@@ -26,6 +26,7 @@ import { myPicks, teamsIn, type FeedItem, type StoredDraft } from './session.js'
 import type { NbaPlayer } from './types.js'
 import type { PrefTag } from './preferences.js'
 import type { MockRecord } from './tendencies.js'
+import type { Habit, OpponentReport } from './opponents.js'
 
 export interface NbaLeague {
   id: string
@@ -36,6 +37,8 @@ export interface NbaLeague {
   scoring: 'points' | 'categories'
   points?: Record<string, number>
   roster: Record<string, number>
+  /** Older seasons Yahoo's renewal chain does not reach, by league id. */
+  history?: { season: string; leagueId: string }[]
   /** Set on a Yahoo mock draft, which borrows a real league's settings for its own temporary league. */
   mock?: { yahooLeagueId: string; baseId: string; apiOk: boolean | null; createdAt: number }
 }
@@ -205,6 +208,10 @@ export interface DraftView {
   board: BoardRow[]
   log: { overall: number; round: number; name: string; manager: string | null; mine: boolean }[]
   feed: FeedItem[]
+  /** The picks between now and my next turn: who makes them, and what their history says about them. */
+  pickingBefore: { overall: number; round: number; manager: string | null; habits: Habit[]; seasons: number }[]
+  /** Whether the league's history has been read; null for a mock, which has no league-mates. */
+  history: null | { seasons: number; consistent: string[] }
   /** Once my roster is full: how it came out, and where I went my own way. */
   review: null | {
     expected: number | null
@@ -268,7 +275,7 @@ function forward(prep: Prepared, taken: Set<string>, mine: string[], slot: numbe
   return { plan, roster }
 }
 
-export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, PrefTag>): DraftView {
+export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, PrefTag>, opponents: OpponentReport | null = null): DraftView {
   const L = prep.league
   const teams = teamsIn(d, L.teams)
   const rounds = prep.rounds
@@ -417,7 +424,24 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     }
   }
 
+  // ── Who picks before my next turn ──
+  const pickingBefore: DraftView['pickingBefore'] = []
+  if (myNext != null && !onClock) {
+    for (let o = overall; o < myNext && pickingBefore.length < 15; o++) {
+      const seat = slotFor(o, teams)
+      const manager = d.managers?.[seat - 1] ?? null
+      const prof = manager ? opponents?.managers[manager] : undefined
+      pickingBefore.push({ overall: o, round: roundFor(o, teams), manager, habits: prof?.habits ?? [], seasons: prof?.seasons ?? 0 })
+    }
+  }
+  const history = L.mock ? null : {
+    seasons: opponents?.seasons.length ?? 0,
+    consistent: opponents ? Object.entries(opponents.validation).filter(([, v]) => v.consistent).map(([k]) => k) : [],
+  }
+
   return {
+    pickingBefore,
+    history,
     review,
     mock: L.mock ?? null,
     playoffNote,

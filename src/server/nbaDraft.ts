@@ -26,6 +26,7 @@ import { NameIndex } from '../nba/join.js'
 import { adpFor } from '../nba/draft.js'
 import { buildView, changes, prepare, recordOf, type DraftView, type NbaLeague, type Prepared } from '../nba/plan.js'
 import { analyseMocks, type MockRecord } from '../nba/tendencies.js'
+import { fetchHistory, historyStatus, opponentReport } from './nbaHistory.js'
 import { addManual, emptyDraft, ingestYahoo, setLocks, setSlot, undoManual, type StoredDraft, type YahooRow } from '../nba/session.js'
 import { resolvePreferences, type PreferenceFile, type PrefTag } from '../nba/preferences.js'
 import { CATS, type Cat } from '../nba/value.js'
@@ -223,9 +224,13 @@ export function playerByYahooId(yahooId: string): NbaPlayer | undefined {
 }
 
 /** A snapshot from the Yahoo API, on the server. Same merge as the extension's, under its own name. */
-export function ingestApi(leagueId: string, rows: YahooRow[], order: string[]) {
+export function ingestApi(leagueId: string, rows: YahooRow[], order: string[], managers: (string | null)[] = []) {
   const s = session(leagueId)
   if (!s) return
+  if (managers.length && JSON.stringify(managers) !== JSON.stringify(s.draft.managers ?? [])) {
+    s.draft.managers = managers
+    s.dirty = true
+  }
   const before = JSON.stringify([s.draft.picks, s.draft.slot, s.draft.order])
   ingestYahoo(s.draft, rows, order, s.league.myTeamName, s.league.teams, load().index, Date.now(), 'api')
   if (before !== JSON.stringify([s.draft.picks, s.draft.slot, s.draft.order])) save(s)
@@ -277,7 +282,7 @@ function save(s: Session) {
 /** The view, worked out once per change rather than once per poll; the feed is what changed in between. */
 function viewOf(s: Session): DraftView {
   if (!s.dirty && s.view) return s.view
-  const next = buildView(s.prep, s.draft, tagsFor(s.league.id))
+  const next = buildView(s.prep, s.draft, tagsFor(s.league.id), s.league.mock ? null : opponentReport(s.league.id.replace(/-test$/, '')))
   // What the advice said when I was on the clock, so the review can say where I went my own way.
   if (next.clock.onClock && next.advice[0]) {
     s.draft.advised = { ...(s.draft.advised ?? {}), [next.clock.overall]: next.advice[0].id }
@@ -355,6 +360,20 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
       .slice(0, 12)
       .map((p) => ({ id: p.id, name: p.name, team: p.team, positions: p.yahoo?.positions ?? p.positions }))
     json(res, 200, hits)
+    return true
+  }
+
+  // The league's draft history: read once from Yahoo (POST), then kept and analysed (GET).
+  if (what === 'history' && id) {
+    const league = load().leagues.find((l) => l.id === id && !l.mock)
+    if (!league) { json(res, 404, { error: `no basketball league ${id}` }); return true }
+    if (req.method === 'POST') {
+      if (!yahooApi.connected() || yahooApi.replaying()) { json(res, 409, { error: 'reading history needs the Yahoo connection, which only the deployed app has' }); return true }
+      void fetchHistory(league.id, league.leagueKey, league.history ?? []).then(() => { for (const s of sessions.values()) s.dirty = true })
+      json(res, 202, { ok: true, started: true })
+      return true
+    }
+    json(res, 200, historyStatus(league.id))
     return true
   }
 

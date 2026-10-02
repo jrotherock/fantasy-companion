@@ -1,5 +1,5 @@
 {
-  "note": "Read from Yahoo league settings and the API on 2026-10-02. Both are offline drafts with no date set.",
+  "note": "Read from Yahoo league settings and the API on 2026-10-02. Both are offline drafts with no date set. history: older seasons Yahoo's renewal chain does not reach, read off the league page's season selector; each is used only if Yahoo marks a team in it as yours.",
   "leagues": [
     {
       "id": "nba-harker",
@@ -10,12 +10,35 @@
       "myTeamName": "Shai Me Up Domo Down",
       "teams": 16,
       "scoring": "points",
-      "points": { "pts": 1, "reb": 1.2, "ast": 1.5, "stl": 3, "blk": 3, "to": -1 },
-      "roster": { "PG": 1, "SG": 1, "SF": 1, "PF": 1, "C": 1, "Util": 2, "BN": 2, "IL": 2 },
-      "adds": { "perWeek": 5, "season": null },
+      "points": {
+        "pts": 1,
+        "reb": 1.2,
+        "ast": 1.5,
+        "stl": 3,
+        "blk": 3,
+        "to": -1
+      },
+      "roster": {
+        "PG": 1,
+        "SG": 1,
+        "SF": 1,
+        "PF": 1,
+        "C": 1,
+        "Util": 2,
+        "BN": 2,
+        "IL": 2
+      },
+      "adds": {
+        "perWeek": 5,
+        "season": null
+      },
       "waivers": "FAB, continuous, 1 day",
       "playoffTeams": 8,
-      "playoffWeeks": [20, 21, 22]
+      "playoffWeeks": [
+        20,
+        21,
+        22
+      ]
     },
     {
       "id": "nba-hoops",
@@ -26,12 +49,112 @@
       "myTeamName": "Slim Reaper Kats",
       "teams": 10,
       "scoring": "categories",
-      "categories": ["fg%", "ft%", "tpm", "pts", "reb", "ast", "stl", "blk", "to"],
-      "roster": { "PG": 1, "SG": 1, "SF": 1, "PF": 1, "C": 1, "Util": 3, "BN": 5, "IL": 3 },
-      "adds": { "perWeek": 10, "season": 100 },
+      "categories": [
+        "fg%",
+        "ft%",
+        "tpm",
+        "pts",
+        "reb",
+        "ast",
+        "stl",
+        "blk",
+        "to"
+      ],
+      "roster": {
+        "PG": 1,
+        "SG": 1,
+        "SF": 1,
+        "PF": 1,
+        "C": 1,
+        "Util": 3,
+        "BN": 5,
+        "IL": 3
+      },
+      "adds": {
+        "perWeek": 10,
+        "season": 100
+      },
       "waivers": "rolling list, 2 days",
       "playoffTeams": 6,
-      "playoffWeeks": [18, 19, 20]
+      "playoffWeeks": [
+        18,
+        19,
+        20
+      ],
+      "history": [
+        {
+          "season": "2022",
+          "leagueId": "66813"
+        },
+        {
+          "season": "2021",
+          "leagueId": "80473"
+        },
+        {
+          "season": "2020",
+          "leagueId": "58559"
+        },
+        {
+          "season": "2019",
+          "leagueId": "46685"
+        },
+        {
+          "season": "2018",
+          "leagueId": "67949"
+        },
+        {
+          "season": "2017",
+          "leagueId": "95961"
+        },
+        {
+          "season": "2016",
+          "leagueId": "73484"
+        },
+        {
+          "season": "2015",
+          "leagueId": "65067"
+        },
+        {
+          "season": "2014",
+          "leagueId": "89021"
+        },
+        {
+          "season": "2013",
+          "leagueId": "75866"
+        },
+        {
+          "season": "2012",
+          "leagueId": "50886"
+        },
+        {
+          "season": "2011",
+          "leagueId": "83063"
+        },
+        {
+          "season": "2010",
+          "leagueId": "51890"
+        },
+        {
+          "season": "2009",
+          "leagueId": "201793"
+        },
+        {
+          "season": "2008",
+          "leagueId": "67746"
+        },
+        {
+          "season": "2007",
+          "leagueId": "190501"
+        },
+        {
+          "season": "2006",
+          "leagueId": "51216"
+        },
+        {
+          "season": "2005",
+          "leagueId": "54354"
+        }
+      ]
     }
   ]
 }

@@ -197,6 +197,7 @@ function Screen({ id }: { id: string }) {
           <Board view={view} act={act} />
         </section>
         <section className="nb-context">
+          <Before view={view} id={id} />
           <Roster view={view} />
           <Feed view={view} />
           <Log view={view} />
@@ -556,6 +557,53 @@ function Board({ view, act }: { view: DraftView; act: (p: string, d?: unknown) =
 }
 
 // ── Context ──────────────────────────────────────────────────────────────────
+
+/**
+ * Who picks between now and my next turn, and what their own history says
+ * about how they draft. Information, not prediction: the advice does not use
+ * it, because most habits in these leagues have not held year to year.
+ */
+function Before({ view, id }: { view: DraftView; id: string }) {
+  const [asked, setAsked] = useState(false)
+  if (!view.history) return null
+  const h = view.history
+  const load = async () => {
+    setAsked(true)
+    try { await post(`/api/nba/history/${id.replace(/-test$/, '')}`) } catch (e) { alert((e as Error).message) }
+  }
+  const rows = view.pickingBefore.filter((p) => p.manager)
+  return (
+    <div className="nb-panel">
+      <div className="nb-h">Picking before you{h.seasons ? <span className="nb-dim"> · {h.seasons} seasons of this league</span> : null}</div>
+      {!h.seasons && (
+        <p className="nb-small nb-dim">
+          League history isn't loaded. <button className="nb-link" onClick={load} disabled={asked}>{asked ? 'Reading it from Yahoo…' : 'Read it from Yahoo'}</button> — only seasons you played in are used.
+        </p>
+      )}
+      {h.seasons > 0 && rows.length === 0 && <p className="nb-small nb-dim">{view.clock.onClock ? 'You are on the clock.' : 'Yahoo has not posted who sits where yet.'}</p>}
+      <ul className="nb-before">
+        {rows.map((p) => (
+          <li key={p.overall}>
+            <span className="nb-dim">#{p.overall}</span> <strong>{p.manager}</strong>
+            {p.habits.length === 0 && <span className="nb-dim nb-small">{p.seasons ? ' — drafts close to the league norm' : ' — no history'}</span>}
+            {p.habits.map((x) => (
+              <div key={x.metric} className="nb-small">
+                {x.text} <span className={`nb-str ${x.consistent ? 'nb-str-clear' : 'nb-str-thin'}`}>{x.consistent ? 'holds year to year' : 'unproven'}</span>
+              </div>
+            ))}
+          </li>
+        ))}
+      </ul>
+      {h.seasons > 0 && (
+        <p className="nb-small nb-dim">
+          {h.consistent.length
+            ? `Only ${h.consistent.map((c) => ({ reach: 'reaching', bigEarly: 'early centres', guardEarly: 'early point guards' } as Record<string, string>)[c]).join(' and ')} has held from one season to the next in this league.`
+            : 'No habit has held from one season to the next in this league, so the advice ignores them.'}
+        </p>
+      )}
+    </div>
+  )
+}
 
 function Roster({ view }: { view: DraftView }) {
   return (

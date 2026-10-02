@@ -22,6 +22,14 @@ export interface ApiTeam {
   name: string
   draftPosition: number | null
   mine: boolean
+  /** The manager's Yahoo nickname: the person, who keeps it while team names change every year. */
+  manager: string | null
+}
+
+/** The manager in each seat, in draft order, once every seat is set. */
+export function draftManagers(teams: ApiTeam[]): (string | null)[] {
+  if (!teams.length || teams.some((t) => t.draftPosition == null)) return []
+  return [...teams].sort((a, b) => a.draftPosition! - b.draftPosition!).map((t) => t.manager)
 }
 
 export function parseDraftResults(json: any): ApiPick[] {
@@ -40,7 +48,13 @@ export function parseTeams(json: any): ApiTeam[] {
   if (!node) return []
   return list(node.body.teams).map((t: any) => {
     const m = flat(t?.team?.[0])
-    return { key: String(m.team_key), name: String(m.name ?? ''), draftPosition: num(m.draft_position), mine: Number(m.is_owned_by_current_login ?? 0) === 1 }
+    const nick = m.managers?.[0]?.manager?.nickname ?? flat(m.managers)?.manager?.nickname ?? null
+    return {
+      key: String(m.team_key), name: String(m.name ?? ''), draftPosition: num(m.draft_position),
+      mine: Number(m.is_owned_by_current_login ?? 0) === 1,
+      // Yahoo hides other managers' identities in some seasons; a hidden one is nobody we can follow.
+      manager: nick && nick !== '--hidden--' ? String(nick) : null,
+    }
   })
 }
 
@@ -62,4 +76,32 @@ export function parsePlayerNames(json: any): Map<string, { name: string; team: s
 
 export function draftStatus(json: any): string | null {
   return leagueNodes(json)[0]?.meta.draft_status ?? null
+}
+
+/** Every drafted player's position and that season's preseason ADP, from a players;player_keys=…/draft_analysis answer. */
+export function parseDraftPlayers(json: any): Map<string, { name: string; positions: string[]; adp: number | null }> {
+  const node = leagueNodes(json)[0]
+  const out = new Map<string, { name: string; positions: string[]; adp: number | null }>()
+  for (const x of list(node?.body.players)) {
+    const p = x?.player
+    if (!Array.isArray(p)) continue
+    const m = flat(p[0])
+    const da = flat(flat(p.slice(1)).draft_analysis)
+    out.set(String(m.player_key), {
+      name: String(m.name?.full ?? ''),
+      positions: String(m.display_position ?? '').split(',').filter(Boolean),
+      adp: num(da.preseason_average_pick) ?? num(da.average_pick),
+    })
+  }
+  return out
+}
+
+/** Season → game key, from games;game_codes=nba;seasons=… */
+export function parseGameKeys(json: any): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const x of list(json?.fantasy_content?.games)) {
+    const m = flat(x?.game)
+    if (m.season && m.game_key) out.set(String(m.season), String(m.game_key))
+  }
+  return out
 }

@@ -13,7 +13,7 @@
  * made, and not at all once the draft is over.
  */
 import * as yahooApi from './yahooApi.js'
-import { draftOrder, draftStatus, parseDraftResults, parsePlayerNames, parseTeams, type ApiTeam } from '../nba/yahooDraft.js'
+import { draftManagers, draftOrder, draftStatus, parseDraftResults, parsePlayerNames, parseTeams, type ApiTeam } from '../nba/yahooDraft.js'
 import { draftDone, nbaLeagues, ingestApi, onReadableMock, playerByYahooId } from './nbaDraft.js'
 
 const HOUR = 60 * 60_000
@@ -51,8 +51,9 @@ async function step(leagueId: string, key: string): Promise<number> {
       w.teamsAt = Date.now()
     }
     const order = draftOrder(w.teams)
+    const managers = draftManagers(w.teams)
     if (w.status === 'predraft') {
-      if (order.length) ingestApi(leagueId, [], order)
+      if (order.length) ingestApi(leagueId, [], order, managers)
       return order.length ? ORDER_SET : HOUR
     }
 
@@ -75,7 +76,7 @@ async function step(leagueId: string, key: string): Promise<number> {
         team: known?.team ?? named?.team ?? undefined,
         manager: teamName.get(p.teamKey),
       }
-    }), order)
+    }), order, managers)
     w.error = null
     return w.status === 'postdraft' || draftDone(leagueId) ? Infinity : DRAFTING
   } catch (e) {

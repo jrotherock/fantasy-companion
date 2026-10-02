@@ -47,6 +47,8 @@ export interface StoredDraft {
   slotSource: 'yahoo' | 'manual' | null
   /** Round-one order by team name, as the results page lists it before and during the draft. */
   order: string[]
+  /** The person in each seat, in seat order, where the API says — for reading their history. */
+  managers?: (string | null)[]
   locks: Cat[]
   feed: FeedItem[]
   /** The advice's first choice at each pick I was on the clock for, keyed by overall pick — for the review. */
