@@ -95,8 +95,13 @@ export function advisePoints(
 ): Advice[] {
   const next = nextTurn(spot)
   const sorted = [...available].sort((a, b) => b.value - a.value)
-  return sorted.filter((c) => canTake(c.id)).slice(0, shortlist).map((c) => {
-    const rest = sorted.filter((x) => x.id !== c.id && canTake(x.id, c.id))
+  const takeable: typeof sorted = []
+  for (const c of sorted) {
+    if (canTake(c.id)) takeable.push(c)
+    if (takeable.length > shortlist + 40) break
+  }
+  return takeable.slice(0, shortlist).map((c) => {
+    const rest = takeable.filter((x) => x.id !== c.id && canTake(x.id, c.id))
     const later = next == null ? 0 : expectedBest(rest, next)
     return { id: c.id, name: c.name, now: c.value, score: c.value + later, survives: next == null ? 0 : survival(c.adp, next) }
   }).sort((a, b) => b.score - a.score)
@@ -183,9 +188,20 @@ export function readBuild(mine: Strength, picks: number, base: Baseline): BuildR
   }
 }
 
-export function expectedCats(mine: Strength, picks: number, base: Baseline): number {
+/** Categories expected to be won in a week, of those not given up. A locked punt is not counted at all. */
+export function expectedCats(mine: Strength, picks: number, base: Baseline, ignore: Cat[] = []): number {
   const w = winChances(mine, picks, base)
-  return CATS.reduce((n, c) => n + w[c], 0)
+  return CATS.reduce((n, c) => (ignore.includes(c) ? n : n + w[c]), 0)
+}
+
+export interface CategoryOptions {
+  shortlist?: number
+  lookahead?: number
+  canTake?: CanTake
+  /** Picks before which the roster's shape is read as an average team's. */
+  neutralUntil?: number
+  /** Categories locked as punts: no longer worth anything to the advice. */
+  ignore?: Cat[]
 }
 
 export function adviseCategories(
@@ -193,28 +209,34 @@ export function adviseCategories(
   mine: CatRow[],
   spot: DraftSpot,
   base: Baseline,
-  shortlist = 20,
-  lookahead = 40,
-  canTake: CanTake = anyone,
-  neutralUntil = 0,
+  opts: CategoryOptions = {},
 ): Advice[] {
+  const { shortlist = 20, lookahead = 40, canTake = anyone, neutralUntil = 0, ignore = [] } = opts
   const next = nextTurn(spot)
   const k = mine.length
   // Before `neutralUntil` picks the roster's shape is not trusted to mean a
   // build: it is read as an average team's, so the advice is the best player
   // rather than the best fit for a direction one or two picks happened to set.
+  // A punt the user has locked is honoured regardless — that is a decision, not a guess.
   const have = k < neutralUntil ? base.after[Math.min(k, base.after.length - 1)] : mine.reduce((s, r) => add(s, contribution(r)), zero())
-  const before = expectedCats(have, k, base)
+  const before = expectedCats(have, k, base, ignore)
 
-  const single = available.filter((c) => canTake(c.id)).map((c) => ({ c, s: add(have, contribution(c)) }))
-    .map(({ c, s }) => ({ c, s, e: expectedCats(s, k + 1, base) }))
+  // Score everyone (cheap), then ask whether I would take them only down the
+  // list as far as the advice looks — the lineup check is the expensive part.
+  const scored = available.map((c) => ({ c, s: add(have, contribution(c)) }))
+    .map(({ c, s }) => ({ c, s, e: expectedCats(s, k + 1, base, ignore) }))
     .sort((a, b) => b.e - a.e)
+  const single: typeof scored = []
+  for (const x of scored) {
+    if (canTake(x.c.id)) single.push(x)
+    if (single.length > Math.max(shortlist, lookahead)) break
+  }
 
   return single.slice(0, shortlist).map(({ c, s, e }) => {
     let later = e
     if (next != null) {
       const follow = single.filter((x) => x.c.id !== c.id && canTake(x.c.id, c.id)).slice(0, lookahead)
-        .map((x) => ({ value: expectedCats(add(s, contribution(x.c)), k + 2, base), adp: x.c.adp }))
+        .map((x) => ({ value: expectedCats(add(s, contribution(x.c)), k + 2, base, ignore), adp: x.c.adp }))
         .sort((a, b) => b.value - a.value)
       later = expectedBest(follow, next, e)
     }

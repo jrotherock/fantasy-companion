@@ -78,6 +78,6 @@ test('no build is read, or steered toward, before the fourth pick', () => {
   const spot = { teams: 4, rounds: 6, slot: 1, overall: 9 }
   const options = [row('passer', { ast: 3 }, 500), row('rebounder', { reb: 3 }, 500)]
   const after = (mine: ReturnType<typeof row>[]) =>
-    adviseCategories(options, mine, spot, base, 20, 40, undefined, BUILD_FROM).map((a) => [a.id, a.score.toFixed(9)])
+    adviseCategories(options, mine, spot, base, { neutralUntil: BUILD_FROM }).map((a) => [a.id, a.score.toFixed(9)])
   assert.deepEqual(after([row('m1', { ast: -12 }, 999), row('m2', { ast: -12 }, 999)]), after([row('m3', { reb: -12 }, 999), row('m4', { reb: -12 }, 999)]))
 })

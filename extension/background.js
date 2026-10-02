@@ -125,17 +125,38 @@ async function leagues() {
   if (!res.ok) throw new Error(`companion HTTP ${res.status}`)
   const all = await res.json()
   // Only Yahoo leagues, paired with the numeric id the results page uses.
-  return all
+  const football = all
     .filter((l) => l.platform === 'yahoo')
     .map((l) => ({
       leagueId: l.id,
       label: l.label,
+      sport: 'nfl',
       yahooLeagueId: String(l.leagueKey || '').split('.').pop() || l.leagueId,
       teamId: l.myTeamId || null,
       // How often to ask, and which page to read — decided by the companion,
       // which is the side that can see a clock and a schedule.
       sensor: l.sensor || null,
     }))
+  /*
+   * Basketball leagues come from their own list, with the page to read and
+   * the site it lives on, since Yahoo serves basketball from another host.
+   * A companion too old to have the list simply has no basketball.
+   */
+  let basketball = []
+  try {
+    const nba = await readFirst('/api/nba/leagues')
+    if (nba.ok) {
+      basketball = (await nba.json()).map((l) => ({
+        leagueId: l.id,
+        label: l.label,
+        sport: 'nba',
+        yahooLeagueId: String(l.leagueKey || '').split('.').pop(),
+        teamId: null,
+        sensor: l.sensor || null,
+      }))
+    }
+  } catch { /* no basketball on this companion */ }
+  return [...football, ...basketball]
 }
 
 /** Replying to a closed port throws; the sender has simply gone away. */
@@ -207,10 +228,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     // Must return true and reply only once the fetch settles. Returning false
     // lets Chrome tear the service worker down mid-request, which silently
     // drops the push — the sensor looks alive and nothing ever arrives.
-    fanOut(`/api/league/${msg.leagueId}/yahoo`, {
+    fanOut(msg.sport === 'nba' ? `/api/nba/draft/${msg.leagueId}/yahoo` : `/api/league/${msg.leagueId}/yahoo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rows: msg.rows, shape: msg.shape }),
+      body: JSON.stringify(msg.sport === 'nba' ? { rows: msg.rows, order: msg.order || [] } : { rows: msg.rows, shape: msg.shape }),
     })
       .then((out) => {
         const json = out.body ?? {}
@@ -233,7 +254,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.type === 'error') {
     status.lastError = `${msg.leagueId}: ${msg.message}`
     // Forward to the companion so its health badge tells the truth.
-    fanOut(`/api/league/${msg.leagueId}/yahoo`, {
+    fanOut(msg.sport === 'nba' ? `/api/nba/draft/${msg.leagueId}/yahoo` : `/api/league/${msg.leagueId}/yahoo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: msg.message }),

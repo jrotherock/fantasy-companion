@@ -17,6 +17,15 @@
         "PATH=\"$HOME/.local/node/bin:$PATH\"; S=\"${TMPDIR:-/tmp}/ff-noapi-state\"; rm -rf \"$S\"; cp -R fixtures \"$S\"; rm -f \"$S\"/yahoo-sync.json \"$S\"/yahoo-leagues.json \"$S\"/yahoo-oauth.json; STATE_DIR=\"$S\" PORT=4602 exec npx tsx src/server/index.ts"
       ],
       "port": 4602
+    },
+    {
+      "name": "nba-test",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "PATH=\"$HOME/.local/node/bin:$PATH\"; S=\"${TMPDIR:-/tmp}/ff-nba-test-state\"; rm -rf \"$S\"; mkdir -p \"$S\"; node -e \"const l=require('./data/nba/leagues.json').leagues.map(x=>({...x,id:x.id+'-test',label:x.label+' (test)'}));require('fs').writeFileSync(process.argv[1]+'/nba-leagues.local.json',JSON.stringify({leagues:l}))\" \"$S\"; STATE_DIR=\"$S\" PORT=4603 exec npx tsx src/server/index.ts"
+      ],
+      "port": 4603
     }
   ]
 }

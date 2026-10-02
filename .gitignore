@@ -92,3 +92,7 @@ fixtures/yahoo-limits.json
 # Reference). A cache of public pages, rebuilt by `npm run data:nba`; the joined
 # tables beside them are what the app reads.
 data/nba/raw/
+
+# Real drafts replayed locally to exercise the basketball draft page. They carry
+# league-mates' team names, so they stay out of a public repository.
+fixtures/nba-replay-*.json

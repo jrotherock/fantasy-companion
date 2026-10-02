@@ -27,6 +27,11 @@ export function positionalSlots(roster: Record<string, number>): string[] {
  * and a player who could fill several is moved if that frees a seat.
  */
 export function unfilled(players: string[][], slots: string[]): number {
+  return openSeats(players, slots).length
+}
+
+/** The positional seats a set of players cannot fill, at best — by name, for the screen. */
+export function openSeats(players: string[][], slots: string[]): string[] {
   const seatOf: (number | null)[] = slots.map(() => null)
   const fits = (p: number, s: number) => players[p].some((pos) => ACCEPTS[slots[s]].includes(pos))
 
@@ -42,7 +47,7 @@ export function unfilled(players: string[][], slots: string[]): number {
     return false
   }
   for (let p = 0; p < players.length; p++) place(p, slots.map(() => false))
-  return seatOf.filter((x) => x == null).length
+  return slots.filter((_, s) => seatOf[s] == null)
 }
 
 /**

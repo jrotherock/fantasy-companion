@@ -1,3 +1,5 @@
+import { handleNba } from './nbaDraft.js'
+import { startNbaYahoo } from './nbaYahoo.js'
 import { createServer } from 'node:http'
 import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs'
 import { extname, join, normalize } from 'node:path'
@@ -685,6 +687,8 @@ function serveStatic(pathname: string, res: any): boolean {
   const rel =
     HOME.includes(pathname) ? '/cockpit.html'
     : pathname === '/draft' || pathname === '/draft/' ? '/index.html'
+    // The basketball draft is its own page: /nba/draft, or /nba/draft/<league>.
+    : /^\/nba\/draft(\/[\w-]*)?\/?$/.test(pathname) ? '/nba-draft.html'
     : pathname
   // Keep the resolved path inside dist, whatever the request asks for.
   const file = join('dist', normalize(rel).replace(/^(\.\.[/\\])+/, ''))
@@ -1343,6 +1347,9 @@ const server = createServer(async (req, res) => {
     if (serveStatic(url.pathname, res)) return
     return json(res, 404, { error: 'not found — run npm run build to bundle the UI' })
   }
+
+  // Basketball has its own sessions and screen; football's code below never sees it.
+  if (await handleNba(parts, url, req, res, json, body)) return
 
   if (parts[1] === 'detect' && req.method === 'POST') {
     const data = await body(req)
@@ -3614,6 +3621,8 @@ setInterval(() => {
 }, 5000)
 
 server.listen(PORT, () => console.log(`draft companion on http://localhost:${PORT}`))
+// Basketball drafts read from the Yahoo API while one is running; idle otherwise.
+startNbaYahoo()
 
 /*
  * The Yahoo leagues, from the API, on a clock of their own.

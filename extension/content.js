@@ -134,8 +134,27 @@ async function pollScore(mapping) {
   }
 }
 
+/**
+ * The draft order by team name, from round one of the results page. Before the
+ * draft the rows are empty but the managers are listed, which is how the
+ * companion learns its seat without being told.
+ */
+function parseOrder(doc) {
+  const table = doc.querySelector('table')
+  if (!table) return []
+  const order = []
+  for (const tr of table.rows) {
+    const cells = tr.cells
+    if (!cells || cells.length < 3) continue
+    if (!Number((cells[0].textContent || '').trim().replace('.', ''))) continue
+    order.push((cells[2].getAttribute('title') || cells[2].textContent || '').trim())
+  }
+  return order
+}
+
 async function pollLeague(mapping) {
-  const url = `/f1/${mapping.yahooLeagueId}/draftresults`
+  // Basketball's page lives at /nba/<id>/draftresults; the companion says where.
+  const url = (mapping.sensor && mapping.sensor.path) || `/f1/${mapping.yahooLeagueId}/draftresults`
   const res = await fetch(url, { credentials: 'include' })
   if (res.status === 999) {
     const err = new Error('Yahoo is rate limiting (HTTP 999) — backing off')
@@ -145,8 +164,9 @@ async function pollLeague(mapping) {
   if (!res.ok) throw new Error(`draftresults HTTP ${res.status}`)
   const doc = new DOMParser().parseFromString(await res.text(), 'text/html')
   const rows = parseDraftResults(doc)
-  if (!rows.length) return { leagueId: mapping.leagueId, rows: [], skipped: 'no picks yet' }
-  return { leagueId: mapping.leagueId, rows }
+  const order = mapping.sport === 'nba' ? parseOrder(doc) : undefined
+  if (!rows.length) return { leagueId: mapping.leagueId, sport: mapping.sport, order, rows: [], skipped: 'no picks yet' }
+  return { leagueId: mapping.leagueId, sport: mapping.sport, order, rows }
 }
 
 let mappings = []
@@ -566,6 +586,13 @@ async function tick() {
 
   let refused = false
   for (const mapping of targets) {
+    /*
+     * A page is read from the site it lives on. Yahoo serves each sport from
+     * its own host, so a basketball tab cannot fetch football's pages or the
+     * reverse — and trying only reported errors against a league that was fine.
+     */
+    const host = (mapping.sensor && mapping.sensor.host) || (mapping.sport === 'nba' ? 'basketball.fantasysports.yahoo.com' : 'football.fantasysports.yahoo.com')
+    if (!mapping.adhoc && location.host !== host) continue
     const key = mapping.leagueId ?? `adhoc:${mapping.yahooLeagueId}`
     // An ad-hoc draft room in this very tab is live by definition.
     const cadence = mapping.adhoc
@@ -619,7 +646,7 @@ async function tick() {
       }
       // Tell the companion, not just the popup: silence is indistinguishable
       // from a quiet draft, and it would keep showing the last good board.
-      await send({ type: 'error', leagueId: mapping.leagueId ?? 'detected', message })
+      await send({ type: 'error', leagueId: mapping.leagueId ?? 'detected', sport: mapping.sport, message })
       /*
        * Stop the whole round, do not carry on down the list. The backoff was
        * only ever checked at the top of the tick, so a refusal on the first

@@ -69,7 +69,7 @@ async function main() {
   const advise = (taken: Set<string>, mine: string[], slot: number, overall: number) => {
     const spot = { teams: league.teams, rounds, slot, overall }
     const canTake = canTakeFor(mine)
-    if (isCats) return adviseCategories(zRows.filter((r) => !taken.has(r.id)), mine.map((id) => rowOf.get(id)), spot, base!, 20, 40, canTake, BUILD_FROM)
+    if (isCats) return adviseCategories(zRows.filter((r) => !taken.has(r.id)), mine.map((id) => rowOf.get(id)), spot, base!, { canTake, neutralUntil: BUILD_FROM })
     return advisePoints(pts.filter((r) => !taken.has(r.id)), spot, 25, canTake)
   }
 
