@@ -1,19 +1,24 @@
-# Fantasy Football Companion
+# Fantasy Companion
 
 ```bash
 ./run.sh
 ```
 
 Starts both apps on one port, detached, so closing the terminal does not stop
-it. `/` is the draft companion, `/cockpit` is the four-league view. Logs to
+it. `/` is the draft companion, `/cockpit` is the multi-league view. Logs to
 `/tmp/ff-companion.log`.
 
-Personal fantasy football companion for the 2026 season. Four leagues, three
-Yahoo and one Sleeper, all snake redraft.
+Personal fantasy companion. Football for the 2026 season: six leagues, five
+Yahoo and one Sleeper, all snake redraft. Basketball is arriving for 2026-27:
+two Yahoo leagues, one points and one nine-category. So far that is the data
+layer only — `npm run data:nba` joins Sleeper and FantasyPros projections,
+three seasons of history, the schedule and Yahoo's ranks into `data/nba/`.
+Football's code stays where it is through its season; the two sports are
+sorted into their own folders once there is a second one to learn from.
 
 Two apps, one process, one URL. `/` is the **draft companion** — the board, the
 verdict and the pick clock, used beside a live draft room. `/cockpit` is the
-**four-league cockpit**, which answers the question that only exists when you
+**multi-league cockpit**, which answers the question that only exists when you
 hold several leagues at once: which of these needs me now, and which can I leave
 alone. No platform can answer it, because each one knows about exactly one of
 your leagues.
@@ -30,6 +35,7 @@ npm install
 npm run data:players      # canonical player map + bye weeks
 npm run data:rankings     # BEER+ boards, one per league
 npm run data:adjustments  # big-play rates and value calibration (optional)
+npm run data:nba          # basketball: projections, history, schedule, teams
 npm start                 # http://localhost:4600
 ```
 
@@ -53,7 +59,13 @@ src/
     sleeper.ts     public REST poll, no auth
     yahoo-ext.ts   receives snapshots pushed by the browser extension
   server/        HTTP + WebSocket, append-only pick log
+  ui/            the draft companion and the cockpit (React)
+  nba/           basketball, kept apart from football for now
+    sources.ts     one parser per source, pure
+    join.ts        name matching, consensus line, durability, team schedules
 data/            league configs, player map, rankings, preferences
+  nba/           basketball inputs (leagues, Yahoo ranks, team notes) and
+                 the joined tables; raw/ is the download cache, not committed
 fixtures/        recorded drafts for replay and calibration
 scripts/         data pipeline and calibration harnesses
 ```
@@ -76,6 +88,20 @@ offline for thirty seconds recovers by itself.
   slot cannot be set ahead of time.
 - **TapThatDraft** config POSTs mint a permanent UUID URL. The board is a lazily
   hydrated Livewire component, so its `__lazyLoad` call has to be replayed.
+
+Basketball:
+
+- **Sleeper's NBA players carry no `yahoo_id` at all**, so every other source
+  joins by name and team, with accents folded (Jokić, Şengün).
+- **Yahoo's basketball game is 478.** The API gives ranks and ADP but no
+  projections. Its token lives only on Railway, so `data/nba/yahoo-ranks.json`
+  is a snapshot taken through the deployed server.
+- **FantasyPros is the only free source that projects games played**, and it
+  projects about seventy for nearly everyone. Durability from three seasons of
+  Sleeper history is kept beside it rather than replaced by it.
+- **ESPN is read for the schedule only.** Its rankings and projections are
+  deliberately not used. The NBA's own stats and schedule endpoints refuse
+  scripted requests.
 
 ## Opponent model
 
