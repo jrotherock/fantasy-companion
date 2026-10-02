@@ -1,0 +1,15 @@
+{
+  "note": "Judgement the feeds cannot carry. Shown as tags beside a player, never folded into value. Each entry says where it came from and when.",
+  "teams": {
+    "CHI": [{ "kind": "new-coach", "text": "Tiago Splitter, first season", "source": "https://www.nba.com/news/closer-look-new-coaches-2026-27", "asOf": "2026-10-02" }],
+    "DAL": [{ "kind": "new-coach", "text": "Dusty May, from Michigan", "source": "https://www.nba.com/news/closer-look-new-coaches-2026-27", "asOf": "2026-10-02" }],
+    "ORL": [{ "kind": "new-coach", "text": "Sean Sweeney, from the Spurs bench", "source": "https://www.nba.com/news/closer-look-new-coaches-2026-27", "asOf": "2026-10-02" }],
+    "MIL": [{ "kind": "new-coach", "text": "Taylor Jenkins, ex-Grizzlies", "source": "https://www.nba.com/news/closer-look-new-coaches-2026-27", "asOf": "2026-10-02" }],
+    "NOP": [{ "kind": "new-coach", "text": "Jamahl Mosley, from Orlando", "source": "https://www.nba.com/news/closer-look-new-coaches-2026-27", "asOf": "2026-10-02" }],
+    "POR": [{ "kind": "new-coach", "text": "Micah Nori, from the Timberwolves bench", "source": "https://www.nba.com/news/closer-look-new-coaches-2026-27", "asOf": "2026-10-02" }]
+  },
+  "tankWatch": {
+    "note": "Deliberately empty until there is evidence. The 2027 lottery is reformed (16 teams, bottom three get fewer balls), so last year's tankers are not a reliable guide.",
+    "teams": []
+  }
+}

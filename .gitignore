@@ -87,3 +87,8 @@ fixtures/yahoo-leagues.json
 fixtures/yahoo-sync.json
 fixtures/yahoo-oauth.json
 fixtures/yahoo-limits.json
+
+# Basketball source downloads (Sleeper, FantasyPros, ESPN schedule, Basketball-
+# Reference). A cache of public pages, rebuilt by `npm run data:nba`; the joined
+# tables beside them are what the app reads.
+data/nba/raw/

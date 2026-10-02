@@ -1,0 +1,35 @@
+{
+  "note": "Read from Yahoo league settings and the API on 2026-10-02. Both are offline drafts with no date set.",
+  "leagues": [
+    {
+      "id": "nba-harker",
+      "label": "Harker Fantasy Basketball",
+      "leagueKey": "478.l.96459",
+      "myTeamId": "3",
+      "myTeamName": "Shai Me Up Domo Down",
+      "teams": 16,
+      "scoring": "points",
+      "points": { "pts": 1, "reb": 1.2, "ast": 1.5, "stl": 3, "blk": 3, "to": -1 },
+      "roster": { "PG": 1, "SG": 1, "SF": 1, "PF": 1, "C": 1, "Util": 2, "BN": 2, "IL": 2 },
+      "adds": { "perWeek": 5, "season": null },
+      "waivers": "FAB, continuous, 1 day",
+      "playoffTeams": 8,
+      "playoffWeeks": [20, 21, 22]
+    },
+    {
+      "id": "nba-hoops",
+      "label": "Hoops 2025",
+      "leagueKey": "478.l.103439",
+      "myTeamId": "4",
+      "myTeamName": "Slim Reaper Kats",
+      "teams": 10,
+      "scoring": "categories",
+      "categories": ["fg%", "ft%", "tpm", "pts", "reb", "ast", "stl", "blk", "to"],
+      "roster": { "PG": 1, "SG": 1, "SF": 1, "PF": 1, "C": 1, "Util": 3, "BN": 5, "IL": 3 },
+      "adds": { "perWeek": 10, "season": 100 },
+      "waivers": "rolling list, 2 days",
+      "playoffTeams": 6,
+      "playoffWeeks": [18, 19, 20]
+    }
+  ]
+}
