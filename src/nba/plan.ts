@@ -202,6 +202,8 @@ export interface DraftView {
   /** When the first choices are too close to call and the playoff schedule separates them. */
   playoffNote: string | null
   playoffNorm: number | null
+  /** How many players are on the never list, so an empty one is noticed. */
+  neverCount: number
   paths: PathView[]
   ahead: { overall: number; round: number; players: { id: string; name: string; team: string | null; positions: string[]; survives: number; planned: boolean }[] }[]
   aheadBuild: string
@@ -300,10 +302,13 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     const s = strengthOf(prep, mine)
     const read = readBuild(s, mine.length, prep.cats.base)
     const win = mine.length ? winChances(s, mine.length, prep.cats.base) : null
+    // A punt is read under 35% but only dropped above 42%, so a category wobbling
+    // round the line does not flip the build back and forth from pick to pick.
+    const sticky = read.stage === 'open' || !win ? [] : CATS.filter((c) => win[c] < 0.35 || ((d.lastPunting ?? []).includes(c) && win[c] < 0.42))
     build = {
       stage: read.stage, buildFrom: BUILD_FROM, buildFirm: BUILD_FIRM,
       win: read.stage === 'open' ? null : win,
-      punting: read.stage === 'open' ? [] : read.punting,
+      punting: sticky,
       edge: read.stage === 'open' || !win ? [] : CATS.filter((c) => win[c] >= 0.35 && win[c] < 0.5),
       strong: read.stage === 'open' || !win ? [] : CATS.filter((c) => win[c] >= 0.65),
       locks: d.locks,
@@ -407,7 +412,14 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   // ── Review, once the roster is full ──
   let review: DraftView['review'] = null
   if (mine.length >= rounds) {
-    const advised = d.advised ?? {}
+    // What the advice said, less anyone since put on the never list: advice you would never
+    // take is not advice, and judging a pick against it says nothing (football's rule too).
+    const advised: Record<number, string> = {}
+    for (const x of mineP) {
+      const turn = d.turns?.[x.overall]
+      const first = turn ? turn.advice.find((a) => tags.get(a.id) !== 'never')?.id : d.advised?.[x.overall]
+      if (first && tags.get(first) !== 'never') advised[x.overall] = first
+    }
     const asked = mineP.filter((x) => advised[x.overall])
     const departures = asked.filter((x) => advised[x.overall] !== x.playerId)
       .map((x) => ({ round: roundFor(x.overall, teams), took: p(x.playerId).name, advised: p(advised[x.overall]).name }))
@@ -446,6 +458,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     mock: L.mock ?? null,
     playoffNote,
     playoffNorm: prep.playoffNorm,
+    neverCount: [...tags.values()].filter((t) => t === 'never').length,
     league: { id: L.id, label: L.label, scoring: L.scoring, teams, rounds, slot, slotSource: d.slotSource, myTeamName: L.myTeamName },
     clock: { overall: done ? teams * rounds : overall, round: roundFor(Math.min(overall, teams * rounds), teams), onClock, myNext, picksUntil: myNext == null ? null : myNext - overall, done },
     sensor: d.sensor,
@@ -523,7 +536,9 @@ export function recordOf(prep: Prepared, d: StoredDraft, tags: Map<string, PrefT
   const mine = d.slot == null ? [] : myPicks(d, teams, slotFor)
   const name = (id: string) => prep.players.get(id)?.name ?? id
   const picks = mine.map((x) => {
-    const turn = d.turns?.[x.overall]
+    const raw = d.turns?.[x.overall]
+    // Never-list players are struck from what the advice offered, as in the review.
+    const turn = raw ? { ...raw, advice: raw.advice.filter((a) => tags.get(a.id) !== 'never') } : undefined
     const top = turn?.advice[0]
     const took = turn?.advice.find((a) => a.id === x.playerId)
     const cost = !top ? null : took ? top.score - took.score : top.score - turn!.advice[turn!.advice.length - 1].score

@@ -296,6 +296,7 @@ function viewOf(s: Session): DraftView {
       },
     }
   }
+  s.draft.lastPunting = next.build?.punting ?? []
   const news = changes(s.view, next)
   if (news.length) {
     s.draft.feed.push(...news)

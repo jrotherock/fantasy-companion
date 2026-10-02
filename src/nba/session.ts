@@ -50,6 +50,8 @@ export interface StoredDraft {
   /** The person in each seat, in seat order, where the API says — for reading their history. */
   managers?: (string | null)[]
   locks: Cat[]
+  /** The punts last shown, so a category must clearly recover before it stops counting as one. */
+  lastPunting?: Cat[]
   feed: FeedItem[]
   /** The advice's first choice at each pick I was on the clock for, keyed by overall pick — for the review. */
   advised?: Record<number, string>

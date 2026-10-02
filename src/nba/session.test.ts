@@ -116,3 +116,22 @@ test('the playoff schedule breaks a tie and never overrules a clear gap', () => 
   const same = playoffTiebreak([a('One', 5.0, 11), a('Two', 5.0, 11)], 0.02)
   assert.equal(same.note, null, 'nothing to say when the schedule does not separate them')
 })
+
+test('the review judges a pick against the advice less anyone on the never list', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
+  const order = hoops.adpOrder
+  const d = emptyDraft('t')
+  d.slot = 1
+  d.turns = {}
+  d.picks = order.slice(0, 130).map((id, i) => ({ overall: i + 1, playerId: id, name: id, source: 'manual' as const }))
+  // At my first pick the advice led with someone now on the never list; I took its second choice.
+  const never = order[200], took = order[0]
+  d.turns[1] = { at: 0, advice: [{ id: never, score: 5, survives: 0, canWait: false }, { id: took, score: 4.9, survives: 0, canWait: false }], locks: [], stage: 'open' }
+  const view = buildView(hoops, d, new Map([[never, 'never' as const]]))
+  assert.equal(view.review?.advisedPicks, 1)
+  assert.equal(view.review?.followed, 1, 'taking the best player not on the never list is following the advice')
+  assert.equal(view.neverCount, 1)
+})

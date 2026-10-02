@@ -222,6 +222,9 @@ function Header({ view, error, act }: { view: DraftView; error: string | null; a
         <span>{view.league.label}</span>
         <span className="nb-badge">{view.league.scoring === 'points' ? 'Points' : '9-cat'} · {view.league.teams} teams</span>
         {view.mock && <span className="nb-badge nb-mockbadge">Mock</span>}
+        <span className={`nb-badge ${view.neverCount ? '' : 'nb-warnbadge'}`} title="Players the advice will never offer; tag them from the board">
+          {view.neverCount ? `Never list: ${view.neverCount}` : 'Never list is empty'}
+        </span>
         {view.league.slot != null && (
           <button className="nb-badge slotedit" title="Change your draft slot — Yahoo can reshuffle the order before the draft" onClick={() => act('slot', { slot: null })}>
             Slot {view.league.slot}{view.league.slotSource === 'yahoo' ? ' (Yahoo)' : ''}
