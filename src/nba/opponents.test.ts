@@ -42,3 +42,9 @@ test('a manager Yahoo hides contributes nothing; seats follow draft position', (
   assert.deepEqual(draftManagers(teams), [null, 'Tony'])
   assert.deepEqual(draftManagers(parseTeams(json([2, null], ['A', 'B']))), [], 'no order until every seat is set')
 })
+
+test('one person is one person however Yahoo capitalised them', () => {
+  const r = analyseOpponents([season('2021', { thomas: 2, B: 1 }), season('2022', { Thomas: 2, B: 1 })])
+  assert.equal(r.managers.thomas.seasons, 2)
+  assert.equal(r.managers.Thomas, undefined)
+})

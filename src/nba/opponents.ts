@@ -14,8 +14,9 @@
  * seasons, most did not either. A habit is called consistent only where that
  * test passes, and is otherwise shown — if at all — as unproven.
  *
- * Managers are the people (Yahoo nicknames), not team names, which change
- * every year. Seasons Yahoo hides managers in contribute nothing.
+ * Managers are the people (Yahoo nicknames, matched regardless of case), not
+ * team names, which change every year. Seasons Yahoo hides managers in
+ * contribute nothing. Profiles are keyed by `personKey`.
  */
 
 export type Metric = 'reach' | 'bigEarly' | 'guardEarly'
@@ -54,6 +55,9 @@ export interface OpponentReport {
   leagueMean: Record<Metric, number>
 }
 
+/** One person however Yahoo capitalised their nickname that year. */
+export const personKey = (nickname: string) => nickname.trim().toLowerCase()
+
 const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0)
 const sd = (a: number[]) => { const m = mean(a); return Math.sqrt(mean(a.map((x) => (x - m) ** 2))) }
 export function corr(xs: number[], ys: number[]): number {
@@ -85,7 +89,7 @@ export function analyseOpponents(history: HistSeason[]): OpponentReport {
   const per = new Map<string, Map<string, Partial<Record<Metric, number>>>>()
   for (const s of seasons) {
     const by = new Map<string, HistPick[]>()
-    for (const p of s.picks) if (p.manager) by.set(p.manager, [...(by.get(p.manager) ?? []), p])
+    for (const p of s.picks) if (p.manager) by.set(personKey(p.manager), [...(by.get(personKey(p.manager)) ?? []), p])
     per.set(s.season, new Map([...by].map(([m, ps]) => [m, seasonMetrics(ps)])))
   }
 

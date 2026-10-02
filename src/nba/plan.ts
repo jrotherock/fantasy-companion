@@ -26,7 +26,7 @@ import { myPicks, teamsIn, type FeedItem, type StoredDraft } from './session.js'
 import type { NbaPlayer } from './types.js'
 import type { PrefTag } from './preferences.js'
 import type { MockRecord } from './tendencies.js'
-import type { Habit, OpponentReport } from './opponents.js'
+import { personKey, type Habit, type OpponentReport } from './opponents.js'
 
 export interface NbaLeague {
   id: string
@@ -430,7 +430,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     for (let o = overall; o < myNext && pickingBefore.length < 15; o++) {
       const seat = slotFor(o, teams)
       const manager = d.managers?.[seat - 1] ?? null
-      const prof = manager ? opponents?.managers[manager] : undefined
+      const prof = manager ? opponents?.managers[personKey(manager)] : undefined
       pickingBefore.push({ overall: o, round: roundFor(o, teams), manager, habits: prof?.habits ?? [], seasons: prof?.seasons ?? 0 })
     }
   }
