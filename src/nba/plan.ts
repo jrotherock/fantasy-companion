@@ -74,7 +74,17 @@ export interface Prepared {
   cats?: { rows: (CatRow & { adp: number })[]; byId: Map<string, CatRow & { adp: number }>; base: Baseline; byBuild: Map<string, Map<string, { value: number; rank: number }>> }
   points?: { rows: (PointsRow & { adp: number })[]; byId: Map<string, PointsRow & { adp: number }> }
   adpOrder: string[]
+  /** Games a player's team plays in this league's playoff weeks, where the schedule is known. */
+  playoff: (id: string) => number | null
+  /** What most teams play in those weeks, so a number can be read as good or bad. */
+  playoffNorm: number | null
 }
+
+/** Team code → games in each league's playoff weeks (data/nba/teams.json). */
+export type PlayoffSchedule = Record<string, Record<string, number>>
+
+/** The real league whose schedule a test or mock league borrows. */
+const scheduleKey = (league: NbaLeague) => league.mock?.baseId ?? league.id.replace(/-test$/, '')
 
 /**
  * The nine-category model is built for Yahoo's standard nine. A league that
@@ -95,13 +105,22 @@ export function checkScoring(league: NbaLeague & { categories?: string[] }) {
   }
 }
 
-export function prepare(league: NbaLeague, players: NbaPlayer[], noise: Record<Cat, number>, adpFor: (p: NbaPlayer) => number): Prepared {
+export function prepare(league: NbaLeague, players: NbaPlayer[], noise: Record<Cat, number>, adpFor: (p: NbaPlayer) => number, schedule: PlayoffSchedule = {}): Prepared {
   checkScoring(league)
   const byId = new Map(players.map((p) => [p.id, p]))
   const adp = (id: string) => adpFor(byId.get(id)!)
   const rounds = rosterSpots(league.roster)
   const positions = (id: string) => byId.get(id)?.yahoo?.positions ?? byId.get(id)?.positions ?? []
-  const prepared: Prepared = { league, rounds, players: byId, adp, positions, slots: positionalSlots(league.roster), adpOrder: [] }
+  const key = scheduleKey(league)
+  const games = Object.values(schedule).map((t) => t[key]).filter((n): n is number => n != null).sort((a, b) => a - b)
+  const playoff = (id: string) => {
+    const team = byId.get(id)?.team
+    return team && schedule[team]?.[key] != null ? schedule[team][key] : null
+  }
+  const prepared: Prepared = {
+    league, rounds, players: byId, adp, positions, slots: positionalSlots(league.roster), adpOrder: [],
+    playoff, playoffNorm: games.length ? games[Math.floor(games.length / 2)] : null,
+  }
   if (league.scoring === 'categories') {
     const rows = categoryZ(players, league).map((r) => ({ ...r, adp: adp(r.id) }))
     const base = baseline(rows, league.teams, rounds, noise)
@@ -142,6 +161,8 @@ export interface BoardRow {
   survives: number | null
   tag: PrefTag | null
   injury: string | null
+  /** Games in this league's playoff weeks. */
+  playoff: number | null
   takenAt: number | null
   takenBy: string | null
   mine: boolean
@@ -174,7 +195,10 @@ export interface DraftView {
     locks: Cat[]
     expected: number | null
   }
-  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number })[]
+  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean })[]
+  /** When the first choices are too close to call and the playoff schedule separates them. */
+  playoffNote: string | null
+  playoffNorm: number | null
   paths: PathView[]
   ahead: { overall: number; round: number; players: { id: string; name: string; team: string | null; positions: string[]; survives: number; planned: boolean }[] }[]
   aheadBuild: string
@@ -282,6 +306,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
 
   // ── Advice ──
   let advice: DraftView['advice'] = []
+  let playoffNote: string | null = null
   if (spot) {
     const raw = prep.cats
       ? adviseCategories(prep.cats.rows.filter((r) => !taken.has(r.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
@@ -296,7 +321,11 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       contrib: prep.cats ? contribution(prep.cats.byId.get(a.id)!) : undefined,
       fpg: prep.points?.byId.get(a.id)?.fpg,
       gp: (prep.cats?.byId.get(a.id)?.games.gp ?? prep.points?.byId.get(a.id)?.games.gp) ?? 0,
+      playoff: prep.playoff(a.id),
     }))
+    const tb = playoffTiebreak(advice, prep.cats ? 0.02 : Math.abs(advice[0]?.score ?? 0) * 0.01)
+    advice = tb.advice
+    playoffNote = tb.note
   }
 
   // ── Paths and targets ahead ──
@@ -362,6 +391,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       survives: (onClock ? nextAfter : myNext) == null ? null : survival(prep.adp(r.id), (onClock ? nextAfter : myNext)!),
       tag: tags.get(r.id) ?? null,
       injury: pl.injury?.status ?? null,
+      playoff: prep.playoff(r.id),
       takenAt: t?.overall ?? null, takenBy: t?.manager ?? null,
       mine: mine.includes(r.id),
     }
@@ -390,6 +420,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   return {
     review,
     mock: L.mock ?? null,
+    playoffNote,
+    playoffNorm: prep.playoffNorm,
     league: { id: L.id, label: L.label, scoring: L.scoring, teams, rounds, slot, slotSource: d.slotSource, myTeamName: L.myTeamName },
     clock: { overall: done ? teams * rounds : overall, round: roundFor(Math.min(overall, teams * rounds), teams), onClock, myNext, picksUntil: myNext == null ? null : myNext - overall, done },
     sensor: d.sensor,
@@ -491,5 +523,31 @@ export function recordOf(prep: Prepared, d: StoredDraft, tags: Map<string, PrefT
     locks: d.locks,
     lockedFromRound: firstLocked ? roundFor(firstLocked.overall, teams) : null,
     picks,
+  }
+}
+
+/**
+ * The playoff schedule as a tiebreaker, and only that. Among the options that
+ * score within `margin` of the first choice — a gap the projections cannot
+ * honestly separate — the one whose team plays more games in this league's
+ * playoff weeks goes first. A clear gap is never overruled: the schedule is
+ * three weeks of twenty.
+ */
+export function playoffTiebreak<T extends { name: string; score: number; playoff: number | null; tiebreak?: boolean }>(advice: T[], margin: number): { advice: T[]; note: string | null } {
+  if (advice.length < 2) return { advice, note: null }
+  const top = advice[0].score
+  const close = advice.filter((a) => top - a.score <= margin)
+  if (close.length < 2) return { advice, note: null }
+  const known = close.filter((a) => a.playoff != null)
+  const most = Math.max(...known.map((a) => a.playoff!))
+  const least = Math.min(...known.map((a) => a.playoff!))
+  if (known.length < 2 || most === least) return { advice, note: null }
+  const reordered = [...close].sort((a, b) => (b.playoff ?? -1) - (a.playoff ?? -1) || b.score - a.score)
+  const moved = reordered[0] !== advice[0]
+  const out = [...reordered.map((a, i) => (i === 0 && moved ? { ...a, tiebreak: true } : a)), ...advice.slice(close.length)]
+  const lead = reordered[0], other = reordered.find((a) => a.playoff === least)!
+  return {
+    advice: out,
+    note: `${close.map((a) => a.name).join(', ')} are too close to call; ${lead.name} plays ${lead.playoff} games in your playoff weeks, ${other.name} ${other.playoff}${moved ? ' — so he goes first' : ''}.`,
   }
 }

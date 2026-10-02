@@ -235,6 +235,16 @@ export function ingestApi(leagueId: string, rows: YahooRow[], order: string[]) {
 
 // ── Sessions ──
 
+let playoffGames: Record<string, Record<string, number>> | null = null
+/** Team → games in each league's playoff weeks, from the joined team table. */
+function schedule() {
+  playoffGames ??= Object.fromEntries(
+    (JSON.parse(readFileSync(`${DATA}/teams.json`, 'utf8')).teams as { team: string; playoffGames: Record<string, number> }[])
+      .map((t) => [t.team, t.playoffGames]),
+  )
+  return playoffGames
+}
+
 interface Session {
   league: NbaLeague
   prep: Prepared
@@ -252,7 +262,7 @@ function session(id: string): Session | null {
   const league = leagues.find((l) => l.id === id)
   if (!league) return null
   const draft: StoredDraft = existsSync(fileOf(id)) ? JSON.parse(readFileSync(fileOf(id), 'utf8')) : emptyDraft(id)
-  const s: Session = { league, prep: prepare(league, players, noise, adpFor), draft, view: null, dirty: true }
+  const s: Session = { league, prep: prepare(league, players, noise, adpFor, schedule()), draft, view: null, dirty: true }
   sessions.set(id, s)
   return s
 }

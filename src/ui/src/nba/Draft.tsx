@@ -20,6 +20,9 @@ const POSITIONS = ['All', 'PG', 'SG', 'SF', 'PF', 'C']
 
 type Tag = 'never' | 'avoid' | 'like'
 
+/** Playoff games read against what most teams play: more is good, fewer is a warning. */
+const po = (n: number, norm: number | null) => (norm == null || n === norm ? 'nb-dim' : n > norm ? 'nb-up' : 'nb-down')
+
 async function post(path: string, data: unknown = {}) {
   const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
@@ -274,6 +277,7 @@ function TakeNow({ view, act }: { view: DraftView; act: (p: string, d?: unknown)
         {r.down.map((c) => <span key={c} className="nb-down">−{LABEL[c]}</span>)}
         {a.fpg != null && <span>{a.fpg.toFixed(1)} fp/g</span>}
         <span className="nb-dim">{Math.round(a.gp)} g</span>
+        {a.playoff != null && <span className={po(a.playoff, view.playoffNorm)} title="Games in your playoff weeks">PO {a.playoff}</span>}
       </span>
     )
   }
@@ -282,7 +286,7 @@ function TakeNow({ view, act }: { view: DraftView; act: (p: string, d?: unknown)
     : <span className="nb-gone">{pct(1 - a.survives)} gone by your next turn</span>
   return (
     <div className="nb-take">
-      <div className="nb-h">{view.clock.onClock ? 'Take' : 'If it were your pick'}</div>
+      <div className="nb-h">{view.clock.onClock ? 'Take' : 'If it were your pick'}{top.tiebreak && <span className="nb-tag nb-lead">playoff tiebreak</span>}</div>
       <div className="nb-top">
         <div className="nb-top-name">{top.name}{top.tag === 'like' && <span className="nb-tag nb-like">like</span>}{top.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</div>
         <div className="nb-dim">{top.team} · {top.positions.join(', ')}</div>
@@ -290,6 +294,7 @@ function TakeNow({ view, act }: { view: DraftView; act: (p: string, d?: unknown)
         <div>{after(top)}</div>
         <button className="nb-btn" onClick={() => act('pick', { playerId: top.id })}>Mark {top.name.split(' ').slice(-1)[0]} drafted</button>
       </div>
+      {view.playoffNote && <div className="nb-ponote">{view.playoffNote}</div>}
       <ul className="nb-alts">
         {rest.slice(0, 5).map((a) => (
           <li key={a.id}>
@@ -499,7 +504,7 @@ function Board({ view, act }: { view: DraftView; act: (p: string, d?: unknown) =
         <table className="nb-table">
           <thead>
             <tr>
-              <th>#</th><th className="nb-l">Player</th><th>Pos</th><th>G</th><th>ADP</th><th title="Chance he lasts to your next decision — the pick after this one when you are on the clock">Next</th>
+              <th>#</th><th className="nb-l">Player</th><th>Pos</th><th>G</th><th title="Games in your playoff weeks">PO</th><th>ADP</th><th title="Chance he lasts to your next decision — the pick after this one when you are on the clock">Next</th>
               {cats ? CATS.map((c) => <th key={c} className={locks.includes(c) ? 'nb-col-off' : ''}>{LABEL[c]}</th>) : <><th>FP/g</th><th>Value</th></>}
               <th title="never · avoid · like">Tag</th>
             </tr>
@@ -517,6 +522,7 @@ function Board({ view, act }: { view: DraftView; act: (p: string, d?: unknown) =
                 </td>
                 <td className="nb-dim">{r.positions.join(',')}</td>
                 <td>{Math.round(r.gp)}</td>
+                <td className={r.playoff != null ? po(r.playoff, view.playoffNorm) : 'nb-dim'}>{r.playoff ?? '—'}</td>
                 <td className="nb-dim">{r.adp != null ? r.adp.toFixed(0) : '—'}</td>
                 <td>{r.takenAt == null && r.survives != null ? pct(r.survives) : ''}</td>
                 {cats ? CATS.map((c) => (

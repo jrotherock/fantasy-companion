@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { addManual, emptyDraft, ingestYahoo, undoManual } from './session.js'
 import { NameIndex } from './join.js'
 import { draftOrder, parseDraftResults, parseTeams } from './yahooDraft.js'
-import { buildView, checkScoring, prepare } from './plan.js'
+import { buildView, checkScoring, playoffTiebreak, prepare } from './plan.js'
 import { adpFor } from './draft.js'
 
 const index = new NameIndex([
@@ -102,4 +102,17 @@ test('a league scoring anything the models cannot value fails loudly', () => {
   assert.doesNotThrow(() => checkScoring({ ...base, scoring: 'categories', categories: ['fg%', 'ft%', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to'] }))
   assert.throws(() => checkScoring({ ...base, scoring: 'categories', categories: ['fg%', 'ft%', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'dd'] }), /standard nine/)
   assert.throws(() => checkScoring({ ...base, scoring: 'points', points: { pts: 1, dd: 2 } }), /dd/)
+})
+
+test('the playoff schedule breaks a tie and never overrules a clear gap', () => {
+  const a = (name: string, score: number, playoff: number | null) => ({ name, score, playoff, tiebreak: false as boolean | undefined })
+  const tie = playoffTiebreak([a('Nine', 5.01, 9), a('Twelve', 5.0, 12), a('Far', 4.5, 13)], 0.02)
+  assert.deepEqual(tie.advice.map((x) => x.name), ['Twelve', 'Nine', 'Far'])
+  assert.equal(tie.advice[0].tiebreak, true)
+  assert.match(tie.note!, /Twelve plays 12 games/)
+  const clear = playoffTiebreak([a('Nine', 5.1, 9), a('Twelve', 5.0, 12)], 0.02)
+  assert.deepEqual(clear.advice.map((x) => x.name), ['Nine', 'Twelve'])
+  assert.equal(clear.note, null)
+  const same = playoffTiebreak([a('One', 5.0, 11), a('Two', 5.0, 11)], 0.02)
+  assert.equal(same.note, null, 'nothing to say when the schedule does not separate them')
 })
