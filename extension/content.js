@@ -487,6 +487,15 @@ function parseStanding(doc) {
 }
 
 function detectedDraft() {
+  /*
+   * Basketball's draft room address had not been seen when this was written,
+   * so it is matched loosely on its own site: a draft-client path carrying a
+   * league id, with or without a sport segment. Football keeps its exact match.
+   */
+  if (location.host.startsWith('basketball.')) {
+    const b = /\/draftclient\/(?:[a-z0-9]+\/)?(\d+)(?:\/(\d+))?/.exec(location.pathname)
+    return b ? { yahooLeagueId: b[1], teamId: b[2] || null, sport: 'nba', sensor: { path: `/nba/${b[1]}/draftresults` } } : null
+  }
   const m = /\/draftclient\/f1\/(\d+)\/(\d+)/.exec(location.pathname)
   return m ? { yahooLeagueId: m[1], teamId: m[2] } : null
 }
@@ -628,9 +637,11 @@ async function tick() {
       if (mapping.adhoc) {
         await send({
           type: 'detected',
+          sport: mapping.sport,
           yahooLeagueId: mapping.yahooLeagueId,
           teamId: mapping.teamId,
           shape,
+          order: payload.order,
           rows: payload.rows,
         })
         continue

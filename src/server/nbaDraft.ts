@@ -21,9 +21,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { STATE_DIR } from './paths.js'
+import * as yahooApi from './yahooApi.js'
 import { NameIndex } from '../nba/join.js'
 import { adpFor } from '../nba/draft.js'
-import { buildView, changes, prepare, type DraftView, type NbaLeague, type Prepared } from '../nba/plan.js'
+import { buildView, changes, prepare, recordOf, type DraftView, type NbaLeague, type Prepared } from '../nba/plan.js'
+import { analyseMocks, type MockRecord } from '../nba/tendencies.js'
 import { addManual, emptyDraft, ingestYahoo, setLocks, setSlot, undoManual, type StoredDraft, type YahooRow } from '../nba/session.js'
 import { resolvePreferences, type PreferenceFile, type PrefTag } from '../nba/preferences.js'
 import { CATS, type Cat } from '../nba/value.js'
@@ -55,6 +57,10 @@ function load(): Loaded {
       if (l.id.endsWith('-test')) leagues.push(l)
     }
   }
+  for (const m of readMocks()) {
+    const base = leagues.find((l) => l.id === m.baseId)
+    if (base) leagues.push(mockLeague(base, m))
+  }
   loaded = {
     players,
     index: new NameIndex(players.map((p) => ({ id: p.id, name: p.name, team: p.team }))),
@@ -62,6 +68,111 @@ function load(): Loaded {
     noise: JSON.parse(readFileSync(`${DATA}/category-noise.json`, 'utf8')).r,
   }
   return loaded
+}
+
+// ── Mock drafts ──
+//
+// A Yahoo mock is a temporary league of its own, sensed when its draft room is
+// open in the browser. It borrows the settings, values and screen of the real
+// league with the same number of teams, and lives in the state directory, so it
+// can never touch a real league's draft. The API is tried once for it; Yahoo
+// has refused finished mocks, so the extension is expected to carry most.
+
+type MockEntry = NonNullable<NbaLeague['mock']> & { id: string; teams: number }
+const MOCKS = join(STATE_DIR, 'nba-mocks.json')
+
+function readMocks(): MockEntry[] {
+  return existsSync(MOCKS) ? JSON.parse(readFileSync(MOCKS, 'utf8')) : []
+}
+function writeMocks(list: MockEntry[]) {
+  mkdirSync(STATE_DIR, { recursive: true })
+  writeFileSync(MOCKS, JSON.stringify(list, null, 1))
+}
+
+function mockLeague(base: NbaLeague, m: MockEntry): NbaLeague {
+  const game = base.leagueKey.split('.')[0]
+  return {
+    ...base, id: m.id, teams: m.teams, myTeamName: '',
+    label: `Mock · ${base.label.replace(/ \(test\)$/, '')}`,
+    leagueKey: `${game}.l.${m.yahooLeagueId}`,
+    mock: { yahooLeagueId: m.yahooLeagueId, baseId: m.baseId, apiOk: m.apiOk, createdAt: m.createdAt },
+  }
+}
+
+let onApiMock: (() => void) | null = null
+/** The API reader asks to be woken when a mock turns out to be readable. */
+export function onReadableMock(f: () => void) { onApiMock = f }
+
+/** One API read decides whether the server can follow this mock itself. */
+async function tryApi(m: MockEntry) {
+  let ok = false
+  // With no Yahoo connection there is nothing to try: the extension reads it.
+  if (yahooApi.connected() && !yahooApi.replaying()) try {
+    await yahooApi.call(`league/${load().leagues.find((l) => l.id === m.id)!.leagueKey}/draftresults`)
+    ok = true
+  } catch { ok = false }
+  const list = readMocks().map((x) => (x.id === m.id ? { ...x, apiOk: ok } : x))
+  writeMocks(list)
+  const l = load().leagues.find((x) => x.id === m.id)
+  if (l?.mock) l.mock.apiOk = ok
+  const sess = sessions.get(m.id)
+  if (sess) { sess.league = l!; sess.dirty = true }
+  if (ok) onApiMock?.()
+}
+
+/**
+ * A draft room the companion has not seen. The team count comes from round
+ * one's listed order where the page has it, else from a round boundary — an
+ * early `max(pickInRound)` is only a lower bound, which football learned when a
+ * mock was built with one team.
+ */
+function detectMock(yahooLeagueId: string, rows: YahooRow[], order: string[]): MockEntry | null {
+  const id = `nba-mock-${yahooLeagueId}`
+  const existing = readMocks().find((m) => m.id === id)
+  if (existing) return existing
+  const rounds = Math.max(0, ...rows.map((r) => r.round))
+  const teams = order.length >= 4 ? order.length : rounds >= 2 ? Math.max(...rows.map((r) => r.pickInRound)) : 0
+  if (teams < 4) return null
+  const real = load().leagues.filter((l) => !l.mock && !l.id.endsWith('-test'))
+  const base = real.find((l) => l.teams === teams) ?? [...real].sort((a, b) => Math.abs(a.teams - teams) - Math.abs(b.teams - teams))[0]
+  if (!base) return null
+  const m: MockEntry = { id, yahooLeagueId, baseId: base.id, teams, apiOk: null, createdAt: Date.now() }
+  writeMocks([...readMocks(), m])
+  load().leagues.push(mockLeague(base, m))
+  void tryApi(m)
+  return m
+}
+
+/** A mock named by hand — a pasted draft-room link — for when the extension cannot tell it is one. */
+function registerMock(yahooLeagueId: string, baseId: string): MockEntry | null {
+  const id = `nba-mock-${yahooLeagueId}`
+  const existing = readMocks().find((m) => m.id === id)
+  if (existing) return existing
+  const base = load().leagues.find((l) => l.id === baseId && !l.mock)
+  if (!base) return null
+  const m: MockEntry = { id, yahooLeagueId, baseId, teams: base.teams, apiOk: null, createdAt: Date.now() }
+  writeMocks([...readMocks(), m])
+  load().leagues.push(mockLeague(base, m))
+  void tryApi(m)
+  return m
+}
+
+/** The league id out of anything Yahoo might put in a draft-room address, or a bare number. */
+export function mockIdFrom(text: string): string | null {
+  const t = text.trim()
+  if (/^\d{3,}$/.test(t)) return t
+  return /\/draftclient\/(?:[a-z0-9]+\/)?(\d{3,})/.exec(t)?.[1] ?? /\/nba\/(\d{3,})(?:\/|$)/.exec(t)?.[1] ?? null
+}
+
+function discardMock(id: string): boolean {
+  const list = readMocks()
+  if (!list.some((m) => m.id === id)) return false
+  writeMocks(list.filter((m) => m.id !== id))
+  const L = load()
+  L.leagues = L.leagues.filter((l) => l.id !== id)
+  sessions.delete(id)
+  try { if (existsSync(fileOf(id))) writeFileSync(fileOf(id), JSON.stringify(emptyDraft(id))) } catch { /* nothing to clear */ }
+  return true
 }
 
 // ── Preferences: one list for every basketball league, editable from the screen ──
@@ -94,8 +205,15 @@ function setTag(playerId: string, tag: PrefTag | null) {
 
 // ── For the API reader ──
 
+/** Every seat filled: the reader can stop asking. */
+export function draftDone(leagueId: string): boolean {
+  const s = session(leagueId)
+  if (!s) return true
+  return s.draft.picks.length >= (s.draft.order.length || s.league.teams) * s.prep.rounds
+}
+
 export function nbaLeagues(): NbaLeague[] {
-  return load().leagues.filter((l) => !l.id.endsWith('-test'))
+  return load().leagues.filter((l) => !l.id.endsWith('-test') && (!l.mock || l.mock.apiOk === true))
 }
 
 let byYahoo: Map<string, NbaPlayer> | null = null
@@ -150,6 +268,19 @@ function save(s: Session) {
 function viewOf(s: Session): DraftView {
   if (!s.dirty && s.view) return s.view
   const next = buildView(s.prep, s.draft, tagsFor(s.league.id))
+  // What the advice said when I was on the clock, so the review can say where I went my own way.
+  if (next.clock.onClock && next.advice[0]) {
+    s.draft.advised = { ...(s.draft.advised ?? {}), [next.clock.overall]: next.advice[0].id }
+    s.draft.turns = {
+      ...(s.draft.turns ?? {}),
+      [next.clock.overall]: {
+        at: Date.now(),
+        advice: next.advice.map((a) => ({ id: a.id, score: a.score, survives: a.survives, canWait: a.canWait })),
+        locks: [...s.draft.locks],
+        stage: next.build?.stage ?? null,
+      },
+    }
+  }
   const news = changes(s.view, next)
   if (news.length) {
     s.draft.feed.push(...news)
@@ -171,8 +302,10 @@ function viewOf(s: Session): DraftView {
 function cadence(s: Session): number {
   const d = s.draft
   const total = (d.order.length || s.league.teams) * s.prep.rounds
-  if (!d.picks.length) return 120_000
   if (d.picks.length >= total) return 900_000
+  // A mock the API cannot read has only the extension, and bots pick at once.
+  if (s.league.mock && s.league.mock.apiOk !== true) return 6_000
+  if (!d.picks.length) return 120_000
   return 15_000
 }
 
@@ -182,7 +315,7 @@ function leaguesForExtension() {
     const yahooLeagueId = l.leagueKey.split('.').pop()!
     return {
       id: l.id, label: l.label, sport: 'nba', platform: 'yahoo', leagueKey: l.leagueKey, myTeamName: l.myTeamName,
-      scoring: l.scoring, teams: l.teams,
+      scoring: l.scoring, teams: l.teams, mock: l.mock ?? null,
       sensor: {
         pollMs: cadence(s), wants: 'draft',
         host: 'basketball.fantasysports.yahoo.com', path: `/nba/${yahooLeagueId}/draftresults`,
@@ -212,6 +345,47 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
       .slice(0, 12)
       .map((p) => ({ id: p.id, name: p.name, team: p.team, positions: p.yahoo?.positions ?? p.positions }))
     json(res, 200, hits)
+    return true
+  }
+
+  // Every finished mock, grouped by the league it copies — the two formats are never pooled.
+  if (what === 'tendencies' && req.method === 'GET') {
+    const L = load()
+    const out = L.leagues.filter((l) => !l.mock && !l.id.endsWith('-test')).map((league) => {
+      const records = L.leagues.filter((l) => l.mock?.baseId === league.id)
+        .map((l) => { const s = session(l.id)!; return recordOf(s.prep, s.draft, tagsFor(l.id)) })
+        .filter((r): r is MockRecord => r != null)
+      return { leagueId: league.id, label: league.label, scoring: league.scoring, report: analyseMocks(records, league.scoring) }
+    })
+    json(res, 200, out)
+    return true
+  }
+
+  if (what === 'mock' && req.method === 'POST') {
+    const data = await body(req)
+    const yid = mockIdFrom(String(data.link ?? ''))
+    if (!yid) { json(res, 400, { error: 'no league id in that link — paste the draft room address' }); return true }
+    if (load().leagues.some((l) => !l.mock && l.leagueKey.endsWith(`.l.${yid}`))) { json(res, 400, { error: 'that is one of your real leagues, not a mock' }); return true }
+    const m = registerMock(yid, String(data.baseId ?? ''))
+    if (!m) { json(res, 400, { error: 'choose which league the mock copies' }); return true }
+    json(res, 200, { ok: true, leagueId: m.id })
+    return true
+  }
+
+  // A draft room the extension found open that the companion does not know: a mock.
+  if (what === 'detect' && req.method === 'POST') {
+    const data = await body(req)
+    const rows: YahooRow[] = Array.isArray(data.rows) ? data.rows : []
+    const order: string[] = Array.isArray(data.order) ? data.order.map(String) : []
+    const yid = String(data.yahooLeagueId ?? '')
+    if (!/^\d+$/.test(yid)) { json(res, 400, { error: 'no league id' }); return true }
+    if (load().leagues.some((l) => !l.mock && l.leagueKey.endsWith(`.l.${yid}`))) { json(res, 200, { ok: false, reason: 'a configured league, not a mock' }); return true }
+    const m = detectMock(yid, rows, order)
+    if (!m) { json(res, 200, { ok: false, reason: 'not enough of the board to size the league yet' }); return true }
+    const s = session(m.id)!
+    ingestYahoo(s.draft, rows, order, '', s.league.teams, load().index, Date.now(), 'page')
+    save(s)
+    json(res, 200, { ok: true, leagueId: m.id, accepted: rows.length })
     return true
   }
 
@@ -282,6 +456,11 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
       setLocks(s.draft, locks)
       save(s)
       json(res, 200, { ok: true, locks })
+      return true
+    }
+    case 'discard': {
+      const ok = s.league.mock ? discardMock(s.league.id) : false
+      json(res, ok ? 200 : 400, ok ? { ok } : { error: 'only a mock can be discarded' })
       return true
     }
     case 'tag': {

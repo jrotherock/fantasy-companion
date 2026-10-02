@@ -49,7 +49,22 @@ export interface StoredDraft {
   order: string[]
   locks: Cat[]
   feed: FeedItem[]
+  /** The advice's first choice at each pick I was on the clock for, keyed by overall pick — for the review. */
+  advised?: Record<number, string>
+  /**
+   * The whole advice at each of my turns, for comparing mocks: what was on
+   * offer, how each scored, and what I had locked. Only turns the screen was
+   * open for are recorded.
+   */
+  turns?: Record<number, Turn>
   sensor: { at: number | null; ok: boolean; error: string | null; unresolved: string[]; source?: 'api' | 'page' }
+}
+
+export interface Turn {
+  at: number
+  advice: { id: string; score: number; survives: number; canWait: boolean }[]
+  locks: Cat[]
+  stage: 'open' | 'leaning' | 'firm' | null
 }
 
 export function emptyDraft(leagueId: string): StoredDraft {
@@ -72,7 +87,8 @@ export function ingestYahoo(
   source: 'api' | 'page' = 'page',
 ): { accepted: number; unresolved: string[] } {
   if (order.length && (source === 'api' || rows.length > 0)) d.order = order
-  const mine = d.order.findIndex((t) => t.trim() === myTeamName.trim())
+  // A mock has no name of mine to look for, and an empty name must not match an empty row.
+  const mine = myTeamName.trim() ? d.order.findIndex((t) => t.trim() === myTeamName.trim()) : -1
   if (mine >= 0 && (d.slot !== mine + 1 || d.slotSource !== 'yahoo')) {
     if (d.slot != null && d.slot !== mine + 1) d.feed.push({ at: now, kind: 'slot', text: `Yahoo moved your seat to ${mine + 1}` })
     d.slot = mine + 1

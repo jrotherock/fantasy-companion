@@ -14,7 +14,7 @@
  */
 import * as yahooApi from './yahooApi.js'
 import { draftOrder, draftStatus, parseDraftResults, parsePlayerNames, parseTeams, type ApiTeam } from '../nba/yahooDraft.js'
-import { nbaLeagues, ingestApi, playerByYahooId } from './nbaDraft.js'
+import { draftDone, nbaLeagues, ingestApi, onReadableMock, playerByYahooId } from './nbaDraft.js'
 
 const HOUR = 60 * 60_000
 const ORDER_SET = 2 * 60_000
@@ -38,7 +38,9 @@ async function step(leagueId: string, key: string): Promise<number> {
   watches.set(leagueId, w)
   try {
     // Status is re-read every couple of minutes mid-draft, which is how the end is noticed.
-    if (w.status !== 'draft' || Date.now() - w.statusAt > 2 * 60_000) {
+    // A mock drafts from the moment it is found, and has no meta worth asking for.
+    if (leagueId.startsWith('nba-mock-')) w.status = w.status ?? 'draft'
+    else if (w.status !== 'draft' || Date.now() - w.statusAt > 2 * 60_000) {
       w.status = draftStatus(await yahooApi.call(`league/${key}`))
       w.statusAt = Date.now()
     }
@@ -75,7 +77,7 @@ async function step(leagueId: string, key: string): Promise<number> {
       }
     }), order)
     w.error = null
-    return w.status === 'postdraft' ? Infinity : DRAFTING
+    return w.status === 'postdraft' || draftDone(leagueId) ? Infinity : DRAFTING
   } catch (e) {
     w.error = (e as Error).message
     // Yahoo said slow down, or the day's budget is spent: wait long, and let the extension carry the draft.
@@ -103,6 +105,11 @@ export function startNbaYahoo() {
   // A replayed recording has no basketball in it, and a local run must not hold the real token.
   if (timer || !yahooApi.connected() || yahooApi.replaying()) return
   timer = setTimeout(tick, 5_000)
+  // A mock the API turns out to read is followed at once, not at the next hourly look.
+  onReadableMock(() => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(tick, 1_000)
+  })
 }
 
 export function nbaYahooStatus() {

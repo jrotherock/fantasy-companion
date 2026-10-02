@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { addManual, emptyDraft, ingestYahoo, undoManual } from './session.js'
 import { NameIndex } from './join.js'
 import { draftOrder, parseDraftResults, parseTeams } from './yahooDraft.js'
-import { buildView, prepare } from './plan.js'
+import { buildView, checkScoring, prepare } from './plan.js'
 import { adpFor } from './draft.js'
 
 const index = new NameIndex([
@@ -95,4 +95,11 @@ test('the screen keeps never-list players on the board and out of the advice, an
   const pv = buildView(harker, { ...emptyDraft('nba-harker'), slot: 3 }, new Map())
   assert.equal(pv.build, null, 'a points league has no build')
   assert.equal(pv.paths.length, 1)
+})
+
+test('a league scoring anything the models cannot value fails loudly', () => {
+  const base = { id: 'x', label: 'x', leagueKey: 'k', myTeamName: '', teams: 10, roster: {} }
+  assert.doesNotThrow(() => checkScoring({ ...base, scoring: 'categories', categories: ['fg%', 'ft%', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to'] }))
+  assert.throws(() => checkScoring({ ...base, scoring: 'categories', categories: ['fg%', 'ft%', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'dd'] }), /standard nine/)
+  assert.throws(() => checkScoring({ ...base, scoring: 'points', points: { pts: 1, dd: 2 } }), /dd/)
 })

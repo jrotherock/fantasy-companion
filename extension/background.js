@@ -197,7 +197,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   }
 
   if (msg.type === 'detected') {
-    fanOut(`/api/detect`, {
+    // A basketball room goes to basketball's own detector, which builds a mock league.
+    fanOut(msg.sport === 'nba' ? `/api/nba/detect` : `/api/detect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -205,6 +206,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
         yahooLeagueId: msg.yahooLeagueId,
         teamId: msg.teamId,
         shape: msg.shape,
+        order: msg.order || [],
         rows: msg.rows,
       }),
     })

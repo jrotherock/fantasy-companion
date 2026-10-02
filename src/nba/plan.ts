@@ -25,6 +25,7 @@ import { openSeats, positionalSlots, stillFeasible } from './lineup.js'
 import { myPicks, teamsIn, type FeedItem, type StoredDraft } from './session.js'
 import type { NbaPlayer } from './types.js'
 import type { PrefTag } from './preferences.js'
+import type { MockRecord } from './tendencies.js'
 
 export interface NbaLeague {
   id: string
@@ -35,6 +36,8 @@ export interface NbaLeague {
   scoring: 'points' | 'categories'
   points?: Record<string, number>
   roster: Record<string, number>
+  /** Set on a Yahoo mock draft, which borrows a real league's settings for its own temporary league. */
+  mock?: { yahooLeagueId: string; baseId: string; apiOk: boolean | null; createdAt: number }
 }
 
 /** The builds offered as paths. Pairs are the ones the punt literature and last season's team suggest. */
@@ -73,7 +76,27 @@ export interface Prepared {
   adpOrder: string[]
 }
 
+/**
+ * The nine-category model is built for Yahoo's standard nine. A league that
+ * scores anything else would be valued wrongly without a sound, so it fails
+ * loudly instead; same for a points league with a stat the projections lack.
+ */
+export function checkScoring(league: NbaLeague & { categories?: string[] }) {
+  if (league.scoring === 'categories') {
+    const want = ['fg%', 'ft%', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to']
+    const have = (league.categories ?? want).map((c) => c.toLowerCase())
+    if (have.length !== want.length || want.some((c) => !have.includes(c))) {
+      throw new Error(`${league.id} scores ${have.join(', ')}; the category model only knows Yahoo's standard nine`)
+    }
+  } else {
+    const known = ['pts', 'reb', 'ast', 'stl', 'blk', 'to', 'tpm']
+    const extra = Object.keys(league.points ?? {}).filter((k) => !known.includes(k))
+    if (extra.length) throw new Error(`${league.id} scores ${extra.join(', ')}, which the points model does not project`)
+  }
+}
+
 export function prepare(league: NbaLeague, players: NbaPlayer[], noise: Record<Cat, number>, adpFor: (p: NbaPlayer) => number): Prepared {
+  checkScoring(league)
   const byId = new Map(players.map((p) => [p.id, p]))
   const adp = (id: string) => adpFor(byId.get(id)!)
   const rounds = rosterSpots(league.roster)
@@ -158,6 +181,17 @@ export interface DraftView {
   board: BoardRow[]
   log: { overall: number; round: number; name: string; manager: string | null; mine: boolean }[]
   feed: FeedItem[]
+  /** Once my roster is full: how it came out, and where I went my own way. */
+  review: null | {
+    expected: number | null
+    win: Record<Cat, number> | null
+    punting: Cat[]
+    value: number | null
+    followed: number
+    advisedPicks: number
+    departures: { round: number; took: string; advised: string }[]
+  }
+  mock: NbaLeague['mock'] | null
 }
 
 function canTakeFor(prep: Prepared, mine: string[], tags: Map<string, PrefTag>): CanTake {
@@ -253,7 +287,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       ? adviseCategories(prep.cats.rows.filter((r) => !taken.has(r.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
         { canTake, neutralUntil: BUILD_FROM, ignore: d.locks })
       : advisePoints(prep.points!.rows.filter((r) => !taken.has(r.id)), spot, 25, canTake)
-    advice = raw.slice(0, 8).map((a) => ({
+    // Fifteen, though the screen shows six: comparing mocks needs the score of whoever I took instead.
+    advice = raw.slice(0, 15).map((a) => ({
       ...a, team: p(a.id).team, positions: prep.positions(a.id), tag: tags.get(a.id) ?? null,
       // "There next time" is the turn after this one; a player who will very likely still be there can wait.
       survives: nextAfter == null ? 0 : survival(prep.adp(a.id), nextAfter),
@@ -332,7 +367,29 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     }
   }).sort((a, b) => a.rank - b.rank).slice(0, 320)
 
+  // ── Review, once the roster is full ──
+  let review: DraftView['review'] = null
+  if (mine.length >= rounds) {
+    const advised = d.advised ?? {}
+    const asked = mineP.filter((x) => advised[x.overall])
+    const departures = asked.filter((x) => advised[x.overall] !== x.playerId)
+      .map((x) => ({ round: roundFor(x.overall, teams), took: p(x.playerId).name, advised: p(advised[x.overall]).name }))
+    const s = prep.cats ? strengthOf(prep, mine) : null
+    const win = s ? winChances(s, mine.length, prep.cats!.base) : null
+    review = {
+      expected: s ? expectedCats(s, mine.length, prep.cats!.base) : null,
+      win,
+      punting: win ? CATS.filter((c) => win[c] < 0.35) : [],
+      value: prep.points ? mine.reduce((n, id) => n + (prep.points!.byId.get(id)?.value ?? 0), 0) : null,
+      followed: asked.length - departures.length,
+      advisedPicks: asked.length,
+      departures,
+    }
+  }
+
   return {
+    review,
+    mock: L.mock ?? null,
     league: { id: L.id, label: L.label, scoring: L.scoring, teams, rounds, slot, slotSource: d.slotSource, myTeamName: L.myTeamName },
     clock: { overall: done ? teams * rounds : overall, round: roundFor(Math.min(overall, teams * rounds), teams), onClock, myNext, picksUntil: myNext == null ? null : myNext - overall, done },
     sensor: d.sensor,
@@ -396,3 +453,43 @@ export function changes(prev: DraftView | null, next: DraftView, now = Date.now(
 }
 
 export { overallFor }
+
+/**
+ * A finished draft as one record for comparing mocks. The cost of a pick is
+ * the advice's first choice less the pick made, in the advice's own score, at
+ * the turn it was made; a pick from outside the list the screen kept is costed
+ * at the list's last entry, which understates it.
+ */
+export function recordOf(prep: Prepared, d: StoredDraft, tags: Map<string, PrefTag>): MockRecord | null {
+  const view = buildView(prep, d, tags)
+  if (!view.review) return null
+  const teams = view.league.teams
+  const mine = d.slot == null ? [] : myPicks(d, teams, slotFor)
+  const name = (id: string) => prep.players.get(id)?.name ?? id
+  const picks = mine.map((x) => {
+    const turn = d.turns?.[x.overall]
+    const top = turn?.advice[0]
+    const took = turn?.advice.find((a) => a.id === x.playerId)
+    const cost = !top ? null : took ? top.score - took.score : top.score - turn!.advice[turn!.advice.length - 1].score
+    return {
+      overall: x.overall, round: roundFor(x.overall, teams),
+      took: name(x.playerId), tookPositions: prep.positions(x.playerId),
+      advised: top ? name(top.id) : null, advisedPositions: top ? prep.positions(top.id) : [],
+      cost,
+      waitedWrong: !!(top && took && took.id !== top.id && took.canWait && !top.canWait),
+      stage: turn?.stage ?? null,
+    }
+  })
+  const firstLocked = mine.find((x) => (d.turns?.[x.overall]?.locks.length ?? 0) > 0)
+  return {
+    id: d.leagueId,
+    when: d.feed[0]?.at ?? d.turns?.[mine[0]?.overall ?? 0]?.at ?? 0,
+    seat: d.slot,
+    result: view.review.expected ?? view.review.value ?? 0,
+    punting: view.review.punting,
+    win: view.review.win,
+    locks: d.locks,
+    lockedFromRound: firstLocked ? roundFor(firstLocked.overall, teams) : null,
+    picks,
+  }
+}
