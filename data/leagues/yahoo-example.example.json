@@ -1,6 +1,7 @@
 {
   "id": "yahoo-example",
   "label": "My Yahoo League",
+  "sport": "nfl",
   "platform": "yahoo",
   "leagueKey": "nfl.l.REPLACE_WITH_YAHOO_LEAGUE_ID",
   "leagueId": "REPLACE_WITH_YAHOO_LEAGUE_ID",

@@ -1,6 +1,7 @@
 {
   "id": "yahoo-h2h-1604981",
   "label": "Yahoo H2H-Pts",
+  "sport": "nfl",
   "platform": "yahoo",
   "leagueKey": "470.l.1604981",
   "leagueId": "1604981",

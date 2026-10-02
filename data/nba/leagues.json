@@ -4,6 +4,7 @@
     {
       "id": "nba-harker",
       "label": "Harker Fantasy Basketball",
+      "sport": "nba",
       "leagueKey": "478.l.96459",
       "myTeamId": "3",
       "myTeamName": "Shai Me Up Domo Down",
@@ -19,6 +20,7 @@
     {
       "id": "nba-hoops",
       "label": "Hoops 2025",
+      "sport": "nba",
       "leagueKey": "478.l.103439",
       "myTeamId": "4",
       "myTeamName": "Slim Reaper Kats",

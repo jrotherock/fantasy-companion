@@ -1,6 +1,7 @@
 {
   "id": "yahoo-guillotine",
   "label": "Harker Experi(Mental) League",
+  "sport": "nfl",
   "platform": "yahoo",
   "leagueKey": "470.l.310904",
   "leagueId": "310904",

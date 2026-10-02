@@ -1,6 +1,7 @@
 {
   "id": "sleeper-example",
   "label": "My Sleeper League",
+  "sport": "nfl",
   "platform": "sleeper",
   "leagueKey": "REPLACE_WITH_SLEEPER_LEAGUE_ID",
   "draftId": "1395155829736378368",

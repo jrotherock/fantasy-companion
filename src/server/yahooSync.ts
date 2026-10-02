@@ -412,6 +412,7 @@ export function configFrom(l: Y.YLeague, s: Y.YSettings, myTeamId: string | null
   const config: LeagueConfig & Record<string, unknown> = {
     id: `yahoo-${l.id}`,
     label: l.name,
+    sport: 'nfl',
     platform: 'yahoo',
     leagueKey: l.key,
     teams: l.teams,

@@ -1,6 +1,7 @@
 {
   "id": "yahoo-steward",
   "label": "Fantasy Steward",
+  "sport": "nfl",
   "platform": "yahoo",
   "leagueKey": "470.l.842228",
   "leagueId": "842228",

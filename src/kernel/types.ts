@@ -61,6 +61,12 @@ export interface FlexSlot {
 export interface LeagueConfig {
   id: string
   label: string
+  /**
+   * Absent means football, which is everything written before basketball.
+   * Nothing branches on it yet; it is here so a mixed list of leagues never
+   * has to be told apart by guessing from the league key.
+   */
+  sport?: 'nfl' | 'nba'
   platform: 'yahoo' | 'sleeper'
   leagueKey: string
   draftId?: string

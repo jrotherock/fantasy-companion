@@ -1,6 +1,7 @@
 {
   "id": "yahoo-green",
   "label": "Harker Football Green",
+  "sport": "nfl",
   "platform": "yahoo",
   "leagueKey": "470.l.582048",
   "leagueId": "582048",
