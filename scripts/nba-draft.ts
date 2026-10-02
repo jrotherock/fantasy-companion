@@ -13,7 +13,8 @@
 import { readFile } from 'node:fs/promises'
 import { categoryZ, pointsValues, rankBuild, rosterSpots, CATS, type Cat, type CatRow } from '../src/nba/value.js'
 import {
-  adpFor, adviseCategories, advisePoints, baseline, contribution, expectedCats, winChances, zero, type Strength,
+  adpFor, adviseCategories, advisePoints, baseline, contribution, expectedCats, readBuild, winChances, zero,
+  BUILD_FROM, BUILD_FIRM, type Strength,
 } from '../src/nba/draft.js'
 import { NameIndex } from '../src/nba/join.js'
 import { positionalSlots, stillFeasible } from '../src/nba/lineup.js'
@@ -68,7 +69,7 @@ async function main() {
   const advise = (taken: Set<string>, mine: string[], slot: number, overall: number) => {
     const spot = { teams: league.teams, rounds, slot, overall }
     const canTake = canTakeFor(mine)
-    if (isCats) return adviseCategories(zRows.filter((r) => !taken.has(r.id)), mine.map((id) => rowOf.get(id)), spot, base!, 20, 40, canTake)
+    if (isCats) return adviseCategories(zRows.filter((r) => !taken.has(r.id)), mine.map((id) => rowOf.get(id)), spot, base!, 20, 40, canTake, BUILD_FROM)
     return advisePoints(pts.filter((r) => !taken.has(r.id)), spot, 25, canTake)
   }
 
@@ -130,11 +131,16 @@ async function main() {
   const mineNow = slotFor(overall, league.teams) === slot
   const myNext = Array.from({ length: rounds }, (_, r) => overallFor(r + 1, slot, league.teams)).find((o) => o >= overall)
   console.log(`${league.label}, slot ${slot}: pick ${overall}${mineNow ? ' is yours' : ` — yours is ${myNext}`}. Roster: ${mine.map((id) => byId.get(id)!.name).join(', ') || 'none yet'}`)
-  if (isCats && mine.length) {
-    const p = profile(mine)
-    console.log(`  this week vs an average team: ${CATS.map((c) => `${c} ${(p.w[c] * 100).toFixed(0)}%`).join('  ')}  → ${p.e.toFixed(2)} of 9`)
-    const punting = CATS.filter((c) => p.w[c] < 0.35)
-    if (punting.length) console.log(`  already punting: ${punting.join(', ')}`)
+  if (isCats) {
+    const build = readBuild(profile(mine).s, mine.length, base!)
+    if (build.stage === 'open') {
+      console.log(`  build: open — not read until your ${BUILD_FROM}th pick; until then the advice is the best player, not a fit`)
+    } else {
+      const p = profile(mine)
+      console.log(`  this week vs an average team: ${CATS.map((c) => `${c} ${(p.w[c] * 100).toFixed(0)}%`).join('  ')}  → ${p.e.toFixed(2)} of 9`)
+      const what = build.punting.length ? `punting ${build.punting.join(', ')}` : `weakest ${build.weakest.join(', ')}, nothing given up`
+      console.log(`  build (${build.stage}${build.stage === 'leaning' ? `, firm from pick ${BUILD_FIRM}` : ''}): ${what}`)
+    }
   }
   const advice = advise(taken, mine, slot, mineNow ? overall : myNext!)
   console.log(`  ${'player'.padEnd(26)} ${isCats ? 'vs avg pick' : 'value'}   with next pick   there next time`)

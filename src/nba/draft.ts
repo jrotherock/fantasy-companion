@@ -161,6 +161,28 @@ export function winChances(mine: Strength, picks: number, base: Baseline): Stren
   return Object.fromEntries(CATS.map((c) => [c, phi((mine[c] - avg[c]) / base.sigma[c])])) as Strength
 }
 
+/**
+ * How many picks before a roster's shape says anything. Measured in mock drafts
+ * from every slot of Hoops: the two weakest categories after k picks matched the
+ * finished roster's about half the time for k of 1 to 3 (chance is about a
+ * fifth), 80% at 4, 65-70% from 5 to 8 and 80-100% from 9. So nothing is read
+ * before the fourth pick, a build is a leaning until the ninth, and firm after.
+ */
+export const BUILD_FROM = 4
+export const BUILD_FIRM = 9
+
+export type BuildRead = { stage: 'open' } | { stage: 'leaning' | 'firm'; punting: Cat[]; weakest: Cat[] }
+
+export function readBuild(mine: Strength, picks: number, base: Baseline): BuildRead {
+  if (picks < BUILD_FROM) return { stage: 'open' }
+  const w = winChances(mine, picks, base)
+  return {
+    stage: picks < BUILD_FIRM ? 'leaning' : 'firm',
+    punting: CATS.filter((c) => w[c] < 0.35),
+    weakest: [...CATS].sort((a, b) => w[a] - w[b]).slice(0, 2),
+  }
+}
+
 export function expectedCats(mine: Strength, picks: number, base: Baseline): number {
   const w = winChances(mine, picks, base)
   return CATS.reduce((n, c) => n + w[c], 0)
@@ -174,10 +196,14 @@ export function adviseCategories(
   shortlist = 20,
   lookahead = 40,
   canTake: CanTake = anyone,
+  neutralUntil = 0,
 ): Advice[] {
   const next = nextTurn(spot)
-  const have = mine.reduce((s, r) => add(s, contribution(r)), zero())
   const k = mine.length
+  // Before `neutralUntil` picks the roster's shape is not trusted to mean a
+  // build: it is read as an average team's, so the advice is the best player
+  // rather than the best fit for a direction one or two picks happened to set.
+  const have = k < neutralUntil ? base.after[Math.min(k, base.after.length - 1)] : mine.reduce((s, r) => add(s, contribution(r)), zero())
   const before = expectedCats(have, k, base)
 
   const single = available.filter((c) => canTake(c.id)).map((c) => ({ c, s: add(have, contribution(c)) }))

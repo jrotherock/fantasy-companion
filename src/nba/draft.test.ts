@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { adpFor, adviseCategories, advisePoints, baseline, expectedBest, expectedCats, winChances, zero, DEFAULT_LATE_ADP } from './draft.js'
+import { adpFor, adviseCategories, advisePoints, baseline, expectedBest, expectedCats, readBuild, winChances, zero, BUILD_FROM, DEFAULT_LATE_ADP } from './draft.js'
 import { CATS, type Cat, type CatRow } from './value.js'
 
 const flatNoise = Object.fromEntries(CATS.map((c) => [c, 2])) as Record<Cat, number>
@@ -66,4 +66,18 @@ test('a lost category stops paying: the recommender adds where it can still win'
     row('rebounder', { reb: 3 }, 500),
   ], mine, spot, base)
   assert.equal(advice[0].id, 'rebounder')
+})
+
+test('no build is read, or steered toward, before the fourth pick', () => {
+  const pool = Array.from({ length: 40 }, (_, i) => row(`p${i}`, { pts: (i % 5) - 2, ast: ((i * 3) % 5) - 2, reb: ((i * 7) % 5) - 2 }, i + 1))
+  const base = baseline(pool, 4, 6, flatNoise)
+  const lopsided = { ...zero(), ast: -24 }
+  assert.deepEqual(readBuild(lopsided, BUILD_FROM - 1, base), { stage: 'open' })
+  assert.equal(readBuild(lopsided, BUILD_FROM, base).stage, 'leaning')
+  // Read neutrally, the advice does not depend on which way the first picks leaned.
+  const spot = { teams: 4, rounds: 6, slot: 1, overall: 9 }
+  const options = [row('passer', { ast: 3 }, 500), row('rebounder', { reb: 3 }, 500)]
+  const after = (mine: ReturnType<typeof row>[]) =>
+    adviseCategories(options, mine, spot, base, 20, 40, undefined, BUILD_FROM).map((a) => [a.id, a.score.toFixed(9)])
+  assert.deepEqual(after([row('m1', { ast: -12 }, 999), row('m2', { ast: -12 }, 999)]), after([row('m3', { reb: -12 }, 999), row('m4', { reb: -12 }, 999)]))
 })
