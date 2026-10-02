@@ -183,7 +183,7 @@ function Screen({ id }: { id: string }) {
   const cats = view.league.scoring === 'categories'
   return (
     <div className="nb">
-      <Header view={view} error={error} />
+      <Header view={view} error={error} act={act} />
       <div className="nb-cols">
         <section className="nb-act">
           <Clock view={view} act={act} />
@@ -208,7 +208,7 @@ function Screen({ id }: { id: string }) {
 
 // ── Header ───────────────────────────────────────────────────────────────────
 
-function Header({ view, error }: { view: DraftView; error: string | null }) {
+function Header({ view, error, act }: { view: DraftView; error: string | null; act: (p: string, d?: unknown) => void }) {
   const s = view.sensor
   const age = s.at ? Math.round((Date.now() - s.at) / 1000) : null
   const tone = !s.at ? 'off' : !s.ok ? 'bad' : age! > 30 ? 'stale' : 'ok'
@@ -221,7 +221,11 @@ function Header({ view, error }: { view: DraftView; error: string | null }) {
         <span>{view.league.label}</span>
         <span className="nb-badge">{view.league.scoring === 'points' ? 'Points' : '9-cat'} · {view.league.teams} teams</span>
         {view.mock && <span className="nb-badge nb-mockbadge">Mock</span>}
-        {view.league.slot != null && <span className="nb-badge">Seat {view.league.slot}{view.league.slotSource === 'yahoo' ? ' (Yahoo)' : ''}</span>}
+        {view.league.slot != null && (
+          <button className="nb-badge slotedit" title="Change your draft slot — Yahoo can reshuffle the order before the draft" onClick={() => act('slot', { slot: null })}>
+            Slot {view.league.slot}{view.league.slotSource === 'yahoo' ? ' (Yahoo)' : ''}
+          </button>
+        )}
       </div>
       <div className={`nb-sensor nb-${tone}`} title={said}>{said}</div>
       {error && <div className="nb-sensor nb-bad">{error}</div>}
@@ -233,16 +237,21 @@ function Header({ view, error }: { view: DraftView; error: string | null }) {
 
 function Clock({ view, act }: { view: DraftView; act: (p: string, d?: unknown) => void }) {
   const c = view.clock
+  // Football's slot gate, same look and the same reason to exist: almost every number depends on it.
   if (view.league.slot == null) {
     return (
-      <div className="nb-clock">
-        <div className="nb-clock-big">Which seat are you?</div>
-        <p className="nb-dim">{view.mock
-          ? 'A mock uses made-up team names, so the seat cannot be read. Count your place in the draft room\'s order and click it.'
-          : 'Yahoo sets the order before the draft and the companion reads it. Until then, set it here.'}</p>
-        <div className="nb-seats">
+      <div className="gate">
+        <h2>Which slot are you?</h2>
+        <p>
+          {view.league.label} · {view.league.teams} teams.{' '}
+          {view.mock
+            ? 'A mock uses made-up team names, so count your place in the draft room\'s order'
+            : 'Yahoo sets the order before the draft and the companion reads it the moment it is posted; until then, set it here'}{' '}
+          — almost every number in here depends on it.
+        </p>
+        <div className="slots">
           {Array.from({ length: view.league.teams }, (_, i) => (
-            <button key={i} onClick={() => act('slot', { slot: i + 1 })}>{i + 1}</button>
+            <button className="slotbtn" key={i} onClick={() => act('slot', { slot: i + 1 })}>{i + 1}</button>
           ))}
         </div>
       </div>
