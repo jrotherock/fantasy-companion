@@ -62,6 +62,14 @@ export function expectedBest(sorted: { value: number; adp: number }[], next: num
   return e + floor * none
 }
 
+/**
+ * Whether I would take this player now — or, with `after`, at my next turn
+ * having taken `after` now. The never list and lineup feasibility live behind
+ * it; the room's picks are not filtered by it.
+ */
+export type CanTake = (id: string, after?: string) => boolean
+const anyone: CanTake = () => true
+
 export interface Advice {
   id: string
   name: string
@@ -83,11 +91,12 @@ export function advisePoints(
   available: (Candidate & { value: number })[],
   spot: DraftSpot,
   shortlist = 25,
+  canTake: CanTake = anyone,
 ): Advice[] {
   const next = nextTurn(spot)
   const sorted = [...available].sort((a, b) => b.value - a.value)
-  return sorted.slice(0, shortlist).map((c) => {
-    const rest = sorted.filter((x) => x.id !== c.id)
+  return sorted.filter((c) => canTake(c.id)).slice(0, shortlist).map((c) => {
+    const rest = sorted.filter((x) => x.id !== c.id && canTake(x.id, c.id))
     const later = next == null ? 0 : expectedBest(rest, next)
     return { id: c.id, name: c.name, now: c.value, score: c.value + later, survives: next == null ? 0 : survival(c.adp, next) }
   }).sort((a, b) => b.score - a.score)
@@ -164,20 +173,21 @@ export function adviseCategories(
   base: Baseline,
   shortlist = 20,
   lookahead = 40,
+  canTake: CanTake = anyone,
 ): Advice[] {
   const next = nextTurn(spot)
   const have = mine.reduce((s, r) => add(s, contribution(r)), zero())
   const k = mine.length
   const before = expectedCats(have, k, base)
 
-  const single = available.map((c) => ({ c, s: add(have, contribution(c)) }))
+  const single = available.filter((c) => canTake(c.id)).map((c) => ({ c, s: add(have, contribution(c)) }))
     .map(({ c, s }) => ({ c, s, e: expectedCats(s, k + 1, base) }))
     .sort((a, b) => b.e - a.e)
 
   return single.slice(0, shortlist).map(({ c, s, e }) => {
     let later = e
     if (next != null) {
-      const follow = single.filter((x) => x.c.id !== c.id).slice(0, lookahead)
+      const follow = single.filter((x) => x.c.id !== c.id && canTake(x.c.id, c.id)).slice(0, lookahead)
         .map((x) => ({ value: expectedCats(add(s, contribution(x.c)), k + 2, base), adp: x.c.adp }))
         .sort((a, b) => b.value - a.value)
       later = expectedBest(follow, next, e)

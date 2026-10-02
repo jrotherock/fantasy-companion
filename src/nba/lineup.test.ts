@@ -1,0 +1,42 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { positionalSlots, stillFeasible, unfilled } from './lineup.js'
+import { resolvePreferences } from './preferences.js'
+import { NameIndex } from './join.js'
+
+const hoops = { PG: 1, SG: 1, SF: 1, PF: 1, C: 1, Util: 3, BN: 5, IL: 3 }
+
+test('only positional slots constrain; Util, bench and IL take anyone', () => {
+  assert.deepEqual(positionalSlots(hoops), ['PG', 'SG', 'SF', 'PF', 'C'])
+  assert.deepEqual(positionalSlots({ G: 1, F: 2, Util: 2 }), ['G', 'F', 'F'])
+})
+
+test('a multi-position player is moved to free a seat', () => {
+  // PG,SG first would take PG greedily; the matching moves him to SG so the pure PG fits.
+  assert.equal(unfilled([['PG', 'SG'], ['PG']], ['PG', 'SG']), 0)
+  assert.equal(unfilled([['C'], ['C'], ['C']], ['PG', 'SG', 'SF', 'PF', 'C']), 4)
+})
+
+test('a fifth centre is refused once the picks left cannot fill the other four seats', () => {
+  const slots = positionalSlots(hoops)
+  const centres = [['C'], ['C'], ['C'], ['C']]
+  assert.equal(stillFeasible(centres, ['C'], slots, 4), true, 'four picks left can still find a PG, SG, SF and PF')
+  assert.equal(stillFeasible(centres, ['C'], slots, 3), false)
+  assert.equal(stillFeasible(centres, ['PG', 'SG'], slots, 3), true)
+})
+
+test('never outranks avoid and like, league lists add to the shared ones, and typos are reported', () => {
+  const index = new NameIndex([
+    { id: '1', name: 'Joel Embiid', team: 'PHI' },
+    { id: '2', name: 'Kawhi Leonard', team: 'TOR' },
+    { id: '3', name: 'Anthony Davis', team: 'WAS' },
+  ])
+  const prefs = resolvePreferences({
+    never: ['Joel Embiid'], avoid: ['Joel Embiid', 'Antony Davis'], like: [],
+    leagues: { 'nba-hoops': { like: ['Kawhi Leonard'] }, 'nba-harker': { never: ['Anthony Davis'] } },
+  }, 'nba-hoops', index)
+  assert.equal(prefs.tags.get('1'), 'never')
+  assert.equal(prefs.tags.get('2'), 'like')
+  assert.equal(prefs.tags.has('3'), false, "another league's list does not apply here")
+  assert.deepEqual(prefs.unresolved, ['Antony Davis'])
+})
