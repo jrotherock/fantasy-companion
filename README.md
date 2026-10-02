@@ -37,6 +37,7 @@ npm run data:rankings     # BEER+ boards, one per league
 npm run data:adjustments  # big-play rates and value calibration (optional)
 npm run data:nba          # basketball: projections, history, schedule, teams
 npm run values:nba        # basketball: points values (Harker), 9-cat builds (Hoops)
+npm run draft:nba -- --league hoops --slot 9 --taken "…;…"   # basketball pick advice
 npm start                 # http://localhost:4600
 ```
 
@@ -65,6 +66,8 @@ src/
     sources.ts     one parser per source, pure
     join.ts        name matching, consensus line, durability, team schedules
     value.ts       points value over replacement; 9-cat z-scores and punt builds
+    draft.ts       pick advice: two-step lookahead on ADP survival; categories
+                   scored as expected weekly wins, noise measured in-league
 data/            league configs, player map, rankings, preferences
   nba/           basketball inputs (leagues, Yahoo ranks, team notes) and
                  the joined tables; raw/ is the download cache, not committed

@@ -1,0 +1,16 @@
+{
+  "note": "How much each category's weekly result is luck. Measured on Hoops 2025 (466.l.43113), 2025-26 regular season, the 16 seven-day weeks, 10 teams. sdTeams is the spread of teams' true weekly means (observed spread less the part weekly noise explains); sdWeekly is a team's week-to-week spread; r = sqrt(2) * sdWeekly / sdTeams is the noise in a head-to-head difference measured in units of the spread between teams. Lower r means a stronger team wins the category more reliably. Weekly totals include streaming volume, so games-played swings are part of the noise, as they are in the league.",
+  "source": "Yahoo league/466.l.43113/scoreboard;week=1..18, read 2026-10-02",
+  "r": { "fg": 3.42, "ft": 2.40, "tpm": 2.07, "pts": 3.41, "reb": 3.54, "ast": 1.81, "stl": 5.04, "blk": 1.87, "to": 2.77 },
+  "raw": {
+    "fg": { "mean": 0.479, "sdWeekly": 0.0245, "sdTeams": 0.0101 },
+    "ft": { "mean": 0.801, "sdWeekly": 0.0402, "sdTeams": 0.0237 },
+    "tpm": { "mean": 66.394, "sdWeekly": 13.5484, "sdTeams": 9.234 },
+    "pts": { "mean": 654.825, "sdWeekly": 104.882, "sdTeams": 43.4655 },
+    "reb": { "mean": 219.325, "sdWeekly": 37.1637, "sdTeams": 14.8295 },
+    "ast": { "mean": 151.4, "sdWeekly": 28.6255, "sdTeams": 22.4064 },
+    "stl": { "mean": 39.825, "sdWeekly": 8.4282, "sdTeams": 2.3668 },
+    "blk": { "mean": 24.331, "sdWeekly": 7.0737, "sdTeams": 5.3395 },
+    "to": { "mean": 76.869, "sdWeekly": 14.6127, "sdTeams": 7.4485 }
+  }
+}
