@@ -26,7 +26,7 @@ import { NameIndex } from '../nba/join.js'
 import { adpFor } from '../nba/draft.js'
 import { buildView, changes, prepare, recordOf, type DraftView, type NbaLeague, type Prepared } from '../nba/plan.js'
 import { analyseMocks, type MockRecord } from '../nba/tendencies.js'
-import { fetchHistory, historyStatus, opponentReport } from './nbaHistory.js'
+import { backtest, fetchHistory, historyStatus, opponentReport } from './nbaHistory.js'
 import { addManual, emptyDraft, ingestYahoo, setLocks, setSlot, undoManual, type StoredDraft, type YahooRow } from '../nba/session.js'
 import { resolvePreferences, type PreferenceFile, type PrefTag } from '../nba/preferences.js'
 import { CATS, type Cat } from '../nba/value.js'
@@ -371,6 +371,11 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
       if (!yahooApi.connected() || yahooApi.replaying()) { json(res, 409, { error: 'reading history needs the Yahoo connection, which only the deployed app has' }); return true }
       void fetchHistory(league.id, league.leagueKey, league.history ?? []).then(() => { for (const s of sessions.values()) s.dirty = true })
       json(res, 202, { ok: true, started: true })
+      return true
+    }
+    if (action === 'backtest') {
+      const r = backtest(league.id)
+      json(res, r ? 200 : 404, r ?? { error: 'no history read yet' })
       return true
     }
     json(res, 200, historyStatus(league.id))

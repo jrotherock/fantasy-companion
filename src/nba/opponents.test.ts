@@ -48,3 +48,45 @@ test('one person is one person however Yahoo capitalised them', () => {
   assert.equal(r.managers.thomas.seasons, 2)
   assert.equal(r.managers.Thomas, undefined)
 })
+
+import { backtestHabits } from './opponents.js'
+
+/**
+ * Synthetic league-seasons: 10 managers, 13 rounds, 130 players with ADP in
+ * order. With `habit`, managers 0-2 take the best point guard left in the first
+ * six rounds and 3-5 the best centre; without it everyone takes the best ADP.
+ */
+function synth(seasons: number, habit: boolean): HistSeason[] {
+  const out: HistSeason[] = []
+  let seed = 7
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  for (let y = 0; y < seasons; y++) {
+    const pool = Array.from({ length: 130 }, (_, i) => ({ adp: i + 1 + rnd() * 6, positions: i % 3 === 0 ? ['PG'] : i % 3 === 1 ? ['C'] : ['SF'] }))
+      .sort((a, b) => a.adp - b.adp)
+    const picks: HistPick[] = []
+    for (let n = 1; n <= 130; n++) {
+      const round = Math.ceil(n / 10), seat = round % 2 ? (n - 1) % 10 : 9 - ((n - 1) % 10)
+      let i = 0
+      // Habits are a lean, not a rule: they win when the player is close to the top of the board.
+      if (habit && round <= 6 && seat < 6 && rnd() < 0.7) {
+        const want = seat < 3 ? 'PG' : 'C'
+        const j = pool.findIndex((p) => p.positions[0] === want)
+        if (j >= 0 && j < 4) i = j
+      }
+      const p = pool.splice(i, 1)[0]
+      picks.push({ pick: n, round, manager: `m${seat}`, positions: p.positions, adp: p.adp })
+    }
+    out.push({ season: String(2010 + y), teams: 10, picks })
+  }
+  return out
+}
+
+test('the backtest finds planted habits and does not invent them', () => {
+  const t0 = Date.now()
+  const planted = backtestHabits(synth(7, true))
+  const none = backtestHabits(synth(7, false))
+  assert.equal(planted.verdict, 'habits help')
+  assert.ok(planted.habits.logloss < planted.adp.logloss)
+  assert.equal(none.verdict, 'no better than ADP')
+  assert.ok(Date.now() - t0 < 20_000, `took ${Date.now() - t0} ms`)
+})

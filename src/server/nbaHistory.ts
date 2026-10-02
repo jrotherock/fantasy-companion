@@ -15,7 +15,7 @@ import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { leagueNodes } from './yahooParse.js'
 import { parseDraftPlayers, parseDraftResults, parseGameKeys, parseTeams } from '../nba/yahooDraft.js'
-import { analyseOpponents, type HistSeason, type OpponentReport } from '../nba/opponents.js'
+import { analyseOpponents, backtestHabits, type HistSeason, type OpponentReport } from '../nba/opponents.js'
 
 export interface StoredHistory {
   leagueId: string
@@ -116,4 +116,10 @@ export function historyStatus(leagueId: string) {
     skipped: h?.skipped ?? [],
     report: opponentReport(leagueId),
   }
+}
+
+/** Whether this league's habits predict its picks better than ADP alone, season by season. */
+export function backtest(leagueId: string) {
+  const h = readHistory(leagueId)
+  return h ? backtestHabits(h.seasons) : null
 }

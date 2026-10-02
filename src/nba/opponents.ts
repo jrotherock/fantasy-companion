@@ -147,3 +147,120 @@ export function analyseOpponents(history: HistSeason[]): OpponentReport {
   }
   return { seasons: seasons.map((s) => s.season), validation, managers, leagueMean }
 }
+
+// ── Backtest: do habits predict picks better than ADP alone? ─────────────────
+
+export interface BacktestResult {
+  seasonsTested: string[]
+  picks: number
+  /** Mean log-loss per pick (lower is better), and hit rates, for each model. */
+  adp: { logloss: number; top1: number; top3: number }
+  habits: { logloss: number; top1: number; top3: number }
+  /** The same, first six rounds only — where the habits are measured and where survival matters. */
+  early: { picks: number; adp: number; habits: number }
+  /** Per held-out season: log-loss with and without habits, and the weight learned before it. */
+  bySeason: { season: string; picks: number; adp: number; habits: number; weight: number; scale: number }[]
+  verdict: 'habits help' | 'no better than ADP'
+}
+
+interface Cand { adp: number; pg: boolean; c: boolean; idx: number }
+
+/** Probability each candidate is the pick: lower ADP more likely, nudged by the manager's appetite. */
+function probs(cands: Cand[], scale: number, w: number, guardDev: number, centreDev: number, early: boolean): number[] {
+  const logits = cands.map((x) => -x.adp / scale + (early ? w * ((x.pg ? guardDev : 0) + (x.c ? centreDev : 0)) : 0))
+  const m = Math.max(...logits)
+  const e = logits.map((l) => Math.exp(l - m))
+  const z = e.reduce((a, b) => a + b, 0)
+  return e.map((v) => v / z)
+}
+
+/** Each manager's appetite for point guards and centres in their first six picks, relative to the league, from these seasons only. */
+function appetites(train: HistSeason[]) {
+  const shares = new Map<string, { g: number[]; c: number[] }>()
+  const all = { g: [] as number[], c: [] as number[] }
+  for (const s of train) {
+    const by = new Map<string, HistPick[]>()
+    for (const p of s.picks) if (p.manager && p.round <= 6 && p.positions.length) by.set(personKey(p.manager), [...(by.get(personKey(p.manager)) ?? []), p])
+    for (const [m, ps] of by) {
+      const g = mean(ps.map((p) => (p.positions.includes('PG') ? 1 : 0))), c = mean(ps.map((p) => (p.positions.includes('C') ? 1 : 0)))
+      const e = shares.get(m) ?? { g: [], c: [] }
+      e.g.push(g); e.c.push(c); shares.set(m, e)
+      all.g.push(g); all.c.push(c)
+    }
+  }
+  const lg = mean(all.g), lc = mean(all.c)
+  return (m: string | null) => {
+    const e = m ? shares.get(personKey(m)) : undefined
+    // Shrunk toward the league by seasons seen: one season of habit is mostly noise.
+    const k = e ? e.g.length / (e.g.length + 2) : 0
+    return e ? { g: k * (mean(e.g) - lg), c: k * (mean(e.c) - lc) } : { g: 0, c: 0 }
+  }
+}
+
+/** Log-loss and hits over a season's picks, every candidate being whoever was still undrafted. */
+function score(s: HistSeason, scale: number, w: number, appetite: ReturnType<typeof appetites>) {
+  const picks = [...s.picks].sort((a, b) => a.pick - b.pick)
+  const pool: Cand[] = picks.map((p, idx) => ({ adp: p.adp ?? 200, pg: p.positions.includes('PG'), c: p.positions.includes('C'), idx }))
+  const out = { ll: 0, top1: 0, top3: 0, n: 0, earlyLl: 0, earlyN: 0 }
+  for (let i = 0; i < picks.length; i++) {
+    const cands = pool.slice(i)
+    const a = appetite(picks[i].manager)
+    const early = picks[i].round <= 6
+    const pr = probs(cands, scale, w, a.g, a.c, early)
+    const p = Math.max(pr[0], 1e-9)
+    out.ll += -Math.log(p); out.n++
+    const rank = pr.filter((q) => q > pr[0]).length
+    if (rank === 0) out.top1++
+    if (rank < 3) out.top3++
+    if (early) { out.earlyLl += -Math.log(p); out.earlyN++ }
+  }
+  return out
+}
+
+/** The ADP scale and habit weight that fit the training seasons best. */
+function fit(train: HistSeason[], appetite: ReturnType<typeof appetites>, withHabits: boolean) {
+  let best = { scale: 10, w: 0, ll: Infinity }
+  for (const scale of [3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30]) {
+    for (const w of withHabits ? [0, 1, 2, 3, 4, 6, 8, 10, 14] : [0]) {
+      const ll = train.reduce((n, s) => n + score(s, scale, w, appetite).ll, 0)
+      if (ll < best.ll) best = { scale, w, ll }
+    }
+  }
+  return best
+}
+
+/**
+ * Walk forward: each season from the fourth on is predicted from the seasons
+ * before it alone — appetites and fitted weights both — and scored against
+ * what was really picked. Habits count as helping only if they lower the
+ * held-out log-loss overall and in most seasons.
+ */
+export function backtestHabits(history: HistSeason[], minTrain = 3): BacktestResult {
+  const seasons = [...history].filter((s) => s.picks.length).sort((a, b) => a.season.localeCompare(b.season))
+  const tot = { adp: { ll: 0, t1: 0, t3: 0 }, hab: { ll: 0, t1: 0, t3: 0 }, n: 0, early: { a: 0, h: 0, n: 0 } }
+  const bySeason: BacktestResult['bySeason'] = []
+  for (let i = minTrain; i < seasons.length; i++) {
+    const train = seasons.slice(0, i), test = seasons[i]
+    const appetite = appetites(train)
+    const base = fit(train, appetite, false)
+    const hab = fit(train, appetite, true)
+    const a = score(test, base.scale, 0, appetite)
+    const h = score(test, hab.scale, hab.w, appetite)
+    tot.adp.ll += a.ll; tot.adp.t1 += a.top1; tot.adp.t3 += a.top3
+    tot.hab.ll += h.ll; tot.hab.t1 += h.top1; tot.hab.t3 += h.top3
+    tot.n += a.n
+    tot.early.a += a.earlyLl; tot.early.h += h.earlyLl; tot.early.n += a.earlyN
+    bySeason.push({ season: test.season, picks: a.n, adp: a.ll / a.n, habits: h.ll / h.n, weight: hab.w, scale: hab.scale })
+  }
+  const n = Math.max(1, tot.n)
+  const wins = bySeason.filter((s) => s.habits < s.adp).length
+  return {
+    seasonsTested: bySeason.map((s) => s.season),
+    picks: tot.n,
+    adp: { logloss: tot.adp.ll / n, top1: tot.adp.t1 / n, top3: tot.adp.t3 / n },
+    habits: { logloss: tot.hab.ll / n, top1: tot.hab.t1 / n, top3: tot.hab.t3 / n },
+    early: { picks: tot.early.n, adp: tot.early.a / Math.max(1, tot.early.n), habits: tot.early.h / Math.max(1, tot.early.n) },
+    bySeason,
+    verdict: tot.hab.ll < tot.adp.ll && wins > bySeason.length / 2 ? 'habits help' : 'no better than ADP',
+  }
+}
