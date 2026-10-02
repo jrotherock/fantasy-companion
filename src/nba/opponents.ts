@@ -160,7 +160,9 @@ export interface BacktestResult {
   early: { picks: number; adp: number; habits: number }
   /** Per held-out season: log-loss with and without habits, and the weight learned before it. */
   bySeason: { season: string; picks: number; adp: number; habits: number; weight: number; scale: number }[]
-  verdict: 'habits help' | 'no better than ADP'
+  /** Mean per-pick log-loss saved by habits, and its standard error over the paired picks. */
+  gain: { mean: number; se: number }
+  verdict: 'habits help' | 'within noise' | 'no better than ADP'
 }
 
 interface Cand { adp: number; pg: boolean; c: boolean; idx: number }
@@ -201,14 +203,14 @@ function appetites(train: HistSeason[]) {
 function score(s: HistSeason, scale: number, w: number, appetite: ReturnType<typeof appetites>) {
   const picks = [...s.picks].sort((a, b) => a.pick - b.pick)
   const pool: Cand[] = picks.map((p, idx) => ({ adp: p.adp ?? 200, pg: p.positions.includes('PG'), c: p.positions.includes('C'), idx }))
-  const out = { ll: 0, top1: 0, top3: 0, n: 0, earlyLl: 0, earlyN: 0 }
+  const out = { ll: 0, top1: 0, top3: 0, n: 0, earlyLl: 0, earlyN: 0, each: [] as number[] }
   for (let i = 0; i < picks.length; i++) {
     const cands = pool.slice(i)
     const a = appetite(picks[i].manager)
     const early = picks[i].round <= 6
     const pr = probs(cands, scale, w, a.g, a.c, early)
     const p = Math.max(pr[0], 1e-9)
-    out.ll += -Math.log(p); out.n++
+    out.ll += -Math.log(p); out.n++; out.each.push(-Math.log(p))
     const rank = pr.filter((q) => q > pr[0]).length
     if (rank === 0) out.top1++
     if (rank < 3) out.top3++
@@ -238,6 +240,7 @@ function fit(train: HistSeason[], appetite: ReturnType<typeof appetites>, withHa
 export function backtestHabits(history: HistSeason[], minTrain = 3): BacktestResult {
   const seasons = [...history].filter((s) => s.picks.length).sort((a, b) => a.season.localeCompare(b.season))
   const tot = { adp: { ll: 0, t1: 0, t3: 0 }, hab: { ll: 0, t1: 0, t3: 0 }, n: 0, early: { a: 0, h: 0, n: 0 } }
+  const diffs: number[] = []
   const bySeason: BacktestResult['bySeason'] = []
   for (let i = minTrain; i < seasons.length; i++) {
     const train = seasons.slice(0, i), test = seasons[i]
@@ -250,10 +253,13 @@ export function backtestHabits(history: HistSeason[], minTrain = 3): BacktestRes
     tot.hab.ll += h.ll; tot.hab.t1 += h.top1; tot.hab.t3 += h.top3
     tot.n += a.n
     tot.early.a += a.earlyLl; tot.early.h += h.earlyLl; tot.early.n += a.earlyN
+    a.each.forEach((x, k) => diffs.push(x - h.each[k]))
     bySeason.push({ season: test.season, picks: a.n, adp: a.ll / a.n, habits: h.ll / h.n, weight: hab.w, scale: hab.scale })
   }
   const n = Math.max(1, tot.n)
   const wins = bySeason.filter((s) => s.habits < s.adp).length
+  // A gain has to stand clear of chance: twice its standard error over the paired picks.
+  const g = mean(diffs), se = diffs.length > 1 ? sd(diffs) / Math.sqrt(diffs.length) : Infinity
   return {
     seasonsTested: bySeason.map((s) => s.season),
     picks: tot.n,
@@ -261,6 +267,7 @@ export function backtestHabits(history: HistSeason[], minTrain = 3): BacktestRes
     habits: { logloss: tot.hab.ll / n, top1: tot.hab.t1 / n, top3: tot.hab.t3 / n },
     early: { picks: tot.early.n, adp: tot.early.a / Math.max(1, tot.early.n), habits: tot.early.h / Math.max(1, tot.early.n) },
     bySeason,
-    verdict: tot.hab.ll < tot.adp.ll && wins > bySeason.length / 2 ? 'habits help' : 'no better than ADP',
+    gain: { mean: g, se },
+    verdict: g <= 0 ? 'no better than ADP' : g > 2 * se && wins > bySeason.length / 2 ? 'habits help' : 'within noise',
   }
 }
