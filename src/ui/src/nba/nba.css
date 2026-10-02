@@ -196,3 +196,6 @@
 .nb-before { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; font-size: var(--t-sm); }
 
 .nb-warnbadge { color: var(--amber); border-color: rgba(255,176,0,0.6); }
+
+.nb-return { font-size: var(--t-xs); color: var(--amber); margin-left: 0.4rem; display: inline-flex; gap: 0.3rem; align-items: center; }
+.nb-return input { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; font-size: 12px; padding: 0 0.2rem; }

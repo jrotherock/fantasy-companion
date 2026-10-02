@@ -290,6 +290,7 @@ function TakeNow({ view, act }: { view: DraftView; act: (p: string, d?: unknown)
         {r.down.map((c) => <span key={c} className="nb-down">−{LABEL[c]}</span>)}
         {a.fpg != null && <span>{a.fpg.toFixed(1)} fp/g</span>}
         <span className="nb-dim">{Math.round(a.gp)} g</span>
+        {a.returnNote && <span className="nb-down" title="Starts the season hurt">{a.returnNote}</span>}
         {a.playoff != null && <span className={po(a.playoff, view.playoffNorm)} title="Games in your playoff weeks">PO {a.playoff}</span>}
       </span>
     )
@@ -529,6 +530,12 @@ function Board({ view, act }: { view: DraftView; act: (p: string, d?: unknown) =
                 <td className="nb-l">
                   {r.name}
                   {r.injury && <span className="nb-inj">{r.injury}</span>}
+                  {r.returnNote && (
+                    <span className="nb-return" title="When he is expected back; set your own date to override">
+                      {r.returnNote}
+                      <input type="date" aria-label={`Return date for ${r.name}`} onChange={(e) => act('return', { playerId: r.id, date: e.target.value || null })} />
+                    </span>
+                  )}
                   {r.tag && <span className={`nb-tag nb-${r.tag}`}>{r.tag}</span>}
                   {r.takenAt != null && <span className="nb-dim nb-small"> #{r.takenAt}{r.takenBy ? ` ${r.takenBy}` : ''}</span>}
                   <span className="nb-dim nb-small"> {r.team}</span>

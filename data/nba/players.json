@@ -1,5 +1,5 @@
 {
- "built": "2026-10-02T15:29:57.964Z",
+ "built": "2026-10-02T21:47:56.655Z",
  "season": 2026,
  "players": [
   {
@@ -68511,7 +68511,11 @@
    ],
    "age": 25,
    "yearsExp": 2,
-   "injury": null,
+   "injury": {
+    "status": "Out",
+    "body": "Hamstring",
+    "notes": null
+   },
    "yahoo": null,
    "lines": {
     "sleeper": {

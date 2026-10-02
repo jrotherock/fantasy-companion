@@ -85,3 +85,12 @@ test('a roster profile names the categories it is already losing', () => {
   assert.ok(weakest.slice(0, 3).includes('ft'))
   assert.ok(weakest.slice(0, 3).includes('ast') || weakest.slice(0, 3).includes('tpm'))
 })
+
+test('a player below replacement does not rise for missing games', () => {
+  const league = { teams: 1, roster: { C: 2 }, points: { pts: 1 } }
+  const ps = [player('a', { pts: 30 }), player('b', { pts: 26 }), player('line', { pts: 20 }),
+    player('healthyBad', { pts: 12 }, { gp: 80, gpShare: null }), player('hurtBad', { pts: 12 }, { gp: 10, gpShare: null })]
+  const rows = pointsValues(ps, league).rows
+  const v = (id: string) => rows.find((r) => r.id === id)!.value
+  assert.equal(v('hurtBad'), v('healthyBad'))
+})

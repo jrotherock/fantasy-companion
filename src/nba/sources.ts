@@ -192,3 +192,42 @@ export function parseYahooRanks(rows: any[][]): (YahooRank & { name: string; tea
     status: r[7] ?? '',
   }))
 }
+
+export interface InjuryNote {
+  name: string
+  injury: string
+  /** CBS's own words, e.g. "Expected to be out until at least Jan 2". */
+  text: string
+  /** The earliest date he is expected back, where CBS gives one. */
+  returnDate: string | null
+  outForSeason: boolean
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * CBS Sports' NBA injury page: one table per team, each row a player with
+ * an injury and a status. The status is where the timeline is: "Expected to
+ * be out until at least Jan 2", "Out for the season", "Game Time Decision".
+ * A date carries no year, so it is placed in the season that starts in
+ * `seasonYear`: October to December that year, January to June the next.
+ */
+export function parseCbsInjuries(html: string, seasonYear: number): InjuryNote[] {
+  const out: InjuryNote[] = []
+  for (const m of html.matchAll(/<tr class="TableBase-bodyTr">([\s\S]*?)<\/tr>/g)) {
+    const row = m[1]
+    const name = /CellPlayerName--long"><span[^>]*><a[^>]*>([^<]+)<\/a>/.exec(row)?.[1]
+    const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((c) => strip(c[1]))
+    if (!name || cells.length < 5) continue
+    const text = cells[4]
+    const at = /until at least ([A-Z][a-z]{2}) (\d{1,2})/.exec(text)
+    let returnDate: string | null = null
+    if (at) {
+      const month = MONTHS.indexOf(at[1])
+      const year = month >= 6 ? seasonYear : seasonYear + 1
+      returnDate = `${year}-${String(month + 1).padStart(2, '0')}-${at[2].padStart(2, '0')}`
+    }
+    out.push({ name: name.replace(/&#39;/g, "'").trim(), injury: cells[3], text, returnDate, outForSeason: /out for the season/i.test(text) })
+  }
+  return out
+}

@@ -135,3 +135,15 @@ test('the review judges a pick against the advice less anyone on the never list'
   assert.equal(view.review?.followed, 1, 'taking the best player not on the never list is following the advice')
   assert.equal(view.neverCount, 1)
 })
+
+test('a hurt player is counted from when he is back, and CBS dates are pushed back', async () => {
+  const { gamesAfterReturn, RETURN_SLIP_DAYS } = await import('./plan.js')
+  const p: any = { team: 'GSW', durability: { gpShare: 0.9 }, projection: { gp: 70, gpSource: 'fantasypros', perGame: {}, shooting: {}, sources: [] } }
+  const dates = { GSW: ['2026-12-01', '2027-01-05', '2027-01-20', '2027-02-10', '2027-03-01'] }
+  const cbs = gamesAfterReturn(p, { returnDate: '2027-01-01', outForSeason: false, source: 'cbs', text: '' }, dates, '2026-10-02')
+  assert.equal(RETURN_SLIP_DAYS, 10)
+  assert.equal(cbs.gp, 3 * 0.9, 'Jan 5 falls inside the slip; Jan 20, Feb 10 and Mar 1 count')
+  const mine = gamesAfterReturn(p, { returnDate: '2027-01-01', outForSeason: false, source: 'you', text: '' }, dates, '2026-10-02')
+  assert.equal(mine.gp, 4 * 0.9, 'your own date is taken as given')
+  assert.equal(gamesAfterReturn(p, { returnDate: null, outForSeason: true, source: 'cbs', text: '' }, dates, '2026-10-02').gp, 0)
+})

@@ -22,7 +22,11 @@ import { NameIndex } from './join.js'
 export type PrefTag = 'never' | 'avoid' | 'like'
 
 interface Lists { never?: string[]; avoid?: string[]; like?: string[] }
-export interface PreferenceFile extends Lists { leagues?: Record<string, Lists> }
+export interface PreferenceFile extends Lists {
+  leagues?: Record<string, Lists>
+  /** Return dates you have set for injured players, by name: YYYY-MM-DD. */
+  returns?: Record<string, string | null>
+}
 
 export interface Preferences {
   tags: Map<string, PrefTag>

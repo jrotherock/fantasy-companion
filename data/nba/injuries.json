@@ -1,0 +1,426 @@
+{
+ "built": "2026-10-02T21:47:56.669Z",
+ "source": "https://www.cbssports.com/nba/injuries/",
+ "injuries": [
+  {
+   "name": "Keshon Gilbert",
+   "injury": "Hip",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "RayJ Dennis",
+   "injury": "Achilles",
+   "text": "Questionable for start of season",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Henri Veesaar",
+   "injury": "Knee",
+   "text": "Out for the season",
+   "returnDate": null,
+   "outForSeason": true
+  },
+  {
+   "name": "Mouhamed Gueye",
+   "injury": "Foot",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Mikel Brown Jr.",
+   "injury": "Ankle",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "PJ Hall",
+   "injury": "Ankle",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Grant Williams",
+   "injury": "Hamstring",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Kon Knueppel",
+   "injury": "Hamstring",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Zach Collins",
+   "injury": "Toe",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Rob Dillingham",
+   "injury": "Wrist",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Peyton Watson",
+   "injury": "Hamstring",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Santi Aldama",
+   "injury": "Undisclosed",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Morez Johnson Jr.",
+   "injury": "Lower Leg",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Kyrie Irving",
+   "injury": "Knee",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Dereck Lively II",
+   "injury": "Foot",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Trevon Brazile",
+   "injury": "Undisclosed",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Jimmy Butler",
+   "injury": "Knee",
+   "text": "Expected to be out until at least Jan 2",
+   "returnDate": "2027-01-02",
+   "outForSeason": false
+  },
+  {
+   "name": "Alex Toohey",
+   "injury": "Knee",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Kristaps Porzingis",
+   "injury": "Undisclosed",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Moses Moody",
+   "injury": "Knee",
+   "text": "Expected to be out until at least Dec 1",
+   "returnDate": "2026-12-01",
+   "outForSeason": false
+  },
+  {
+   "name": "Larry Nance Jr.",
+   "injury": "Hamstring",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Johnny Furphy",
+   "injury": "Knee",
+   "text": "Expected to be out until at least Jan 1",
+   "returnDate": "2027-01-01",
+   "outForSeason": false
+  },
+  {
+   "name": "Yanic Konan Niederhauser",
+   "injury": "Foot",
+   "text": "Expected to be out until at least Nov 1",
+   "returnDate": "2026-11-01",
+   "outForSeason": false
+  },
+  {
+   "name": "Brandon Ingram",
+   "injury": "Achilles",
+   "text": "Expected to be out until at least Nov 1",
+   "returnDate": "2026-11-01",
+   "outForSeason": false
+  },
+  {
+   "name": "Bradley Beal",
+   "injury": "Knee",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Jordan Miller",
+   "injury": "Shoulder",
+   "text": "Expected to be out until at least Mar 1",
+   "returnDate": "2027-03-01",
+   "outForSeason": false
+  },
+  {
+   "name": "Karim Lopez",
+   "injury": "Undisclosed",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Micah Peavy",
+   "injury": "Ankle",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Zach Edey",
+   "injury": "Ankle",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Keshad Johnson",
+   "injury": "Hamstring",
+   "text": "Expected to be out until at least Oct 26",
+   "returnDate": "2026-10-26",
+   "outForSeason": false
+  },
+  {
+   "name": "Dru Smith",
+   "injury": "Calf",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Myron Gardner",
+   "injury": "Ankle",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Donte DiVincenzo",
+   "injury": "Achilles",
+   "text": "Expected to be out until at least Apr 1",
+   "returnDate": "2027-04-01",
+   "outForSeason": false
+  },
+  {
+   "name": "Bryce McGowens",
+   "injury": "Toe",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Mohamed Diawara",
+   "injury": "Finger",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Otega Oweh",
+   "injury": "Lower Leg",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Nikola Topic",
+   "injury": "Back",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Thomas Sorber",
+   "injury": "Knee",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Anthony Black",
+   "injury": "Ankle",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Noah Penda",
+   "injury": "Hamstring",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Jonathan Isaac",
+   "injury": "Knee",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Izaiyah Nelson",
+   "injury": "Ankle",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Adem Bona",
+   "injury": "Foot",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Tacko Fall",
+   "injury": "Hip",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "CJ Huntley",
+   "injury": "Hamstring",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Duop Reath",
+   "injury": "Foot",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Mark Williams",
+   "injury": "Shoulder",
+   "text": "Expected to be out until at least Feb 3",
+   "returnDate": "2027-02-03",
+   "outForSeason": false
+  },
+  {
+   "name": "Shaedon Sharpe",
+   "injury": "Knee",
+   "text": "Expected to be out until at least Mar 2",
+   "returnDate": "2027-03-02",
+   "outForSeason": false
+  },
+  {
+   "name": "David Jones",
+   "injury": "Ankle",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Jayden Quaintance",
+   "injury": "Knee",
+   "text": "Expected to be out until at least Dec 1",
+   "returnDate": "2026-12-01",
+   "outForSeason": false
+  },
+  {
+   "name": "Nate Bittle",
+   "injury": "Lower Leg",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Chucky Hepburn",
+   "injury": "Knee",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Allen Graves",
+   "injury": "Groin",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Alijah Martin",
+   "injury": "Knee",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Kyle Anderson",
+   "injury": "Knee",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Jamison Battle",
+   "injury": "Back",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Trey Alexander",
+   "injury": "Ribs",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Tristan Vukcevic",
+   "injury": "Hip",
+   "text": "Expected to be out until at least Nov 2",
+   "returnDate": "2026-11-02",
+   "outForSeason": false
+  },
+  {
+   "name": "Alex Sarr",
+   "injury": "Foot",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Jamir Watkins",
+   "injury": "Knee",
+   "text": "Expected to be out until at least Apr 1",
+   "returnDate": "2027-04-01",
+   "outForSeason": false
+  }
+ ]
+}

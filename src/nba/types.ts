@@ -57,7 +57,7 @@ export interface YahooRank {
   status: string
 }
 
-export type GpSource = 'fantasypros' | 'history' | 'default'
+export type GpSource = 'fantasypros' | 'history' | 'default' | 'injury'
 
 export interface Projection {
   perGame: PerGame

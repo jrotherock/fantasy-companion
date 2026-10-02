@@ -24,7 +24,7 @@ export const TEAM_GAMES = 82
 
 export interface Games {
   gp: number
-  how: 'blend' | 'projection' | 'history' | 'default'
+  how: 'blend' | 'projection' | 'history' | 'default' | 'injury'
 }
 
 /**
@@ -39,6 +39,8 @@ export function effectiveGames(p: NbaPlayer): Games {
   if (proj.gpSource === 'fantasypros' && history != null) return { gp: Math.min(TEAM_GAMES, (proj.gp + history) / 2), how: 'blend' }
   if (proj.gpSource === 'fantasypros') return { gp: Math.min(TEAM_GAMES, proj.gp), how: 'projection' }
   if (proj.gpSource === 'history') return { gp: proj.gp, how: 'history' }
+  // Already counted from his return date and his team's remaining schedule (see plan.ts).
+  if (proj.gpSource === 'injury') return { gp: proj.gp, how: 'injury' }
   return { gp: proj.gp, how: 'default' }
 }
 
@@ -96,7 +98,9 @@ export function pointsValues(players: NbaPlayer[], league: PointsLeague): { rows
   const rows = base
     .map(({ p, fpg, games, season }) => ({
       id: p.id, name: p.name, team: p.team, positions: p.positions, fpg, games, season,
-      value: (fpg - replacementFpg) * games.gp, rank: 0, yahooRank: p.yahoo?.rank ?? null,
+      // Above the line, value grows with games. Below it, missing games must not make a
+      // player look less bad, so the shortfall is counted over a full season.
+      value: (fpg - replacementFpg) * (fpg >= replacementFpg ? games.gp : TEAM_GAMES), rank: 0, yahooRank: p.yahoo?.rank ?? null,
     }))
     .sort((a, b) => b.value - a.value)
   rows.forEach((r, i) => (r.rank = i + 1))
@@ -213,7 +217,9 @@ export function rankBuild(rows: CatRow[], league: CatLeague, punt: Cat[] = []): 
   const ranked = rows
     .map((r) => ({
       id: r.id, name: r.name, team: r.team, positions: r.positions,
-      perGame: perGame.get(r.id)!, value: (perGame.get(r.id)! - line) * (r.games.gp / TEAM_GAMES),
+      // Below the line the shortfall is not scaled down by games, or an injured
+      // below-replacement player would rise for being hurt.
+      perGame: perGame.get(r.id)!, value: (perGame.get(r.id)! - line) * (perGame.get(r.id)! >= line ? r.games.gp / TEAM_GAMES : 1),
       rank: 0, yahooRank: r.yahooRank, gp: r.games.gp,
     }))
     .sort((a, b) => b.value - a.value)

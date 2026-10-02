@@ -24,7 +24,8 @@ import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { NameIndex } from '../nba/join.js'
 import { adpFor } from '../nba/draft.js'
-import { buildView, changes, prepare, recordOf, type DraftView, type NbaLeague, type Prepared } from '../nba/plan.js'
+import { buildView, changes, prepare, recordOf, type Availability, type DraftView, type InjuryInputs, type NbaLeague, type Prepared } from '../nba/plan.js'
+import { parseCbsInjuries, type InjuryNote } from '../nba/sources.js'
 import { analyseMocks, type MockRecord } from '../nba/tendencies.js'
 import { backtest, fetchHistory, historyStatus, opponentReport } from './nbaHistory.js'
 import { addManual, emptyDraft, ingestYahoo, setLocks, setSlot, undoManual, type StoredDraft, type YahooRow } from '../nba/session.js'
@@ -238,6 +239,91 @@ export function ingestApi(leagueId: string, rows: YahooRow[], order: string[], m
   if (s.view) s.view.sensor = s.draft.sensor
 }
 
+// ── Injuries: who starts the season hurt, and when they are back ──
+//
+// CBS Sports' injury page gives a return estimate per player. It is re-read
+// every six hours so a draft uses the news of the day; the snapshot built with
+// the data (data/nba/injuries.json) stands in when CBS cannot be reached. A
+// date you set yourself beats CBS's.
+
+const INJURY_REFRESH = 6 * 60 * 60_000
+let injuryNotes: { at: number; notes: InjuryNote[] } | null = null
+let injuryFetching = false
+
+function snapshotInjuries(): InjuryNote[] {
+  return existsSync(`${DATA}/injuries.json`) ? JSON.parse(readFileSync(`${DATA}/injuries.json`, 'utf8')).injuries : []
+}
+
+async function refreshInjuries() {
+  if (injuryFetching) return
+  injuryFetching = true
+  try {
+    const res = await fetch('https://www.cbssports.com/nba/injuries/', { headers: { 'user-agent': 'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/128 Safari/537.36' } })
+    if (res.ok) {
+      const notes = parseCbsInjuries(await res.text(), 2026)
+      if (notes.length) {
+        injuryNotes = { at: Date.now(), notes }
+        reprepare()
+      }
+    }
+  } catch { /* keep the last good read, or the snapshot */ } finally {
+    injuryFetching = false
+  }
+}
+
+let teamDates: Record<string, string[]> | null = null
+function datesByTeam() {
+  if (teamDates) return teamDates
+  const games = JSON.parse(readFileSync(`${DATA}/schedule.json`, 'utf8')).games as { date: string; home: string; away: string }[]
+  const out: Record<string, string[]> = {}
+  for (const g of games) for (const t of [g.home, g.away]) (out[t] ??= []).push(g.date)
+  teamDates = out
+  return out
+}
+
+function injuryInputs(): InjuryInputs {
+  if (!injuryNotes || Date.now() - injuryNotes.at > INJURY_REFRESH) void refreshInjuries()
+  const index = load().index
+  const returns = new Map<string, Availability>()
+  for (const n of injuryNotes?.notes ?? snapshotInjuries()) {
+    if (!n.returnDate && !n.outForSeason) continue
+    const id = index.resolve(n.name, null)
+    if (id) returns.set(id, { returnDate: n.returnDate, outForSeason: n.outForSeason, source: 'cbs', text: n.text })
+  }
+  for (const [name, date] of Object.entries(prefFile().returns ?? {})) {
+    const id = index.resolve(name, null)
+    if (!id) continue
+    if (date) returns.set(id, { returnDate: date, outForSeason: false, source: 'you', text: `back ${date}` })
+    else returns.delete(id)
+  }
+  return { returns, teamDates: datesByTeam(), today: new Date().toISOString().slice(0, 10) }
+}
+
+/** Revalue every open draft: injuries or a return date changed. */
+function reprepare() {
+  const { players, noise } = load()
+  const inj = injuryInputs()
+  for (const s of sessions.values()) {
+    s.prep = prepare(s.league, players, noise, adpFor, schedule(), inj)
+    s.dirty = true
+  }
+}
+
+/** A return date you set for a player, by name, kept with your lists. Null goes back to CBS's. */
+function setReturn(playerId: string, date: string | null) {
+  const p = load().players.find((x) => x.id === playerId)
+  if (!p) return false
+  const file = prefFile()
+  const returns = { ...(file.returns ?? {}) }
+  if (date) returns[p.name] = date
+  else delete returns[p.name]
+  file.returns = returns
+  mkdirSync(STATE_DIR, { recursive: true })
+  writeFileSync(PREFS, JSON.stringify(file, null, 1))
+  reprepare()
+  return true
+}
+
 // ── Sessions ──
 
 let playoffGames: Record<string, Record<string, number>> | null = null
@@ -267,7 +353,7 @@ function session(id: string): Session | null {
   const league = leagues.find((l) => l.id === id)
   if (!league) return null
   const draft: StoredDraft = existsSync(fileOf(id)) ? JSON.parse(readFileSync(fileOf(id), 'utf8')) : emptyDraft(id)
-  const s: Session = { league, prep: prepare(league, players, noise, adpFor, schedule()), draft, view: null, dirty: true }
+  const s: Session = { league, prep: prepare(league, players, noise, adpFor, schedule(), injuryInputs()), draft, view: null, dirty: true }
   sessions.set(id, s)
   return s
 }
@@ -496,6 +582,12 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
     case 'discard': {
       const ok = s.league.mock ? discardMock(s.league.id) : false
       json(res, ok ? 200 : 400, ok ? { ok } : { error: 'only a mock can be discarded' })
+      return true
+    }
+    case 'return': {
+      const date = data.date == null || data.date === '' ? null : String(data.date)
+      if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) { json(res, 400, { error: 'date is YYYY-MM-DD' }); return true }
+      json(res, setReturn(String(data.playerId), date) ? 200 : 400, { ok: true })
       return true
     }
     case 'tag': {

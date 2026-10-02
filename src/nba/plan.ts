@@ -20,7 +20,7 @@ import {
   adviseCategories, advisePoints, baseline, contribution, expectedCats, readBuild, winChances, zero,
   BUILD_FIRM, BUILD_FROM, type Advice, type Baseline, type CanTake, type Strength,
 } from './draft.js'
-import { CATS, categoryZ, pointsValues, rankBuild, rosterSpots, type Cat, type CatRow, type PointsRow } from './value.js'
+import { CATS, categoryZ, effectiveGames, pointsValues, rankBuild, rosterSpots, type Cat, type CatRow, type PointsRow } from './value.js'
 import { openSeats, positionalSlots, stillFeasible } from './lineup.js'
 import { myPicks, teamsIn, type FeedItem, type StoredDraft } from './session.js'
 import type { NbaPlayer } from './types.js'
@@ -81,6 +81,56 @@ export interface Prepared {
   playoff: (id: string) => number | null
   /** What most teams play in those weeks, so a number can be read as good or bad. */
   playoffNorm: number | null
+  /** For a player starting the season hurt: when he is back and what that leaves. */
+  returnNote: (id: string) => string | null
+}
+
+/** Where a player's expected return comes from: a date you set, or CBS's injury report. */
+export interface Availability {
+  returnDate: string | null
+  outForSeason: boolean
+  source: 'you' | 'cbs'
+  text: string
+}
+
+export interface InjuryInputs {
+  returns: Map<string, Availability>
+  /** Team code → every game date, from the schedule. */
+  teamDates: Record<string, string[]>
+  /** Today, as YYYY-MM-DD; games before it are not counted. */
+  today: string
+}
+
+/**
+ * CBS gives the earliest a player is expected back ("out until at least Jan 2"),
+ * and returns slip more often than they come early, so its dates are pushed
+ * back this many days. A date you set yourself is taken as given.
+ */
+export const RETURN_SLIP_DAYS = 10
+
+const addDays = (d: string, n: number) => {
+  const t = new Date(`${d}T12:00:00Z`)
+  t.setUTCDate(t.getUTCDate() + n)
+  return t.toISOString().slice(0, 10)
+}
+const shortDate = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+
+/**
+ * Games for a player who starts the season hurt: his team's games from the day
+ * he is back, at his usual rate of availability, never more than he was
+ * projected for a full season. Out for the season is no games at all.
+ */
+export function gamesAfterReturn(p: NbaPlayer, av: Availability, teamDates: Record<string, string[]>, today: string): { gp: number; note: string } {
+  const base = effectiveGames(p).gp
+  if (av.outForSeason) return { gp: 0, note: 'Out for the season' }
+  if (!av.returnDate) return { gp: base, note: av.text }
+  const back = av.source === 'cbs' ? addDays(av.returnDate, RETURN_SLIP_DAYS) : av.returnDate
+  const from = back > today ? back : today
+  const left = (teamDates[p.team ?? ''] ?? []).filter((d) => d >= from).length
+  const rate = Math.min(0.95, Math.max(0.6, p.durability.gpShare ?? 0.85))
+  const gp = Math.min(base, left * rate)
+  const why = av.source === 'you' ? 'your date' : `CBS: at least ${shortDate(av.returnDate)}`
+  return { gp, note: `Back ~${shortDate(from)} (${why}) · ${Math.round(gp)} games` }
 }
 
 /** Team code → games in each league's playoff weeks (data/nba/teams.json). */
@@ -108,8 +158,20 @@ export function checkScoring(league: NbaLeague & { categories?: string[] }) {
   }
 }
 
-export function prepare(league: NbaLeague, players: NbaPlayer[], noise: Record<Cat, number>, adpFor: (p: NbaPlayer) => number, schedule: PlayoffSchedule = {}): Prepared {
+export function prepare(
+  league: NbaLeague, rawPlayers: NbaPlayer[], noise: Record<Cat, number>, adpFor: (p: NbaPlayer) => number,
+  schedule: PlayoffSchedule = {}, injuries: InjuryInputs | null = null,
+): Prepared {
   checkScoring(league)
+  // A player starting the season hurt is valued on the games he will be back for.
+  const notes = new Map<string, string>()
+  const players = !injuries ? rawPlayers : rawPlayers.map((p) => {
+    const av = injuries.returns.get(p.id)
+    if (!av || !p.projection) return p
+    const r = gamesAfterReturn(p, av, injuries.teamDates, injuries.today)
+    notes.set(p.id, r.note)
+    return { ...p, projection: { ...p.projection, gp: r.gp, gpSource: 'injury' as const } }
+  })
   const byId = new Map(players.map((p) => [p.id, p]))
   const adp = (id: string) => adpFor(byId.get(id)!)
   const rounds = rosterSpots(league.roster)
@@ -123,6 +185,7 @@ export function prepare(league: NbaLeague, players: NbaPlayer[], noise: Record<C
   const prepared: Prepared = {
     league, rounds, players: byId, adp, positions, slots: positionalSlots(league.roster), adpOrder: [],
     playoff, playoffNorm: games.length ? games[Math.floor(games.length / 2)] : null,
+    returnNote: (id: string) => notes.get(id) ?? null,
   }
   if (league.scoring === 'categories') {
     const rows = categoryZ(players, league).map((r) => ({ ...r, adp: adp(r.id) }))
@@ -166,6 +229,8 @@ export interface BoardRow {
   injury: string | null
   /** Games in this league's playoff weeks. */
   playoff: number | null
+  /** When a player starting hurt is expected back, and the games that leaves. */
+  returnNote: string | null
   takenAt: number | null
   takenBy: string | null
   mine: boolean
@@ -198,7 +263,7 @@ export interface DraftView {
     locks: Cat[]
     expected: number | null
   }
-  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean })[]
+  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null })[]
   /** When the first choices are too close to call and the playoff schedule separates them. */
   playoffNote: string | null
   playoffNorm: number | null
@@ -334,6 +399,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       fpg: prep.points?.byId.get(a.id)?.fpg,
       gp: (prep.cats?.byId.get(a.id)?.games.gp ?? prep.points?.byId.get(a.id)?.games.gp) ?? 0,
       playoff: prep.playoff(a.id),
+      returnNote: prep.returnNote(a.id),
     }))
     const tb = playoffTiebreak(advice, prep.cats ? 0.02 : Math.abs(advice[0]?.score ?? 0) * 0.01)
     advice = tb.advice
@@ -404,6 +470,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       tag: tags.get(r.id) ?? null,
       injury: pl.injury?.status ?? null,
       playoff: prep.playoff(r.id),
+      returnNote: prep.returnNote(r.id),
       takenAt: t?.overall ?? null, takenBy: t?.manager ?? null,
       mine: mine.includes(r.id),
     }

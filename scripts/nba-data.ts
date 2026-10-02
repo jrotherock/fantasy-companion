@@ -17,7 +17,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import {
-  parseBrefAdvanced, parseEspnSchedule, parseFantasyPros, parseSleeperProjections, parseSleeperSeason, parseYahooRanks,
+  parseBrefAdvanced, parseCbsInjuries, parseEspnSchedule, parseFantasyPros, parseSleeperProjections, parseSleeperSeason, parseYahooRanks,
 } from '../src/nba/sources.js'
 import { NameIndex, consensus, durability, teamRows } from '../src/nba/join.js'
 import type { NbaPlayer, Season, SourceLine, TeamNote, YahooWeek } from '../src/nba/types.js'
@@ -47,12 +47,13 @@ async function source(file: string, url: string): Promise<string> {
 async function main() {
   await mkdir(RAW, { recursive: true })
 
-  const [playersRaw, projRaw, fprosRaw, schedRaw, brefRaw, ...seasonRaw] = await Promise.all([
+  const [playersRaw, projRaw, fprosRaw, schedRaw, brefRaw, cbsRaw, ...seasonRaw] = await Promise.all([
     source('sleeper-players.json', 'https://api.sleeper.app/v1/players/nba'),
     source('sleeper-projections.json', `https://api.sleeper.app/projections/nba/${SEASON}?season_type=regular`),
     source('fantasypros.html', 'https://www.fantasypros.com/nba/projections/overall.php'),
     source('espn-schedule.json', `https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/${SEASON + 1}?view=proTeamSchedules_wl`),
     source('bref.html', `https://www.basketball-reference.com/leagues/NBA_${SEASON}.html`),
+    source('cbs-injuries.html', 'https://www.cbssports.com/nba/injuries/'),
     ...HISTORY.map((y) => source(`sleeper-stats-${y}.json`, `https://api.sleeper.app/stats/nba/${y}?season_type=regular`)),
   ])
 
@@ -127,6 +128,10 @@ async function main() {
   await writeFile(`${DIR}/players.json`, JSON.stringify({ built: new Date().toISOString(), season: SEASON, players }, round, 1))
   await writeFile(`${DIR}/teams.json`, JSON.stringify({ built: new Date().toISOString(), teams }, round, 1))
   await writeFile(`${DIR}/schedule.json`, JSON.stringify({ built: new Date().toISOString(), games }))
+  // A snapshot of who starts hurt and when they are back; the server re-reads CBS itself.
+  const injuries = parseCbsInjuries(cbsRaw, SEASON)
+  await writeFile(`${DIR}/injuries.json`, JSON.stringify({ built: new Date().toISOString(), source: 'https://www.cbssports.com/nba/injuries/', injuries }, null, 1))
+  console.log(`injuries ${injuries.length}; with a return date ${injuries.filter((i) => i.returnDate).length}; out for the season ${injuries.filter((i) => i.outForSeason).length}`)
 
   // The report is the point of a data layer: what joined, what did not, and what looks wrong.
   const projected = players.filter((p) => p.projection)
