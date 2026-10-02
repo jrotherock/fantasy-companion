@@ -14,6 +14,7 @@
     "data:rankings": "tsx scripts/data-rankings.ts",
     "data:idp": "tsx scripts/fetch-idp.ts",
     "data:nba": "tsx scripts/nba-data.ts",
+    "values:nba": "tsx scripts/nba-values.ts",
     "check:lists": "tsx scripts/check-lists.ts",
     "test:e2e": "tsx --test test/e2e.test.ts",
     "test:all": "npm test && npm run test:e2e",
