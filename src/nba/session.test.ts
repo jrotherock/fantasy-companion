@@ -269,15 +269,3 @@ test('after Shai the cards say what each covers and what it stacks', () => {
   const leaning = buildView(hoops, { ...d, locks: ['reb', 'blk'] }, new Map())
   assert.ok(!leaning.weakSpots?.cats.some((c) => c === 'reb' || c === 'blk'))
 })
-
-test('fit decides a close call and never overrules a clear gap', async () => {
-  const { fitTiebreak } = await import('./plan.js')
-  const card = (name: string, score: number, fits: any[] = []) => ({ name, score, fits })
-  const fit = (a: { name: string }) => (a.name === 'Big' ? 1.2 : 0)
-  const close = fitTiebreak([card('Guard', 5.01), card('Big', 5.0, ['reb', 'blk'])], 0.02, fit, "Shai's")
-  assert.equal(close.advice[0].name, 'Big')
-  assert.match(close.note!, /covers Shai's weak REB, BLK/)
-  const clear = fitTiebreak([card('Guard', 5.2), card('Big', 5.0, ['reb'])], 0.02, fit, "Shai's")
-  assert.equal(clear.advice[0].name, 'Guard')
-  assert.equal(clear.note, null)
-})

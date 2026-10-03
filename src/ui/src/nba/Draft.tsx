@@ -247,7 +247,6 @@ function Take({ view, act }: { view: DraftView; act: Act }) {
       <div className="vhead">
         <span className="vlabel">{onClock ? 'TAKE' : `LIKELY THERE AT YOUR PICK ${view.clock.myNext}`}</span>
         {onClock && <span className={`conf ${close ? 'close' : 'clear'}`}>{close ? 'close call' : 'clear pick'}</span>}
-        {cards[0].fitBreak && <span className="conf close">fit tiebreak</span>}
         {cards[0].tiebreak && <span className="conf close">playoff tiebreak</span>}
       </div>
       <div className="threeup">

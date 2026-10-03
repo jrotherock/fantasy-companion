@@ -1,0 +1,194 @@
+/**
+ * Does it pay, in Hoops, to cover the roster's weak categories with each pick,
+ * to stack its strong ones, or to do a bit of both — or none of it, and take
+ * the best player?
+ *
+ *   npx tsx scripts/nba-strategy-sim.ts [--seeds 20] [--window 4]
+ *
+ * Every strategy drafts from every slot against the same rooms: nine teams
+ * drafting down Yahoo ADP with a realistic scatter, re-drawn identically for
+ * each strategy so the comparisons are paired. My first pick is the best
+ * value for all of them; from the second on, each strategy chooses among the
+ * best few players by value (the window), so none can win by reaching.
+ *
+ * Scored on what wins a head-to-head league: the chance of winning a week
+ * against each of the nine rosters actually drafted in that room (categories
+ * raced with the week-to-week noise measured on Hoops 2025), averaged — an
+ * all-play win rate. Expected categories a week against an average team is
+ * reported beside it.
+ */
+import { readFileSync, existsSync } from 'node:fs'
+import type { NbaPlayer } from '../src/nba/types.js'
+import { categoryZ, rankBuild, rosterSpots, CATS, type Cat } from '../src/nba/value.js'
+import { adpFor, adviseCategories, baseline, contribution, expectedCats, winChances, zero, BUILD_FROM, type Strength } from '../src/nba/draft.js'
+import { positionalSlots, stillFeasible } from '../src/nba/lineup.js'
+import { slotFor } from '../src/kernel/snake.js'
+
+const arg = (k: string) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : null }
+const SEEDS = Number(arg('seeds') ?? 20)
+const WINDOW = Number(arg('window') ?? 4)
+
+const players: NbaPlayer[] = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+const league = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues.find((l: any) => l.id === 'nba-hoops')
+const noiseR = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r as Record<Cat, number>
+const rounds = rosterSpots(league.roster)
+const byId = new Map(players.map((p) => [p.id, p]))
+const adp = (id: string) => adpFor(byId.get(id)!)
+const rows = categoryZ(players, league).map((r) => ({ ...r, adp: adp(r.id) }))
+const rowOf = new Map(rows.map((r) => [r.id, r]))
+const base = baseline(rows, league.teams, rounds, noiseR)
+const value = new Map(rankBuild(rows, league, []).map((r) => [r.id, r.value]))
+const contribOf = new Map(rows.map((r) => [r.id, contribution(r)]))
+
+// His rule: never drafted. The local preferences file when there is one; else the three he named.
+const neverNames = existsSync('data/preferences/nba.json')
+  ? (JSON.parse(readFileSync('data/preferences/nba.json', 'utf8')).never ?? [])
+  : ['Anthony Davis', 'Joel Embiid', 'Kristaps Porziņģis']
+const never = new Set(players.filter((p) => neverNames.includes(p.name)).map((p) => p.id))
+
+const slots = positionalSlots(league.roster)
+const posOf = (id: string) => byId.get(id)!.yahoo?.positions ?? byId.get(id)!.positions
+const canTake = (mine: string[]) => (id: string, after?: string) => {
+  if (never.has(id)) return false
+  const have = mine.map(posOf)
+  const roster = after ? [...have, posOf(after)] : have
+  return stillFeasible(roster, posOf(id), slots, rounds - roster.length - 1)
+}
+
+const strengthOf = (ids: string[]): Strength => ids.reduce((s, id) => {
+  const c = contribOf.get(id)!
+  return Object.fromEntries(CATS.map((k) => [k, s[k] + c[k]])) as Strength
+}, zero())
+
+// ── Strategies: each picks from the best WINDOW players by value ──
+
+type Pick = (avail: string[], mine: string[], overall: number, slot: number, taken: Set<string>) => string
+const windowOf = (avail: string[], mine: string[]) => {
+  const ok = avail.filter((id) => canTake(mine)(id))
+  return ok.sort((a, b) => value.get(b)! - value.get(a)!).slice(0, WINDOW)
+}
+const ranked = (mine: string[]) => {
+  const w = winChances(strengthOf(mine), mine.length, base)
+  return [...CATS].sort((a, b) => w[a] - w[b])
+}
+const gain = (id: string, cats: Cat[]) => cats.reduce((s, c) => s + Math.max(0, contribOf.get(id)![c]), 0)
+const byScore = (ids: string[], f: (id: string) => number) => ids.reduce((x, y) => (f(y) > f(x) ? y : x))
+
+const strategies: Record<string, Pick> = {
+  'best value': (avail, mine) => windowOf(avail, mine)[0],
+  'cover weak 3': (avail, mine) => mine.length ? byScore(windowOf(avail, mine), (id) => gain(id, ranked(mine).slice(0, 3))) : windowOf(avail, mine)[0],
+  'stack strong 3': (avail, mine) => mine.length ? byScore(windowOf(avail, mine), (id) => gain(id, ranked(mine).slice(-3))) : windowOf(avail, mine)[0],
+  'cover 2 + stack 2': (avail, mine) => mine.length ? byScore(windowOf(avail, mine), (id) => { const r = ranked(mine); return gain(id, r.slice(0, 2)) + gain(id, r.slice(-2)) }) : windowOf(avail, mine)[0],
+  // Stack until the build is read (pick 4), then cover what is left in play: lean in early, round out late.
+  'stack then cover': (avail, mine) => !mine.length ? windowOf(avail, mine)[0]
+    : byScore(windowOf(avail, mine), (id) => gain(id, mine.length < BUILD_FROM ? ranked(mine).slice(-3) : ranked(mine).slice(2, 5))),
+  'the app (recommender)': (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none'),
+  'app + cover tiebreak': (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'cover'),
+  'app + stack tiebreak': (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'stack'),
+}
+
+/** The app's advice, with near-ties (within 0.02 categories, as on the screen) broken by fit or not at all. */
+function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack'): string {
+  const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
+    { teams: league.teams, rounds, slot, overall }, base, { canTake: canTake(mine), neutralUntil: BUILD_FROM })
+  if (!advice.length) return windowOf(avail, mine)[0]
+  if (tie === 'none' || !mine.length) return advice[0].id
+  const close = advice.filter((a) => advice[0].score - a.score <= 0.02).slice(0, 3).map((a) => a.id)
+  const r = ranked(mine)
+  const cats = tie === 'cover' ? r.slice(0, 3) : r.slice(-3)
+  return byScore(close, (id) => gain(id, cats))
+}
+
+// ── The room: Yahoo ADP with scatter ──
+
+function rng(seed: number) {
+  let s = seed >>> 0 || 1
+  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296)
+}
+const gauss = (r: () => number) => Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r())
+
+const pool = rows.filter((r) => r.adp < 400).map((r) => r.id)
+
+function draft(slot: number, seed: number, pick: Pick): { mine: string[]; teams: string[][] } {
+  const r = rng(seed * 7919 + slot)
+  // Each team's view of every player, drawn once per room: same room for every strategy.
+  const scatter = new Map(pool.map((id) => [id, adp(id) + gauss(r) * (2 + 0.18 * adp(id))]))
+  const taken = new Set<string>()
+  const teams: string[][] = Array.from({ length: league.teams }, () => [])
+  for (let overall = 1; overall <= league.teams * rounds; overall++) {
+    const seat = slotFor(overall, league.teams)
+    const avail = pool.filter((id) => !taken.has(id))
+    let id: string
+    const byScatter = (xs: string[]) => [...xs].sort((a, b) => scatter.get(a)! - scatter.get(b)!)
+    if (seat === slot) id = pick(avail, teams[seat - 1], overall, slot, taken) ?? byScatter(avail)[0]
+    else {
+      const ok = canTake(teams[seat - 1])
+      // A roster whose seats nobody left can fill takes the best player anyway, as a manager would.
+      id = byScatter(avail.filter((x) => ok(x) || never.has(x)))[0] ?? byScatter(avail)[0]
+    }
+    taken.add(id)
+    teams[seat - 1].push(id)
+  }
+  return { mine: teams[slot - 1], teams }
+}
+
+// ── Scoring: head-to-head weeks against the nine rosters in the room ──
+
+function phi(z: number) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z)), d = 0.3989423 * Math.exp(-z * z / 2)
+  const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))))
+  return z > 0 ? 1 - p : p
+}
+function weekWin(a: Strength, b: Strength): number {
+  // Chance of more categories than the other side, each a race with Hoops' measured noise.
+  const ps = CATS.map((c) => phi((a[c] - b[c]) / base.sigma[c]))
+  let dist = new Map<number, number>([[0, 1]])
+  for (const p of ps) {
+    const next = new Map<number, number>()
+    for (const [k, v] of dist) {
+      next.set(k + 1, (next.get(k + 1) ?? 0) + v * p)
+      next.set(k - 1, (next.get(k - 1) ?? 0) + v * (1 - p))
+    }
+    dist = next
+  }
+  let win = 0
+  for (const [k, v] of dist) if (k > 0) win += v
+  return win
+}
+
+const results: Record<string, { allPlay: number[]; cats: number[]; bySlot: number[][] }> = {}
+const t0 = Date.now()
+for (const [name, pick] of Object.entries(strategies)) {
+  const res = { allPlay: [] as number[], cats: [] as number[], bySlot: Array.from({ length: league.teams }, () => [] as number[]) }
+  for (let slot = 1; slot <= league.teams; slot++) {
+    for (let seed = 1; seed <= SEEDS; seed++) {
+      const { mine, teams } = draft(slot, seed, pick)
+      const me = strengthOf(mine)
+      const others = teams.filter((_, i) => i !== slot - 1).map(strengthOf)
+      const ap = others.reduce((s, o) => s + weekWin(me, o), 0) / others.length
+      res.allPlay.push(ap)
+      res.cats.push(expectedCats(me, mine.length, base))
+      res.bySlot[slot - 1].push(ap)
+    }
+  }
+  results[name] = res
+  console.error(`${name}: done (${((Date.now() - t0) / 1000).toFixed(0)}s)`)
+}
+
+const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+const se = (xs: number[]) => { const m = mean(xs); return Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1) / xs.length) }
+const ref = results['best value'].allPlay
+console.log(`Hoops, ${league.teams} slots × ${SEEDS} rooms each, window ${WINDOW}. All-play = chance of winning a week, averaged over the nine rosters in the room.`)
+console.log('strategy                 all-play   ±2se    vs best value (paired) ±2se    cats/wk')
+for (const [name, r] of Object.entries(results)) {
+  const diff = r.allPlay.map((x, i) => x - ref[i])
+  console.log(`${name.padEnd(24)} ${(mean(r.allPlay) * 100).toFixed(1).padStart(6)}%  ${(2 * se(r.allPlay) * 100).toFixed(1).padStart(4)}   ${(mean(diff) * 100 >= 0 ? '+' : '') + (mean(diff) * 100).toFixed(1).padStart(5)} pts  ${(2 * se(diff) * 100).toFixed(1).padStart(4)}       ${mean(r.cats).toFixed(2)}`)
+}
+const app = results['the app (recommender)'].allPlay
+for (const name of ['app + cover tiebreak', 'app + stack tiebreak']) {
+  const d = results[name].allPlay.map((x, i) => x - app[i])
+  console.log(`${name} vs the app: ${(mean(d) * 100).toFixed(2)} pts ± ${(2 * se(d) * 100).toFixed(2)} (2se); changed the pick in ${d.filter((x) => x !== 0).length} of ${d.length} drafts`)
+}
+console.log('\nby slot (all-play %):')
+console.log('slot  ' + Object.keys(results).map((n) => n.slice(0, 12).padStart(13)).join(''))
+for (let s = 0; s < league.teams; s++) console.log(String(s + 1).padStart(4) + '  ' + Object.values(results).map((r) => (mean(r.bySlot[s]) * 100).toFixed(1).padStart(13)).join(''))

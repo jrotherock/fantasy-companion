@@ -291,7 +291,7 @@ export interface DraftView {
     locks: Cat[]
     expected: number | null
   }
-  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; fitBreak?: boolean; returnNote: string | null; there: number | null; bestBuild: BestBuild | null
+  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; bestBuild: BestBuild | null
     /** Which of my roster's weak categories he would help, from my first pick on. */
     fits: Cat[]
     /** Which of its strong ones he would add to: leaning in rather than covering. */
@@ -651,14 +651,12 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   // The tiebreak orders the cards, never the players you are told can wait.
   if (takeNow.length) {
     const margin = prep.cats ? 0.02 : Math.abs(takeNow[0].score) * 0.01
-    // Fit first: among cards too close to call, the one covering my weak spots. Then the playoff weeks.
-    const fb = fitTiebreak(takeNow, margin, (a) => fitScore(prep, a.id, weakSpots?.cats ?? []), weakSpots?.whose ?? 'your')
-    if (fb.note) { takeNow = fb.advice; playoffNote = fb.note }
-    else {
-      const tb = playoffTiebreak(takeNow, margin)
-      takeNow = tb.advice
-      playoffNote = tb.note
-    }
+    // No fit tiebreak: in 400 simulated Hoops drafts, breaking near-ties toward my weak
+    // categories cost 0.46 points of all-play (±0.14), and toward my strong ones 0.62.
+    // The advice's own score already weighs fit where it matters (scripts/nba-strategy-sim.ts).
+    const tb = playoffTiebreak(takeNow, margin)
+    takeNow = tb.advice
+    playoffNote = tb.note
   }
 
   // ── After a pick that is drafted for a punt: offer to lock it ──
@@ -808,37 +806,6 @@ export function recordOf(prep: Prepared, d: StoredDraft, tags: Map<string, PrefT
 /** A category counts as covered when a player adds at least this much of it over a season (in z, games-weighted). */
 export const FIT_MIN = 0.25
 
-/** How much a player shores up my weak categories: his season contribution in them, the positive part. */
-function fitScore(prep: Prepared, id: string, weak: Cat[]): number {
-  const r = prep.cats?.byId.get(id)
-  if (!r || !weak.length) return 0
-  const c = contribution(r)
-  return weak.reduce((s, k) => s + Math.max(0, c[k]), 0)
-}
-
-/** Fit has to differ by this much before it decides a close call; less is noise. */
-export const FIT_GAP = 0.3
-
-/**
- * Among cards too close to call on value, the one that covers my weak spots
- * goes first. It never overrules a clear gap: a better player still leads.
- */
-export function fitTiebreak<T extends { name: string; score: number; fitBreak?: boolean; fits: Cat[] }>(
-  advice: T[], margin: number, fit: (a: T) => number, whose: string,
-): { advice: T[]; note: string | null } {
-  if (advice.length < 2) return { advice, note: null }
-  const close = advice.filter((a) => advice[0].score - a.score <= margin)
-  if (close.length < 2) return { advice, note: null }
-  const scored = close.map((a) => ({ a, f: fit(a) }))
-  const best = scored.reduce((x, y) => (y.f > x.f ? y : x))
-  if (best.a === advice[0] || best.f - fit(advice[0]) < FIT_GAP) return { advice, note: null }
-  const rest = advice.filter((a) => a !== best.a)
-  const covers = best.a.fits.map((c) => CAT_LABEL[c]).join(', ')
-  return {
-    advice: [{ ...best.a, fitBreak: true }, ...rest],
-    note: `${close.map((a) => a.name).join(', ')} are too close to call; ${best.a.name} covers ${whose} weak ${covers || 'categories'} — so he goes first.`,
-  }
-}
 
 export function playoffTiebreak<T extends { name: string; score: number; playoff: number | null; tiebreak?: boolean }>(advice: T[], margin: number): { advice: T[]; note: string | null } {
   if (advice.length < 2) return { advice, note: null }
