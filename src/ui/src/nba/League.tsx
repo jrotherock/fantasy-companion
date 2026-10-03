@@ -184,7 +184,7 @@ function Prep({ leagueId }: { leagueId: string }) {
                 <thead><tr><th className="l">Mock</th><th title="Your draft position: where you picked in round one">Pick</th>
                   {cats
                     ? <><th className="l" title="The punt your roster ended with, or the one you locked">Build</th><th title="Categories a week against an average team">Cats/wk</th><th title="Where that placed in the room">Place</th></>
-                    : <><th title="Season value over replacement: points a game above the waiver line, times games, summed over your roster">Value</th><th title="Where your Value placed in the room">Place</th><th title="Your roster's fantasy points over the season: a game times games">FP season</th><th title="Where your season points placed in the room">Place</th></>}
+                    : <><th title="Season value over replacement: points a game above the waiver line, times games, summed over your roster">Value</th><th title="Your roster's fantasy points over the season: a game times games">FP season</th><th title="Where your season points placed against every other team's in the mock">Place</th></>}
                   <th title="Picks where you took what the cards advised">Advice</th></tr></thead>
                 <tbody>{r.table.map((m) => (
                   <tr key={m.id}>
@@ -192,7 +192,7 @@ function Prep({ leagueId }: { leagueId: string }) {
                     <td>{m.seat ?? '—'}</td>
                     {cats
                       ? <><td className="l">{m.build}</td><td>{fmt(m.result)}</td><td>{place(m.place?.result, m.place?.of)}</td></>
-                      : <><td>{fmt(m.result)}</td><td>{place(m.place?.result, m.place?.of)}</td><td>{m.fpSeason != null ? Math.round(m.fpSeason).toLocaleString() : '—'}</td><td>{place(m.place?.fpSeason, m.place?.of)}</td></>}
+                      : <><td>{fmt(m.result)}</td><td>{m.fpSeason != null ? Math.round(m.fpSeason).toLocaleString() : '—'}</td><td>{place(m.place?.fpSeason, m.place?.of)}</td></>}
                     <td>{m.followed}</td>
                   </tr>
                 ))}</tbody>
