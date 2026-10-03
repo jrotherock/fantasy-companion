@@ -213,3 +213,23 @@ test('a player out for the season is never advised, however late — in both for
     assert.ok(after.board.some((r) => r.id === star), `${id}: he stays on the board`)
   }
 })
+
+test('a points mock places my roster against every team\'s season points total', async () => {
+  const { recordOf } = await import('./plan.js')
+  const { slotFor } = await import('../kernel/snake.js')
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const prep = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)
+  const d = { ...emptyDraft('t'), slot: 5 }
+  d.picks = prep.adpOrder.slice(0, 16 * prep.rounds).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
+  const r = recordOf(prep, d, new Map())!
+  // By hand: each seat's season points, from its own picks.
+  const totals = new Map<number, number>()
+  for (const x of d.picks) totals.set(slotFor(x.overall, 16), (totals.get(slotFor(x.overall, 16)) ?? 0) + (prep.points!.byId.get(x.playerId)?.season ?? 0))
+  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1])
+  assert.equal(r.place!.of, 16)
+  assert.equal(r.place!.fpSeason, sorted.findIndex(([seat]) => seat === 5) + 1)
+  assert.ok(Math.abs(r.fpSeason! - totals.get(5)!) < 1e-6)
+  assert.ok(r.place!.result >= 1 && r.place!.result <= 16)
+})

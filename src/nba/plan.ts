@@ -310,6 +310,25 @@ export interface DraftView {
   mock: NbaLeague['mock'] | null
 }
 
+/** Where my roster finished in the room: on the review's measure, and on season points in a points league. */
+function placeOf(prep: Prepared, d: StoredDraft, teams: number, rounds: number): { result: number; fpSeason: number | null; of: number } | null {
+  if (d.slot == null) return null
+  const room = roomOf(prep, d, teams, d.slot, rounds)
+  const result = room.find((r) => r.mine)?.rank
+  if (result == null) return null
+  let fpSeason: number | null = null
+  if (prep.points) {
+    const totals = new Map<number, number>()
+    for (const x of d.picks) {
+      const seat = slotFor(x.overall, teams)
+      totals.set(seat, (totals.get(seat) ?? 0) + (prep.points.byId.get(x.playerId)?.season ?? 0))
+    }
+    const mine = totals.get(d.slot) ?? 0
+    fpSeason = 1 + [...totals.values()].filter((t) => t > mine).length
+  }
+  return { result, fpSeason, of: room.length }
+}
+
 /** How every team's draft came out, measured as mine is. */
 export function roomOf(prep: Prepared, d: StoredDraft, teams: number, mySlot: number, rounds: number): NonNullable<NonNullable<DraftView['review']>['room']> {
   const bySeat = new Map<number, string[]>()
@@ -688,6 +707,7 @@ export function recordOf(prep: Prepared, d: StoredDraft, tags: Map<string, PrefT
     seat: d.slot,
     result: view.review.expected ?? view.review.value ?? 0,
     fpSeason: prep.points ? mine.reduce((n, x) => n + (prep.points!.byId.get(x.playerId)?.season ?? 0), 0) : null,
+    place: placeOf(prep, d, teams, prep.rounds),
     punting: view.review.punting,
     win: view.review.win,
     locks: d.locks,
