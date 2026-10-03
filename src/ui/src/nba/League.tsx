@@ -1,0 +1,364 @@
+/**
+ * One basketball league's season, in the cockpit's look.
+ *
+ * Basketball is a daily game, so the first tab is today: is the lineup right,
+ * and if not, what to change before which tip. Then the week (where it can
+ * still be won), adds (what is left to spend and on whom), news, and the
+ * season-long views — power, luck, the playoff weeks, trades.
+ *
+ * The server works everything out (src/nba/seasonView.ts); this only draws it.
+ */
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import type { SeasonView } from '../../../nba/seasonView'
+import type { CatRace } from '../../../nba/matchup'
+import type { Cat } from '../../../nba/value'
+
+const LABEL: Record<Cat, string> = { fg: 'FG%', ft: 'FT%', tpm: '3PM', pts: 'PTS', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO' }
+const pct = (x: number) => `${Math.round(x * 100)}%`
+const TABS = ['Today', 'Week', 'Adds', 'News', 'Season'] as const
+type Tab = typeof TABS[number]
+
+const time = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '')
+const day = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })
+const ago = (ms: number) => {
+  const m = Math.round((Date.now() - ms) / 60000)
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`
+}
+
+function useSeason(id: string) {
+  const [view, setView] = useState<SeasonView | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const refresh = useCallback(async (force = false) => {
+    try {
+      const res = await fetch(`/api/nba/season/${id}${force ? '/refresh' : ''}`, force ? { method: 'POST' } : undefined)
+      if (res.status === 401) { setError('Sign in on the home screen first'); return }
+      if (!res.ok) { setError((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`); return }
+      setView(await res.json())
+      setError(null)
+    } catch (e) {
+      setError(`Can't reach the companion (${(e as Error).message})`)
+    }
+  }, [id])
+  useEffect(() => {
+    refresh()
+    const t = setInterval(() => refresh(), 60000)
+    return () => clearInterval(t)
+  }, [refresh])
+  return { view, error, refresh }
+}
+
+function Seg<T extends string>({ opts, on, set }: { opts: readonly T[]; on: T; set: (v: T) => void }) {
+  return (
+    <div className="ckseg" role="tablist">
+      {opts.map((o) => (
+        <button key={o} role="tab" aria-selected={o === on} className={o === on ? 'on' : ''} onClick={() => set(o)}>{o}</button>
+      ))}
+    </div>
+  )
+}
+
+function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+  return (
+    <section className="nl-sect">
+      <h2 className="nl-h">{title}{hint && <span className="nl-hint">{hint}</span>}</h2>
+      {children}
+    </section>
+  )
+}
+
+export function League() {
+  const id = location.pathname.match(/^\/nba\/league\/([\w-]+)/)?.[1] ?? ''
+  const { view, error, refresh } = useSeason(id)
+  const [tab, setTab] = useState<Tab>(() => (sessionStorage.getItem(`nl-tab-${id}`) as Tab) || 'Today')
+  useEffect(() => { try { sessionStorage.setItem(`nl-tab-${id}`, tab) } catch { /* private window */ } }, [id, tab])
+  if (!id) return <div className="ckwrap"><div className="ckempty">No league in the address.</div></div>
+  if (!view) return <div className="ckwrap"><div className="ckempty">{error ?? 'Reading the league…'}</div></div>
+  const v = view
+  const rec = v.standing && v.standing.w != null ? `${v.standing.w}-${v.standing.l}${v.standing.t ? `-${v.standing.t}` : ''}${v.standing.rank ? ` · ${ordinal(v.standing.rank)}` : ''}` : null
+  return (
+    <div className="ckwrap nl">
+      <a className="ckcrumb" href="/home">‹ Home</a>
+      <header className="ckhdr">
+        <div className="ckbig">{v.league.label}</div>
+        <div className="cksub">
+          {v.league.scoring === 'categories' ? '9-cat' : 'Points'} · {v.league.teams} teams
+          {v.myTeam?.name ? ` · ${v.myTeam.name}` : ''}{rec ? ` · ${rec}` : ''}
+          <span className="nl-fresh"> · {v.at ? `read ${ago(v.at)}` : 'not read yet'} <button className="nl-link" onClick={() => refresh(true)}>refresh</button></span>
+        </div>
+      </header>
+      {error && <div className="nl-warn">{error}</div>}
+      {v.phase === 'before-draft' ? (
+        <div className="ckempty">
+          Not drafted yet. The season screens start once Yahoo has rosters.{' '}
+          <a href={`/nba/draft/${v.league.id}`}>Open the draft screen</a>
+        </div>
+      ) : (
+        <>
+          <Seg opts={TABS} on={tab} set={setTab} />
+          {tab === 'Today' && <Today v={v} />}
+          {tab === 'Week' && <Week v={v} />}
+          {tab === 'Adds' && <Adds v={v} />}
+          {tab === 'News' && <News v={v} />}
+          {tab === 'Season' && <Season v={v} />}
+        </>
+      )}
+      <div className="nl-attr">Fantasy data provided by Yahoo Fantasy. Stats and projections from Sleeper; injury timelines from CBS Sports.</div>
+    </div>
+  )
+}
+
+const ordinal = (n: number) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`
+
+// ── Today ──
+
+function Today({ v }: { v: SeasonView }) {
+  const l = v.lineup
+  const name = (id: string | null) => (id ? v.players[id]?.name ?? id : '')
+  if (!l) return <div className="ckempty">Today's lineup has not been read yet.</div>
+  const first = l.moves.map((m) => m.by).filter(Boolean).sort()[0] ?? null
+  const order = (s: string | null) => ['PG', 'SG', 'G', 'SF', 'PF', 'F', 'C', 'Util', 'BN', 'IL', 'IL+'].indexOf(s ?? 'BN')
+  const rows = [...l.rows].sort((a, b) => order(a.slot) - order(b.slot))
+  return (
+    <>
+      <div className={`nl-verdict ${l.ok ? 'ok' : 'fix'}`}>
+        {l.ok
+          ? 'Lineup is right for today'
+          : `${l.moves.length} change${l.moves.length === 1 ? '' : 's'} to make${first ? ` — first by ${time(first)}` : ''}`}
+        {l.lostStarts > 0 && <span className="nl-sub"> · {l.lostStarts} start{l.lostStarts === 1 ? '' : 's'} lost as it stands</span>}
+      </div>
+      {l.moves.length > 0 && (
+        <ul className="nl-moves">
+          {l.moves.map((m) => (
+            <li key={m.start}>
+              <b>Start {name(m.start)}</b>{m.bench && <> for <b>{name(m.bench)}</b></>}
+              <span className="nl-why">{m.why}{m.by ? ` · by ${time(m.by)}` : ''}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <table className="nl-table">
+        <thead><tr><th>Slot</th><th className="l">Player</th><th className="l">Today</th><th>Plays</th></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} className={!r.game ? 'nl-idle' : ''}>
+              <td className="nl-slot">{r.slot ?? '—'}</td>
+              <td className="l">{r.name} <span className="nl-dim">{r.positions.join('/')}</span>
+                {r.status !== 'healthy' && <span className={`nl-stat ${r.status}`}>{r.status}</span>}</td>
+              <td className="l nl-dim">{r.game ? `${r.game.home ? 'v' : '@'} ${r.game.vs} ${r.game.started ? '· under way' : time(r.game.tip)}` : 'no game'}</td>
+              <td>{r.game ? pct(r.play) : ''}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="nl-note">Yahoo locks each player at his game's tip. "Plays" is the chance he plays today, from his designation and any return date.</p>
+    </>
+  )
+}
+
+// ── Week ──
+
+const STATE_WORD: Record<CatRace['state'], string> = { safe: 'safe', leaning: 'leaning yours', swing: 'in play', behind: 'leaning theirs', lost: 'gone', done: 'decided' }
+
+function fmt(cat: Cat, x: number) {
+  return cat === 'fg' || cat === 'ft' ? x.toFixed(3).replace(/^0/, '') : Math.round(x).toString()
+}
+
+function Week({ v }: { v: SeasonView }) {
+  const w = v.week
+  if (!w) return <div className="ckempty">No matchup this week.</div>
+  const swing = w.odds?.races.filter((r) => r.state === 'swing').map((r) => LABEL[r.cat]) ?? []
+  return (
+    <>
+      <div className="nl-score">
+        <div>
+          <div className="nl-vs">Week {w.week}{w.playoffs ? ' · playoffs' : ''} · vs {w.opponent?.name ?? '—'}</div>
+          {w.odds && (
+            <div className="nl-big">{w.score.mine ?? 0}–{w.score.theirs ?? 0}
+              <span className="nl-sub"> now · {w.odds.expected.toFixed(1)} of 9 expected · win {pct(w.odds.win)}</span></div>
+          )}
+          {w.points && (
+            <div className="nl-big">{w.points.mineNow.toFixed(0)}–{w.points.theirsNow.toFixed(0)}
+              <span className="nl-sub"> now · {w.points.mine.toFixed(0)}–{w.points.theirs.toFixed(0)} projected · win {pct(w.points.win)}</span></div>
+          )}
+        </div>
+      </div>
+      <p className="nl-line">
+        {w.startsLeft.mine.toFixed(0)} starts left for you, {w.startsLeft.theirs.toFixed(0)} for them.
+        {w.idleGames >= 1 && ` ${w.idleGames.toFixed(0)} of your players' games fall on days with no seat for them.`}
+        {swing.length > 0 && ` In play: ${swing.join(', ')}.`}
+      </p>
+      {w.odds && (
+        <div className="nl-cats">
+          {w.odds.races.map((r) => (
+            <div key={r.cat} className={`nl-cat ${r.state}`} title={STATE_WORD[r.state]}>
+              <div className="nl-catk">{LABEL[r.cat]}</div>
+              <div className="nl-catv">{fmt(r.cat, r.mineNow)}<span>–{fmt(r.cat, r.theirsNow)}</span></div>
+              <div className="nl-catp">{pct(r.win + r.tie / 2)}</div>
+              <div className="nl-catf">→ {fmt(r.cat, r.mine)}–{fmt(r.cat, r.theirs)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <Section title="Days left" hint="your starts · theirs">
+        <div className="nl-days">
+          {w.days.map((d) => (
+            <div key={d.date} className="nl-day">
+              <div className="nl-dayk">{day(d.date)}</div>
+              <div className="nl-dayv">{d.mine}<span>·{d.theirs}</span></div>
+              {d.idle > 0 && <div className="nl-dayi">{d.idle} idle</div>}
+            </div>
+          ))}
+        </div>
+      </Section>
+      <p className="nl-note">Each category is the week so far plus what both lineups are expected to do from here, seated day by day. A race at 35–65% is in play: that is where a stream helps.</p>
+    </>
+  )
+}
+
+// ── Adds ──
+
+function Adds({ v }: { v: SeasonView }) {
+  const b = v.budget
+  const streams = v.pickups.filter((p) => p.kind === 'stream')
+  const ups = v.pickups.filter((p) => p.kind === 'upgrade')
+  const cats = v.league.scoring === 'categories'
+  return (
+    <>
+      {b && (
+        <div className="nl-budget">
+          {b.week && <div><b>{Math.max(0, b.week.max - b.week.used)}</b> of {b.week.max} left this week</div>}
+          {b.season && <div><b>{Math.max(0, b.season.max - b.season.used)}</b> of {b.season.max} left this season</div>}
+          <div className="nl-dim">{b.note}</div>
+        </div>
+      )}
+      <Section title="For the rest of the season" hint="better than someone you have">
+        {!ups.length && <div className="nl-none">Nobody on the wire beats your roster by enough to spend an add.</div>}
+        {ups.map((p) => <PickupRow key={p.add} p={p} cats={cats} />)}
+      </Section>
+      <Section title="Streams for this week" hint={b ? `${b.forStreams} to spend at your pace` : undefined}>
+        {!streams.length && <div className="nl-none">No stream moves this week by enough to spend an add.</div>}
+        {streams.map((p, i) => <PickupRow key={p.add} p={p} cats={cats} over={b ? i >= b.forStreams : false} />)}
+      </Section>
+      {v.punts.length > 0 && <p className="nl-note">Your roster is not competing in {v.punts.map((c) => LABEL[c]).join(', ')}, so season value leaves {v.punts.length === 1 ? 'it' : 'them'} out. A stream counts every category: any category won this week counts.</p>}
+    </>
+  )
+}
+
+function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: boolean; over?: boolean }) {
+  return (
+    <div className={`nl-pick${over ? ' over' : ''}`}>
+      <div className="nl-pickh">
+        <span className={`nl-kind ${p.kind}`}>{p.kind}</span>
+        <b>Add {p.name}</b> <span className="nl-dim">{p.team} · {p.positions.join('/')}</span>
+        {p.waiver && <span className="nl-stat questionable">waivers</span>}
+      </div>
+      <div className="nl-pickd">
+        {p.dropName && <>Drop {p.dropName} · </>}
+        {p.why}
+        {cats
+          ? <> · week {p.weekGain >= 0 ? '+' : ''}{p.weekGain.toFixed(2)} cats</>
+          : <> · week {p.weekGain >= 0 ? '+' : ''}{p.weekGain.toFixed(0)} pts</>}
+        {' · win '}{pct(p.winBefore)} → {pct(p.winAfter)}
+        {over && <span className="nl-dim"> · beyond your pace</span>}
+      </div>
+    </div>
+  )
+}
+
+// ── News ──
+
+const WHOSE: Record<string, string> = { mine: 'Your players', opponent: 'This week’s opponent', free: 'Free agents', other: 'Elsewhere' }
+
+function News({ v }: { v: SeasonView }) {
+  if (!v.news.length) return <div className="ckempty">Nothing new.</div>
+  const groups = ['mine', 'opponent', 'free', 'other'].map((w) => [w, v.news.filter((n) => n.whose === w)] as const).filter(([, xs]) => xs.length)
+  return (
+    <>
+      {groups.map(([w, xs]) => (
+        <Section key={w} title={WHOSE[w]}>
+          {xs.map((n) => (
+            <div key={n.key} className={`nl-news ${n.kind}`}>
+              <div className="nl-newsh">{n.headline}</div>
+              <div className="nl-dim">{n.detail}{n.at ? ` · ${ago(n.at)}` : ''}</div>
+            </div>
+          ))}
+        </Section>
+      ))}
+    </>
+  )
+}
+
+// ── Season ──
+
+function Season({ v }: { v: SeasonView }) {
+  const [exp, setExp] = useState<{ name: string; leagues: { label: string; starting: boolean }[]; status: string }[] | null>(null)
+  useEffect(() => { fetch('/api/nba/season/exposure').then((r) => r.json()).then(setExp).catch(() => {}) }, [])
+  const cats = v.league.scoring === 'categories'
+  const ap = v.allPlay
+  const po = v.playoffs
+  const CAT_ORDER: Cat[] = ['fg', 'ft', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to']
+  return (
+    <>
+      <Section title="Power" hint={cats ? 'categories a week against an average team' : 'chance of beating an average team'}>
+        <table className="nl-table">
+          <thead><tr><th>#</th><th className="l">Team</th><th>{cats ? 'Cats' : 'Win'}</th>{cats && CAT_ORDER.map((c) => <th key={c} className="nl-edgeh">{LABEL[c]}</th>)}</tr></thead>
+          <tbody>
+            {v.power.map((r) => (
+              <tr key={r.teamId} className={r.mine ? 'nl-mine' : ''}>
+                <td>{r.rank}</td>
+                <td className="l">{r.name} <span className="nl-dim">{r.manager}</span></td>
+                <td>{cats ? r.score.toFixed(2) : pct(r.score)}</td>
+                {cats && CAT_ORDER.map((c) => {
+                  const e = r.edges?.[c] ?? 0.5
+                  return <td key={c} className="nl-edge" style={{ background: `color-mix(in srgb, ${e >= 0.5 ? 'var(--green)' : 'var(--red)'} ${Math.round(Math.abs(e - 0.5) * 140)}%, transparent)` }}>{Math.round(e * 100)}</td>
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="nl-note">From each roster's typical week as it stands, injuries and games left included — the same yardstick the trade ideas use.</p>
+      </Section>
+
+      <Section title="Luck" hint="all-play: every team, every week">
+        {!ap ? <div className="nl-none">No finished weeks yet.</div> : (
+          <p className="nl-line">
+            You are {ap.record.w}-{ap.record.l}{ap.record.t ? `-${ap.record.t}` : ''}. Against every team every week you would have won {pct(ap.allPlay)},
+            {' '}{Math.abs(ap.luck) < 0.05 ? 'about what your record says.' : ap.luck > 0 ? `so the schedule has been kind: ${Math.round(ap.luck * ap.weeks)} more win${Math.round(ap.luck * ap.weeks) === 1 ? '' : 's'} than your play earned.` : `so the schedule has cost you about ${Math.round(-ap.luck * ap.weeks)} win${Math.round(-ap.luck * ap.weeks) === 1 ? '' : 's'}.`}
+          </p>
+        )}
+      </Section>
+
+      <Section title="Playoff weeks" hint={po ? `weeks ${po.weeks.join(', ')}` : undefined}>
+        {!po ? <div className="nl-none">No playoff weeks set.</div> : (
+          <>
+            <p className="nl-line">
+              Your roster plays {po.total} games in them — {ordinal(po.rank)} in the league (average {po.leagueAverage.toFixed(0)}).
+              {po.tradeDeadline && po.daysToDeadline != null && po.daysToDeadline >= 0 && ` Trade deadline ${new Date(po.tradeDeadline + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}, ${po.daysToDeadline} days away.`}
+            </p>
+            <div className="nl-chips">{po.mine.map((m) => <span key={m.id} className="nl-chip">{m.name} <b>{m.games}</b></span>)}</div>
+            {po.targets.length > 0 && <>
+              <div className="nl-subh">Free agents with more games than most</div>
+              <div className="nl-chips">{po.targets.map((t) => <span key={t.id} className="nl-chip">{t.name} <span className="nl-dim">{t.team}</span> <b>{t.games}</b></span>)}</div>
+            </>}
+          </>
+        )}
+      </Section>
+
+      <Section title="Trade ideas" hint="good for you, not bad for them">
+        {!v.trades.length && <div className="nl-none">{po?.daysToDeadline != null && po.daysToDeadline < 0 ? 'The trade deadline has passed.' : 'Nothing that helps you without hurting them.'}</div>}
+        {v.trades.map((t, i) => (
+          <div key={i} className="nl-trade">
+            <div><span className="nl-dim">{t.teamName} ({t.manager}):</span> give <b>{t.give.map((g) => g.name).join(' + ')}</b>, get <b>{t.get.map((g) => g.name).join(' + ')}</b></div>
+            <div className="nl-dim">{t.why}</div>
+          </div>
+        ))}
+      </Section>
+
+      {exp && exp.length > 0 && (
+        <Section title="In both leagues" hint="one injury, two lineups">
+          <div className="nl-chips">{exp.map((e) => <span key={e.name} className={`nl-chip${e.status !== 'healthy' ? ' hurt' : ''}`}>{e.name}{e.status !== 'healthy' && <span className={`nl-stat ${e.status}`}>{e.status}</span>}</span>)}</div>
+        </Section>
+      )}
+    </>
+  )
+}

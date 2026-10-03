@@ -603,3 +603,36 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
   json(res, 404, { error: 'not found' })
   return true
 }
+
+// ── For the season screens (nbaSeason.ts) ──
+
+/** Every basketball league the screens serve: real ones and -test replays, never mocks. */
+export function seasonLeagues(): NbaLeague[] {
+  return load().leagues.filter((l) => !l.mock)
+}
+
+export function nbaPlayers(): NbaPlayer[] {
+  return load().players
+}
+
+/** The never list for a league, as player ids: never offered anywhere in the season screens. */
+export function neverIds(leagueId: string): Set<string> {
+  return new Set([...tagsFor(leagueId.replace(/-test$/, ''))].filter(([, t]) => t === 'never').map(([id]) => id))
+}
+
+/** CBS's injury notes as last read (refreshed in the background every six hours). */
+export function injuryNotesNow(): InjuryNote[] {
+  if (!injuryNotes || Date.now() - injuryNotes.at > INJURY_REFRESH) void refreshInjuries()
+  return injuryNotes?.notes ?? snapshotInjuries()
+}
+
+/** Return dates set by hand, by player id. */
+export function handReturns(): Map<string, string> {
+  const index = load().index
+  const out = new Map<string, string>()
+  for (const [name, date] of Object.entries(prefFile().returns ?? {})) {
+    const id = index.resolve(name, null)
+    if (id && date) out.set(id, date)
+  }
+  return out
+}

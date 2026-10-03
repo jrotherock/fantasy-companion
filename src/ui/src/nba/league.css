@@ -1,0 +1,97 @@
+/*
+ * A basketball league's season. Built on the cockpit's skin (cockpit.css):
+ * the same header, segments and cards, so the two sports read as one app.
+ * Only what basketball has and football does not lives here — daily lineups,
+ * category races, the add budget.
+ */
+body { background: var(--bg); color: var(--ink); font-family: var(--ui); margin: 0; }
+.nl a { color: var(--blue); }
+.nl .ckcrumb { text-decoration: none; color: var(--dim); }
+.nl .ckseg { margin-bottom: 1rem; }
+
+.nl-fresh { font-size: var(--t-sm); }
+.nl-link { background: none; border: 0; padding: 0; color: var(--blue); font: inherit; cursor: pointer; }
+.nl-warn { background: var(--raise); border-left: 3px solid var(--amber); padding: 0.5rem 0.7rem; margin-bottom: 0.8rem; font-size: var(--t-sm); }
+.nl-attr { margin-top: 2rem; font-size: var(--t-xs); color: var(--muted); }
+.nl-dim { color: var(--muted); }
+.nl-note { font-size: var(--t-sm); color: var(--muted); line-height: 1.5; margin: 0.8rem 0 0; }
+.nl-line { font-size: var(--t-md); line-height: 1.5; margin: 0.3rem 0 0.8rem; }
+.nl-none { font-size: var(--t-sm); color: var(--muted); padding: 0.2rem 0 0.6rem; }
+.nl-sub { font-family: var(--ui); font-weight: 400; font-size: var(--t-md); color: var(--muted); }
+
+.nl-sect { margin-top: 1.4rem; }
+.nl-h { font-family: var(--mono); font-weight: 500; font-size: var(--t-xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); margin: 0 0 0.5rem; }
+.nl-hint { color: var(--muted); text-transform: none; letter-spacing: 0; margin-left: 0.6rem; font-family: var(--ui); }
+.nl-subh { font-size: var(--t-sm); color: var(--muted); margin: 0.8rem 0 0.4rem; }
+
+/* Today */
+.nl-verdict { font-family: var(--cond); font-weight: 600; font-size: 1.5rem; line-height: 1.15; padding: 0.6rem 0.8rem; border-radius: 5px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--green); }
+.nl-verdict.fix { border-left-color: var(--red); }
+.nl-moves { list-style: none; padding: 0; margin: 0.6rem 0 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.nl-moves li { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 0.5rem 0.7rem; font-size: var(--t-md); }
+.nl-why { display: block; color: var(--muted); font-size: var(--t-sm); margin-top: 0.15rem; }
+
+.nl-table { width: 100%; border-collapse: collapse; margin-top: 0.8rem; font-size: var(--t-sm); }
+.nl-table th { font-family: var(--mono); font-weight: 400; font-size: var(--t-xs); color: var(--muted); text-align: right; padding: 0.3rem 0.35rem; border-bottom: 1px solid var(--line); }
+.nl-table td { text-align: right; padding: 0.35rem; border-bottom: 1px solid rgba(42, 52, 65, 0.6); font-variant-numeric: tabular-nums; }
+.nl-table .l { text-align: left; }
+.nl-table tr.nl-idle td { color: var(--muted); }
+.nl-table tr.nl-mine td { background: color-mix(in srgb, var(--amber) 10%, transparent); }
+.nl-slot { font-family: var(--mono); color: var(--muted); text-align: left !important; width: 3rem; }
+.nl-edgeh { font-size: 10px !important; padding: 0.3rem 0.1rem !important; }
+.nl-edge { font-size: var(--t-xs); padding: 0.3rem 0.1rem !important; text-align: center !important; }
+.nl-stat { display: inline-block; margin-left: 0.4rem; font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 0.3rem; border-radius: 3px; border: 1px solid var(--line); color: var(--amber); }
+.nl-stat.out, .nl-stat.injured, .nl-stat.suspended, .nl-stat.inactive, .nl-stat.doubtful { color: var(--red); }
+
+/* Week */
+.nl-score { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 0.6rem 0.8rem; }
+.nl-vs { font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+.nl-big { font-family: var(--cond); font-weight: 700; font-size: 2.2rem; line-height: 1.1; }
+.nl-cats { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 4px; }
+@media (max-width: 620px) { .nl-cats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.nl-cat { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 0.4rem 0.3rem; text-align: center; }
+.nl-cat.safe, .nl-cat.leaning { border-color: color-mix(in srgb, var(--green) 60%, var(--line)); }
+.nl-cat.swing { border-color: var(--amber); }
+.nl-cat.behind, .nl-cat.lost { border-color: color-mix(in srgb, var(--red) 60%, var(--line)); }
+.nl-catk { font-family: var(--mono); font-size: var(--t-xs); color: var(--muted); }
+.nl-catv { font-family: var(--mono); font-size: var(--t-md); }
+.nl-catv span { color: var(--muted); }
+.nl-catp { font-family: var(--cond); font-weight: 700; font-size: 1.25rem; }
+.nl-cat.safe .nl-catp, .nl-cat.leaning .nl-catp { color: var(--green); }
+.nl-cat.swing .nl-catp { color: var(--amber); }
+.nl-cat.behind .nl-catp, .nl-cat.lost .nl-catp { color: var(--red); }
+.nl-catf { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+.nl-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.nl-day { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 0.35rem; text-align: center; }
+.nl-dayk { font-family: var(--mono); font-size: var(--t-xs); color: var(--muted); }
+.nl-dayv { font-family: var(--cond); font-weight: 700; font-size: 1.25rem; }
+.nl-dayv span { color: var(--muted); font-weight: 500; font-size: 1rem; }
+.nl-dayi { font-size: 10px; color: var(--amber); }
+
+/* Adds */
+.nl-budget { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 0.6rem 0.8rem; display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; font-size: var(--t-md); }
+.nl-budget b { font-family: var(--cond); font-size: 1.4rem; }
+.nl-budget .nl-dim { flex-basis: 100%; font-size: var(--t-sm); }
+.nl-pick { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 0.5rem 0.7rem; margin-bottom: 0.35rem; }
+.nl-pick.over { opacity: 0.6; }
+.nl-pickh { font-size: var(--t-md); display: flex; flex-wrap: wrap; gap: 0.2rem 0.4rem; align-items: baseline; }
+.nl-pickd { font-size: var(--t-sm); color: var(--muted); margin-top: 0.2rem; }
+.nl-kind { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; padding: 0 0.3rem; border-radius: 3px; border: 1px solid var(--line); }
+.nl-kind.upgrade { color: var(--green); }
+.nl-kind.stream { color: var(--blue); }
+
+/* News */
+.nl-news { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 5px; padding: 0.45rem 0.7rem; margin-bottom: 0.35rem; font-size: var(--t-sm); }
+.nl-news.worse { border-left-color: var(--red); }
+.nl-news.better { border-left-color: var(--green); }
+.nl-news.opening, .nl-news.minutes-up { border-left-color: var(--blue); }
+.nl-news.minutes-down { border-left-color: var(--amber); }
+.nl-newsh { font-size: var(--t-md); }
+
+/* Season */
+.nl-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.nl-chip { background: var(--surface); border: 1px solid var(--line); border-radius: 3px; padding: 0.15rem 0.45rem; font-size: var(--t-sm); }
+.nl-chip b { font-family: var(--mono); margin-left: 0.2rem; }
+.nl-chip.hurt { border-color: var(--red); }
+.nl-trade { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 0.5rem 0.7rem; margin-bottom: 0.35rem; font-size: var(--t-md); }
+.nl-trade .nl-dim { font-size: var(--t-sm); margin-top: 0.15rem; }

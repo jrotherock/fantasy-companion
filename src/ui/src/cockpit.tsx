@@ -12,6 +12,7 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 import './cockpit.css'
 import { Attribution } from './attribution'
+import type { SeasonTile } from '../../nba/seasonView'
 
 type Urgency = 'act' | 'soon' | 'watch' | 'quiet' | 'blocked'
 type Verdict = 'act' | 'watch' | 'hold' | 'ignore'
@@ -973,16 +974,49 @@ function LeagueCard({ t, onOpen, mark, close }: {
   )
 }
 
-function Now({ tiles, onOpen, marks, closeCalls }: {
+const URGENCY: Tile['urgency'][] = ['act', 'soon', 'watch', 'quiet', 'blocked']
+
+/**
+ * A basketball league's card. Same shape and colours as football's, so the
+ * home list reads as one list worst-first; it opens the league's own page,
+ * because basketball's season screens live in their own bundle.
+ */
+function NbaCard({ t }: { t: SeasonTile }) {
+  const s = t.score
+  return (
+    <a className={`ck tap ${t.urgency}`} href={t.link} style={leagueStyle(t.id)}>
+      <div className="ckhead">
+        <span className="cknm" title={t.label}>{t.label}</span>
+        <span className="ckfmt">NBA</span>
+        <span className="cksp" />
+        {s && s.mine != null && (
+          <span className="ckrec" title={s.expected != null ? `${s.expected.toFixed(1)} categories expected` : undefined}>
+            <b>{s.mine}–{s.theirs ?? '—'}</b>
+            {s.win != null && <i className="ckplace">{Math.round(s.win * 100)}%</i>}
+          </span>
+        )}
+        <span className="ckchev" aria-hidden="true">›</span>
+      </div>
+      <div className="ckwhy">{t.why}</div>
+      <div className="ckfoot">
+        <span className={`ckpill ${t.urgency}`}>{t.action}</span>
+      </div>
+    </a>
+  )
+}
+
+function Now({ tiles, onOpen, marks, closeCalls, nba = [] }: {
   tiles: Tile[]; onOpen: (id: string) => void
   marks?: Record<string, { count: number; worst: number; first: string }>
   closeCalls?: Record<string, number>
+  nba?: SeasonTile[]
 }) {
   /* Counted from what the tiles are actually marked with, so the heading
      cannot say "nothing needs you" over a card that says otherwise. */
-  const need = tiles.filter(
-    (t) => marks?.[t.id] || closeCalls?.[t.id] || t.urgency === 'act' || t.urgency === 'soon',
-  )
+  const need: { id: string }[] = [
+    ...tiles.filter((t) => marks?.[t.id] || closeCalls?.[t.id] || t.urgency === 'act' || t.urgency === 'soon'),
+    ...nba.filter((t) => t.urgency === 'act' || t.urgency === 'soon'),
+  ]
   /* Everything marked, across them: a league with two questionable starters
      and one with a close call is three things and two leagues. */
   const things = need.reduce(
@@ -1013,10 +1047,14 @@ function Now({ tiles, onOpen, marks, closeCalls }: {
           : undefined}
       />
       <div className="ckgrid ckleagues">
-        {tiles.map((t) => (
+        {/* Worst first across both sports; a basketball card goes ahead of football cards of the same urgency, since a daily lineup locks sooner. */}
+        {[...tiles.map((t) => ({ u: URGENCY.indexOf(t.urgency), el: (
           <LeagueCard key={t.id} t={t} mark={marks?.[t.id]} close={closeCalls?.[t.id]}
                       onOpen={() => onOpen(t.id)} />
-        ))}
+        ) })), ...nba.map((t) => ({ u: URGENCY.indexOf(t.urgency) - 0.5, el: <NbaCard key={t.id} t={t} /> }))]
+          .map((x, i) => ({ ...x, i }))
+          .sort((a, b) => a.u - b.u || a.i - b.i)
+          .map((x) => x.el)}
       </div>
     </>
   )
@@ -3623,6 +3661,7 @@ function Cockpit() {
   const [tab, setTab] = useState<Tab>('now')
   const [openLeague, setOpenLeague] = useState<string | null>(null)
   const [tiles, setTiles] = useState<Tile[] | null>(null)
+  const [nba, setNba] = useState<SeasonTile[]>([])
   const [marks, setMarks] = useState<Record<string, any>>({})
   const [closeCalls, setCloseCalls] = useState<Record<string, number>>({})
   const [news, setNews] = useState<{ items: Item[]; scanned: number; baseline: number | null } | null>(null)
@@ -3669,7 +3708,7 @@ function Cockpit() {
     const load = () => {
       fetch('/api/cockpit').then((r) => r.json())
         .then((d) => {
-          setTiles(d.tiles); setMarks(d.marks ?? {})
+          setTiles(d.tiles); setMarks(d.marks ?? {}); setNba(d.nba ?? [])
           setCloseCalls(d.closeCalls ?? {}); setErr(null)
         })
         .catch(() => setErr('The companion is not answering on :4600'))
@@ -3744,7 +3783,7 @@ function Cockpit() {
           <div className="ckwrap">
             {tab === 'now' && (openLeague
               ? <League id={openLeague} onBack={() => setOpenLeague(null)} />
-              : <><Now tiles={tiles} onOpen={setOpenLeague} marks={marks} closeCalls={closeCalls} /><Exposure /></>)}
+              : <><Now tiles={tiles} onOpen={setOpenLeague} marks={marks} closeCalls={closeCalls} nba={nba} /><Exposure /></>)}
             {tab === 'news' && <NewsTab news={news} alerts={alerts} onRead={markRead} />}
             {tab === 'plan' && <MovesTab tiles={tiles} />}
             {tab === 'settings' && <Settings sources={sources} />}

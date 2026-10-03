@@ -1,5 +1,6 @@
 import { handleNba } from './nbaDraft.js'
 import { startNbaYahoo } from './nbaYahoo.js'
+import { handleNbaSeason, nbaAlerts, seasonTiles, startNbaSeason } from './nbaSeason.js'
 import { createServer } from 'node:http'
 import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs'
 import { extname, join, normalize } from 'node:path'
@@ -357,6 +358,7 @@ const margins = new Map<string, boolean>()
 
 async function gatherAlerts(): Promise<Alert[]> {
   const found: Alert[] = []
+  try { found.push(...nbaAlerts()) } catch (e) { console.warn('nba alerts:', String((e as Error)?.message ?? e)) }
   {
     for (const session of sessions.values()) {
       const l = session.league
@@ -689,6 +691,8 @@ function serveStatic(pathname: string, res: any): boolean {
     : pathname === '/draft' || pathname === '/draft/' ? '/index.html'
     // The basketball draft is its own page: /nba/draft, or /nba/draft/<league>.
     : /^\/nba\/draft(\/[\w-]*)?\/?$/.test(pathname) ? '/nba-draft.html'
+    // A basketball league's season: /nba/league/<league>.
+    : /^\/nba\/league(\/[\w-]*)?\/?$/.test(pathname) ? '/nba-league.html'
     : pathname
   // Keep the resolved path inside dist, whatever the request asks for.
   const file = join('dist', normalize(rel).replace(/^(\.\.[/\\])+/, ''))
@@ -1349,6 +1353,7 @@ const server = createServer(async (req, res) => {
   }
 
   // Basketball has its own sessions and screen; football's code below never sees it.
+  if (await handleNbaSeason(parts, req, res, json, body)) return
   if (await handleNba(parts, url, req, res, json, body)) return
 
   if (parts[1] === 'detect' && req.method === 'POST') {
@@ -1405,7 +1410,10 @@ const server = createServer(async (req, res) => {
     const close: Record<string, number> = {}
     for (const [id, c] of closeCallCount) if (c.n > 0) close[id] = c.n
     foldMarks(tiles, marks, Object.fromEntries(closeCallCount))
-    return json(res, 200, { generatedAt: Date.now(), tiles, marks, closeCalls: close })
+    // Basketball's leagues ride along as their own tiles; a failure there never costs football its screen.
+    let nba: unknown[] = []
+    try { nba = seasonTiles() } catch (e) { console.warn('nba tiles:', String((e as Error)?.message ?? e)) }
+    return json(res, 200, { generatedAt: Date.now(), tiles, marks, closeCalls: close, nba })
   }
 
   /**
@@ -3623,6 +3631,7 @@ setInterval(() => {
 server.listen(PORT, () => console.log(`draft companion on http://localhost:${PORT}`))
 // Basketball drafts read from the Yahoo API while one is running; idle otherwise.
 startNbaYahoo()
+startNbaSeason()
 
 /*
  * The Yahoo leagues, from the API, on a clock of their own.

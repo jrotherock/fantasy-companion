@@ -145,7 +145,7 @@ export function parseEspnSchedule(data: any): Game[] {
       for (const g of day) {
         const home = abbr.get(g.homeProTeamId), away = abbr.get(g.awayProTeamId)
         if (!home || !away || games.has(String(g.id))) continue
-        games.set(String(g.id), { id: String(g.id), date: easternDate(g.date), home, away })
+        games.set(String(g.id), { id: String(g.id), date: easternDate(g.date), tip: typeof g.date === 'number' ? new Date(g.date).toISOString() : null, home, away })
       }
     }
   }

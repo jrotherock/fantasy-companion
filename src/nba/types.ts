@@ -101,6 +101,8 @@ export interface Game {
   id: string
   /** Calendar date in US Eastern time, which is the date the league plays it on. */
   date: string
+  /** Tip-off, as an instant; a player's lineup slot locks then. Null where the source gave no time. */
+  tip?: string | null
   home: Team
   away: Team
 }

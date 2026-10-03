@@ -29,7 +29,8 @@ test('the schedule lists each game once although ESPN lists it under both teams'
       ],
     },
   })
-  assert.deepEqual(games, [{ id: '1', date: '2026-10-20', home: 'SAS', away: 'NOP' }])
+  // Midnight UTC is the evening before in the East: the game is on the 20th, tipping at 8pm Eastern.
+  assert.deepEqual(games, [{ id: '1', date: '2026-10-20', tip: '2026-10-21T00:00:00.000Z', home: 'SAS', away: 'NOP' }])
 })
 
 test('Sleeper projections are per game and keep attempts for weighting the percentages', () => {
