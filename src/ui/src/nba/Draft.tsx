@@ -409,6 +409,7 @@ function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
           <ul>
             <li><b>#</b> is value for your build; it re-ranks when you lock, and locked columns fade.</li>
             <li><b>Coloured cells</b>: what a player adds per category over a season. Read down the <span className="nb-amber">amber headers</span> — your coin flips — to find who tips one to green.</li>
+            {!cats && <li><b>FP/g</b> fantasy points a game; <b>FP/min</b> per minute he is projected to play — high means he scores in what he gets, so more minutes would show; <b>FP season</b> a game times his games. <b>Value</b> is not the season total: it is points a game above the replacement line times games, so a replacement-level player is worth nought however much he scores.</li>}
             <li><b>Next</b>: chance he lasts to your next pick. Above about 60%, he can wait. <b>PO</b>: games in your playoff weeks, the tiebreaker.</li>
             <li>Grey rows are your never list. A red note means he starts the season hurt; set your own return date beside it.</li>
             <li>Check a name here; let the cards above make the call.</li>
@@ -425,7 +426,7 @@ function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
           <thead>
             <tr>
               <th>#</th><th className="nb-l">Player</th><th>Pos</th><th>G</th><th title="Games in your playoff weeks">PO</th><th>ADP</th><th title="Chance he lasts to your next decision">Next</th>
-              {cats ? CATS.map((c) => <th key={c} className={locks.includes(c) ? 'nb-off' : need.includes(c) ? 'nb-need' : ''}>{LABEL[c]}</th>) : <><th>FP/g</th><th>Value</th></>}
+              {cats ? CATS.map((c) => <th key={c} className={locks.includes(c) ? 'nb-off' : need.includes(c) ? 'nb-need' : ''}>{LABEL[c]}</th>) : <><th title="Fantasy points a game">FP/g</th><th title="Fantasy points a minute">FP/min</th><th title="Fantasy points over the season: a game times games">FP season</th><th title="Points a game above the replacement line, times games">Value</th></>}
               <th title="never · avoid · like">Tag</th>
             </tr>
           </thead>
@@ -452,7 +453,7 @@ function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
                 <td className="nb-dim">{r.adp != null ? r.adp.toFixed(0) : '—'}</td>
                 <td>{r.takenAt == null && r.survives != null ? pct(r.survives) : ''}</td>
                 {cats ? CATS.map((c) => <td key={c} className={`mono ${locks.includes(c) ? 'nb-off' : ''}`} style={locks.includes(c) ? undefined : heat(r.contrib![c])}>{r.contrib![c].toFixed(1)}</td>)
-                  : <><td className="mono">{r.fpg?.toFixed(1)}</td><td className="mono">{Math.round(r.value)}</td></>}
+                  : <><td className="mono">{r.fpg?.toFixed(1)}</td><td className="mono">{r.fpMin != null ? r.fpMin.toFixed(2) : '—'}</td><td className="mono">{r.fpSeason != null ? Math.round(r.fpSeason).toLocaleString() : ''}</td><td className="mono">{Math.round(r.value)}</td></>}
                 <td className="nb-tags">
                   <button className={r.tag === 'never' ? 'nb-on' : ''} title="Never draft" onClick={() => tag(r, 'never')}>✕</button>
                   <button className={r.tag === 'avoid' ? 'nb-on' : ''} title="Avoid" onClick={() => tag(r, 'avoid')}>↓</button>

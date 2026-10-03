@@ -224,6 +224,10 @@ export interface BoardRow {
   contrib?: Record<Cat, number>
   /** Fantasy points per game (points leagues). */
   fpg?: number
+  /** Fantasy points per projected minute (points leagues): who scores in the minutes he gets. */
+  fpMin?: number | null
+  /** Fantasy points over the season: per game times the games he is expected to play (points leagues). */
+  fpSeason?: number
   survives: number | null
   tag: PrefTag | null
   injury: string | null
@@ -508,6 +512,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       value: v.value, rank: v.rank,
       contrib: prep.cats ? contribution(r as CatRow) : undefined,
       fpg: prep.points ? (r as PointsRow).fpg : undefined,
+      fpMin: prep.points ? ((pl.projection?.perGame.min ?? 0) > 0 ? (r as PointsRow).fpg / pl.projection!.perGame.min : null) : undefined,
+      fpSeason: prep.points ? (r as PointsRow).season : undefined,
       // Chance he lasts to the next decision: the pick after this one when I am on the clock.
       survives: (onClock ? nextAfter : myNext) == null ? null : survival(prep.adp(r.id), (onClock ? nextAfter : myNext)!),
       tag: tags.get(r.id) ?? null,
