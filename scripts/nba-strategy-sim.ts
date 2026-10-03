@@ -30,6 +30,9 @@ const SEEDS = Number(arg('seeds') ?? 20)
 const WINDOW = Number(arg('window') ?? 4)
 /** `--mode locks` compares when to lock a punt instead of how to choose for fit. */
 const MODE = arg('mode') ?? 'fit'
+/** `--first "Name"` takes that player with my first pick, from the slots where he is realistically there (`--slots 1-6`). */
+const FIRST = arg('first')
+const [SLOT_FROM, SLOT_TO] = (arg('slots') ?? '').split('-').map(Number)
 
 const players: NbaPlayer[] = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
 const league = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues.find((l: any) => l.id === 'nba-hoops')
@@ -124,7 +127,9 @@ function draft(slot: number, seed: number, pick: Pick): { mine: string[]; teams:
     const avail = pool.filter((id) => !taken.has(id))
     let id: string
     const byScatter = (xs: string[]) => [...xs].sort((a, b) => scatter.get(a)! - scatter.get(b)!)
-    if (seat === slot) id = pick(avail, teams[seat - 1], overall, slot, taken) ?? byScatter(avail)[0]
+    const firstId = FIRST ? players.find((p) => p.name === FIRST)?.id : undefined
+    if (seat === slot && firstId && teams[seat - 1].length === 0 && avail.includes(firstId)) id = firstId
+    else if (seat === slot) id = pick(avail, teams[seat - 1], overall, slot, taken) ?? byScatter(avail)[0]
     else {
       const ok = canTake(teams[seat - 1])
       // A roster whose seats nobody left can fill takes the best player anyway, as a manager would.
@@ -199,6 +204,16 @@ const lockOnAnchor: Pick = (avail, mine, overall, slot) => {
   return appPick(avail, mine, overall, slot, 'none', locks)
 }
 
+if (MODE === 'first') {
+  // After a forced first pick: the advice as it is, against locking that player's punt now or at the fourth pick.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const punt = (arg('punt') ?? 'ft').split('+') as Cat[]
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none')
+  strategies[`lock ${punt.join('+')} at once`] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', mine.length >= 1 ? punt : [])
+  strategies[`lock ${punt.join('+')} at pick 4`] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', mine.length >= 3 ? punt : [])
+  strategies['best value'] = (avail, mine) => windowOf(avail, mine)[0]
+}
+
 if (MODE === 'locks') {
   for (const k of Object.keys(strategies)) delete strategies[k]
   strategies['best value'] = (avail, mine) => windowOf(avail, mine)[0]
@@ -213,7 +228,7 @@ const results: Record<string, { allPlay: number[]; cats: number[]; bySlot: numbe
 const t0 = Date.now()
 for (const [name, pick] of Object.entries(strategies)) {
   const res = { allPlay: [] as number[], cats: [] as number[], bySlot: Array.from({ length: league.teams }, () => [] as number[]) }
-  for (let slot = 1; slot <= league.teams; slot++) {
+  for (let slot = SLOT_FROM || 1; slot <= (SLOT_TO || league.teams); slot++) {
     for (let seed = 1; seed <= SEEDS; seed++) {
       const { mine, teams } = draft(slot, seed, pick)
       const me = strengthOf(mine)
@@ -231,17 +246,17 @@ for (const [name, pick] of Object.entries(strategies)) {
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 const se = (xs: number[]) => { const m = mean(xs); return Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1) / xs.length) }
 const ref = results['best value'].allPlay
-console.log(`Hoops, ${league.teams} slots × ${SEEDS} rooms each, window ${WINDOW}. All-play = chance of winning a week, averaged over the nine rosters in the room.`)
+console.log(`Hoops, slots ${SLOT_FROM || 1}–${SLOT_TO || league.teams} × ${SEEDS} rooms each, window ${WINDOW}${FIRST ? `, first pick ${FIRST}` : ''}. All-play = chance of winning a week, averaged over the nine rosters in the room.`)
 console.log('strategy                 all-play   ±2se    vs best value (paired) ±2se    cats/wk')
 for (const [name, r] of Object.entries(results)) {
   const diff = r.allPlay.map((x, i) => x - ref[i])
   console.log(`${name.padEnd(24)} ${(mean(r.allPlay) * 100).toFixed(1).padStart(6)}%  ${(2 * se(r.allPlay) * 100).toFixed(1).padStart(4)}   ${(mean(diff) * 100 >= 0 ? '+' : '') + (mean(diff) * 100).toFixed(1).padStart(5)} pts  ${(2 * se(diff) * 100).toFixed(1).padStart(4)}       ${mean(r.cats).toFixed(2)}`)
 }
 const app = results['the app (recommender)'].allPlay
-for (const name of Object.keys(results).filter((n) => n !== 'the app (recommender)' && n !== 'best value' && (MODE === 'locks' || n.startsWith('app +')))) {
+for (const name of Object.keys(results).filter((n) => n !== 'the app (recommender)' && n !== 'best value' && (MODE !== 'fit' || n.startsWith('app +')))) {
   const d = results[name].allPlay.map((x, i) => x - app[i])
   console.log(`${name} vs the app: ${(mean(d) * 100).toFixed(2)} pts ± ${(2 * se(d) * 100).toFixed(2)} (2se); changed the pick in ${d.filter((x) => x !== 0).length} of ${d.length} drafts`)
 }
 console.log('\nby slot (all-play %):')
 console.log('slot  ' + Object.keys(results).map((n) => n.slice(0, 12).padStart(13)).join(''))
-for (let s = 0; s < league.teams; s++) console.log(String(s + 1).padStart(4) + '  ' + Object.values(results).map((r) => (mean(r.bySlot[s]) * 100).toFixed(1).padStart(13)).join(''))
+for (let s = 0; s < league.teams; s++) if (Object.values(results)[0].bySlot[s].length) console.log(String(s + 1).padStart(4) + '  ' + Object.values(results).map((r) => (mean(r.bySlot[s]) * 100).toFixed(1).padStart(13)).join(''))
