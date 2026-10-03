@@ -109,7 +109,7 @@ function Screen({ id }: { id: string }) {
         <Status view={view} error={error} act={act} rosterOpen={rosterOpen} setRosterOpen={setRosterOpen} drawer={drawer} setDrawer={setDrawer} />
         {rosterOpen && <RosterLine view={view} />}
         {view.league.slot == null ? <Gate view={view} act={act} />
-          : view.review ? <Review view={view} act={act} />
+          : view.review ? null
           : <>
               <Notice view={view} />
               <Take view={view} act={act} />
@@ -118,6 +118,8 @@ function Screen({ id }: { id: string }) {
       </div>
       {view.league.slot != null && (
         <div className="nb-panel">
+          {/* Once the draft is done nothing is on the clock, so the review scrolls with the board rather than pinning it out of sight. */}
+          {view.review && <Review view={view} act={act} />}
           <NextPicks view={view} />
           <Board view={view} act={act} id={id} />
         </div>
