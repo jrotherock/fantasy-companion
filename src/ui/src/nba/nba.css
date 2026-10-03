@@ -164,3 +164,9 @@ div.nb-cat { cursor: default; }
 .nb-num { font-family: var(--mono); }
 .nb-l { text-align: left; }
 .nb-builds-list { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; margin-bottom: 0.5rem; }
+
+/* The room: every team's draft on my review's yardstick */
+.nb-room { list-style: none; margin: 0.3rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--t-sm); }
+.nb-room li { display: flex; gap: 0.4rem; align-items: baseline; padding: 0.2rem 0.4rem; border-radius: 3px; }
+.nb-room li.mine { background: color-mix(in srgb, var(--amber) 12%, transparent); }
+.nb-room .spacer { flex: 1; }

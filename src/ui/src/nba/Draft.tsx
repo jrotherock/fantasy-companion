@@ -447,6 +447,15 @@ function Review({ view }: { view: DraftView; act: Act }) {
       {r.value != null && <div className="nb-bignum">{Math.round(r.value)} <span className="nb-dim">season value over replacement</span></div>}
       <div>Took the advice at {r.followed} of {r.advisedPicks} picks.</div>
       {r.departures.length > 0 && <ul className="nb-list">{r.departures.map((d, i) => <li key={i}><span className="mono nb-dim">R{d.round}</span> took {d.took} <span className="nb-dim">— advice was {d.advised}</span></li>)}</ul>}
+      {r.room && <>
+        <div className="nb-bhead"><span className="vlabel">THE ROOM</span><span className="nb-dim nb-small">{r.expected != null ? 'categories a week against an average team' : 'season value over replacement'}</span></div>
+        <ol className="nb-room">{r.room.map((t) => (
+          <li key={t.seat} className={t.mine ? 'mine' : ''}>
+            <span className="mono nb-dim">{t.rank}.</span> {t.mine ? 'You' : t.manager ?? `Seat ${t.seat}`}{(t.mine || t.manager) && <span className="nb-dim"> seat {t.seat}</span>}
+            <span className="spacer" /><b className="mono">{r.expected != null ? t.score.toFixed(2) : Math.round(t.score)}</b>
+          </li>
+        ))}</ol>
+      </>}
       {view.mock && <button className="btn" onClick={async () => { if (confirm('Discard this mock? It drops out of the comparison.')) { await post(`/api/nba/draft/${view.league.id}/discard`); location.href = '/nba/draft' } }}>Discard this mock</button>}
     </div>
   )

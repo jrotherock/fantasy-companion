@@ -297,8 +297,30 @@ export interface DraftView {
     followed: number
     advisedPicks: number
     departures: { round: number; took: string; advised: string }[]
+    /**
+     * Every team's draft on the same yardstick as mine, once every pick is in:
+     * expected categories a week against an average team, or season value.
+     */
+    room: { seat: number; manager: string | null; score: number; mine: boolean; rank: number }[] | null
   }
   mock: NbaLeague['mock'] | null
+}
+
+/** How every team's draft came out, measured as mine is. */
+export function roomOf(prep: Prepared, d: StoredDraft, teams: number, mySlot: number): NonNullable<NonNullable<DraftView['review']>['room']> {
+  const bySeat = new Map<number, string[]>()
+  for (const x of d.picks) {
+    const seat = slotFor(x.overall, teams)
+    ;(bySeat.get(seat) ?? bySeat.set(seat, []).get(seat)!).push(x.playerId)
+  }
+  const rows = [...bySeat.entries()].map(([seat, ids]) => {
+    const score = prep.cats
+      ? expectedCats(strengthOf(prep, ids), ids.length, prep.cats.base)
+      : ids.reduce((n, id) => n + (prep.points!.byId.get(id)?.value ?? 0), 0)
+    return { seat, manager: d.managers?.[seat - 1] ?? null, score, mine: seat === mySlot, rank: 0 }
+  }).sort((a, b) => b.score - a.score)
+  rows.forEach((r, i) => (r.rank = i + 1))
+  return rows
 }
 
 function canTakeFor(prep: Prepared, mine: string[], tags: Map<string, PrefTag>): CanTake {
@@ -509,6 +531,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       followed: asked.length - departures.length,
       advisedPicks: asked.length,
       departures,
+      room: d.picks.length >= teams * rounds ? roomOf(prep, d, teams, slot!) : null,
     }
   }
 
