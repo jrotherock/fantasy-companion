@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DraftView, BoardRow, PathView } from '../../../nba/plan'
 import type { Cat } from '../../../nba/value'
-import type { MockReport } from '../../../nba/tendencies'
 
 const CATS: Cat[] = ['fg', 'ft', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to']
 const LABEL: Record<Cat, string> = { fg: 'FG%', ft: 'FT%', tpm: '3PM', pts: 'PTS', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO' }
@@ -63,119 +62,13 @@ function useDraft(id: string) {
 
 export function Draft() {
   const id = location.pathname.match(/^\/nba\/draft\/([\w-]+)/)?.[1] ?? null
-  return id ? <Screen id={id} /> : <Pick />
+  // The draft hub is gone: each league's page holds its draft prep.
+  if (!id) { location.replace('/home'); return null }
+  return <Screen id={id} />
 }
 
-type LeagueRow = { id: string; label: string; scoring: string; teams: number; picks: number; mock: { apiOk: boolean | null; createdAt: number } | null }
-
-function Pick() {
-  const [leagues, setLeagues] = useState<LeagueRow[] | null>(null)
-  const [link, setLink] = useState('')
-  const [base, setBase] = useState('')
-  const [err, setErr] = useState<string | null>(null)
-  const load = () => fetch('/api/nba/leagues').then((r) => r.json()).then(setLeagues).catch(() => setLeagues([]))
-  useEffect(() => { load() }, [])
-  const real = leagues?.filter((l) => !l.mock) ?? []
-  const mocks = leagues?.filter((l) => l.mock).sort((a, b) => b.mock!.createdAt - a.mock!.createdAt) ?? []
-  const follow = async () => {
-    setErr(null)
-    try {
-      const r = await post('/api/nba/mock', { link, baseId: base || real[0]?.id })
-      location.href = `/nba/draft/${r.leagueId}`
-    } catch (e) { setErr((e as Error).message) }
-  }
-  const discard = async (id: string) => { await post(`/api/nba/draft/${id}/discard`); load() }
-  return (
-    <div className="nb-pick">
-      <a className="nb-home" href="/home">← Home</a>
-      <h1>Basketball draft</h1>
-      {!leagues && <p className="nb-dim">Loading leagues…</p>}
-      {real.map((l) => (
-        <a key={l.id} className="nb-league" href={`/nba/draft/${l.id}`}>
-          <span className="nb-league-name">{l.label}</span>
-          <span className="nb-dim">{l.scoring === 'points' ? 'Points' : '9-cat'} · {l.teams} teams{l.picks ? ` · ${l.picks} picks in` : ''}</span>
-        </a>
-      ))}
-      <h2 className="nb-h2">Mock drafts</h2>
-      <p className="nb-dim nb-small">Start an Instant Mock Draft from your league on Yahoo with the extension loaded and it appears here by itself. If it does not, paste the draft room's address below.</p>
-      {mocks.map((l) => (
-        <div key={l.id} className="nb-league nb-mockrow">
-          <a href={`/nba/draft/${l.id}`}>
-            <span className="nb-league-name">{l.label}</span>
-            <span className="nb-dim"> · {l.picks} picks · {l.mock!.apiOk === true ? 'read by the Yahoo API' : l.mock!.apiOk === false ? 'read by the extension (the API refused it)' : 'checking the API…'}</span>
-          </a>
-          <button className="nb-btn nb-quiet" onClick={() => discard(l.id)}>Discard</button>
-        </div>
-      ))}
-      <div className="nb-follow">
-        <input value={link} placeholder="Mock draft room address" onChange={(e) => setLink(e.target.value)} />
-        <select value={base} onChange={(e) => setBase(e.target.value)}>
-          {real.map((l) => <option key={l.id} value={l.id}>copies {l.label}</option>)}
-        </select>
-        <button className="nb-btn nb-quiet" onClick={follow} disabled={!link.trim()}>Follow</button>
-      </div>
-      {err && <p className="nb-bad nb-small">{err}</p>}
-      <Lessons />
-    </div>
-  )
-}
-
-/**
- * What the mocks say, one league format at a time. The playbook leads — three
- * things at most to do differently — and the rest is the evidence behind it.
- */
-function Lessons() {
-  const [out, setOut] = useState<{ leagueId: string; label: string; scoring: string; report: MockReport }[] | null>(null)
-  useEffect(() => { fetch('/api/nba/tendencies').then((r) => r.json()).then(setOut).catch(() => setOut([])) }, [])
-  if (!out) return null
-  const fmt = (r: MockReport, x: number) => (r.scoring === 'categories' ? x.toFixed(2) : String(Math.round(x)))
-  return (
-    <div id="mocks">
-      <h2 className="nb-h2">What your mocks say</h2>
-      {out.map(({ leagueId, label, report: r }) => (
-        <div key={leagueId} className="nb-panel nb-lessons">
-          <div className="nb-h"><strong>{label}</strong><span className="nb-dim"> — {r.headline}</span></div>
-          {r.playbook.length > 0 && (
-            <ol className="nb-playbook">
-              {r.playbook.map((p) => (
-                <li key={p.id}>
-                  <div className="nb-pb-action">{p.action} <span className={`nb-str nb-str-${p.strength}`}>{p.strength}</span></div>
-                  <div className="nb-small"><span className="nb-dim">When:</span> {p.when}</div>
-                  <div className="nb-small"><span className="nb-dim">Because:</span> {p.because}</div>
-                  <div className="nb-small"><span className="nb-dim">Check:</span> {p.check}</div>
-                </li>
-              ))}
-            </ol>
-          )}
-          {r.tendencies.length > 0 && (
-            <ul className="nb-tend">
-              {r.tendencies.map((t) => (
-                <li key={t.id}><strong>{t.headline}</strong> <span className={`nb-str nb-str-${t.strength}`}>{t.strength}</span><div className="nb-small nb-dim">{t.detail}{t.tryNext ? ` Try: ${t.tryNext}` : ''}</div></li>
-              ))}
-            </ul>
-          )}
-          {r.byBuild.length > 1 && (
-            <div className="nb-small nb-builds">{r.byBuild.map((b) => <span key={b.build}>{b.build} <strong>{fmt(r, b.avg)}</strong> <span className="nb-dim">×{b.mocks}</span></span>)}</div>
-          )}
-          {r.table.length > 0 && (
-            <table className="nb-table nb-mocktable">
-              <thead><tr><th className="nb-l">Mock</th><th>Seat</th><th className="nb-l">Build</th><th>Result</th><th>Took advice</th><th>Cost</th></tr></thead>
-              <tbody>
-                {r.table.map((m) => (
-                  <tr key={m.id}>
-                    <td className="nb-l"><a href={`/nba/draft/${m.id}`}>{m.when ? new Date(m.when).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : m.id}</a></td>
-                    <td>{m.seat ?? '—'}</td><td className="nb-l">{m.build}</td><td className="nb-num">{fmt(r, m.result)}</td><td>{m.followed}</td><td className="nb-num">{fmt(r, m.cost)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <p className="nb-dim nb-small">{r.caveat}</p>
-        </div>
-      ))}
-    </div>
-  )
-}
+/** Where ← leads: the league's page, or for a mock the page of the league it copies. */
+const leaguePage = (view: DraftView) => `/nba/league/${view.mock?.baseId ?? view.league.id}`
 
 // ── The draft screen ─────────────────────────────────────────────────────────
 //
@@ -243,7 +136,7 @@ function Status({ view, error, act, rosterOpen, setRosterOpen, drawer, setDrawer
   const said = !s.at ? 'NO FEED — ENTER PICKS BY HAND' : !s.ok ? `FEED: ${s.error}` : `${s.source === 'api' ? 'YAHOO API' : 'YAHOO PAGE'} · ${age}s`
   return (
     <div className="statusbar">
-      <a className="nb-home" href="/nba/draft">←</a>
+      <a className="nb-home" href={leaguePage(view)} title="The league's page">←</a>
       {c.done ? <span className="clockpill waiting">DONE</span>
         : view.league.slot == null ? <span className="clockpill waiting">PICK {c.overall}</span>
         : c.onClock ? <span className="clockpill">PICK {c.overall} — YOU</span>
@@ -438,7 +331,7 @@ function Review({ view }: { view: DraftView; act: Act }) {
   const r = view.review!
   return (
     <div className="nb-build">
-      <div className="nb-bhead"><span className="vlabel">HOW IT CAME OUT</span><span className="spacer" />{view.mock && <a className="nb-link" href="/nba/draft#mocks">What all your mocks say →</a>}</div>
+      <div className="nb-bhead"><span className="vlabel">HOW IT CAME OUT</span><span className="spacer" />{view.mock && <a className="nb-link" href={`${leaguePage(view)}#mocks`}>What all your mocks say →</a>}</div>
       {r.expected != null && r.win && <>
         <div className="nb-bignum">{r.expected.toFixed(1)} <span className="nb-dim">of 9 categories a week</span></div>
         <div className="nb-cats">{CATS.map((c) => <div key={c} className={`nb-cat nb-cat-${tone(r.win![c]) || 'even'}`}><span className="l">{LABEL[c]}</span><span className="v">{pct(r.win![c])}</span></div>)}</div>
@@ -456,7 +349,7 @@ function Review({ view }: { view: DraftView; act: Act }) {
           </li>
         ))}</ol>
       </>}
-      {view.mock && <button className="btn" onClick={async () => { if (confirm('Discard this mock? It drops out of the comparison.')) { await post(`/api/nba/draft/${view.league.id}/discard`); location.href = '/nba/draft' } }}>Discard this mock</button>}
+      {view.mock && <button className="btn" onClick={async () => { if (confirm('Discard this mock? It drops out of the comparison.')) { await post(`/api/nba/draft/${view.league.id}/discard`); location.href = leaguePage(view) } }}>Discard this mock</button>}
     </div>
   )
 }

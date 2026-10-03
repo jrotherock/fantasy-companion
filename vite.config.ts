@@ -13,13 +13,12 @@ export default defineConfig({
     outDir: '../../dist',
     emptyOutDir: true,
     // Separate bundles so work on one cannot break another: the football draft
-    // companion, the cockpit, the basketball draft, and a basketball league's season.
+    // companion, the cockpit (with basketball's league pages inside it), and the basketball draft room.
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'src/ui/index.html'),
         cockpit: resolve(__dirname, 'src/ui/cockpit.html'),
         nbaDraft: resolve(__dirname, 'src/ui/nba-draft.html'),
-        nbaLeague: resolve(__dirname, 'src/ui/nba-league.html'),
       },
     },
   },

@@ -84,7 +84,7 @@ export function leagueNews(ctx: Context, snap: Snapshot, myTeamId: string, event
       key: `status:${e.id}:${e.at}`, at: e.at, playerId: e.id, name: name(e.id), team: team(e.id), whose: w,
       kind: worse ? 'worse' : 'better',
       headline: `${name(e.id)} ${e.to === 'healthy' ? 'is cleared to play' : `is ${words[e.to]}`}`,
-      detail: [`was ${words[e.from]}`, r.text].filter(Boolean).join(' · '),
+      detail: [`was ${e.from === 'healthy' ? 'available' : words[e.from]}`, r.text].filter(Boolean).join(' · '),
       weight: WHOSE_WEIGHT[w] * 10 + (worse ? SEVERITY[e.to] : 1),
     })
   }

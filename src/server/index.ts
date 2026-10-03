@@ -685,14 +685,20 @@ function serveStatic(pathname: string, res: any): boolean {
     res.end()
     return true
   }
+  // The old basketball draft hub: each league's page holds its draft prep now.
+  if (pathname === '/nba/draft' || pathname === '/nba/draft/') {
+    res.writeHead(302, { Location: '/home' })
+    res.end()
+    return true
+  }
   const HOME = ['/', '/home', '/home/']
   const rel =
     HOME.includes(pathname) ? '/cockpit.html'
     : pathname === '/draft' || pathname === '/draft/' ? '/index.html'
-    // The basketball draft is its own page: /nba/draft, or /nba/draft/<league>.
+    // A basketball draft room is its own page: /nba/draft/<league>.
     : /^\/nba\/draft(\/[\w-]*)?\/?$/.test(pathname) ? '/nba-draft.html'
-    // A basketball league's season: /nba/league/<league>.
-    : /^\/nba\/league(\/[\w-]*)?\/?$/.test(pathname) ? '/nba-league.html'
+    // A basketball league's page lives inside the home app, under its tab bar: /nba/league/<league>.
+    : /^\/nba\/league(\/[\w-]*)?\/?$/.test(pathname) ? '/cockpit.html'
     : pathname
   // Keep the resolved path inside dist, whatever the request asks for.
   const file = join('dist', normalize(rel).replace(/^(\.\.[/\\])+/, ''))

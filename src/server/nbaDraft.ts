@@ -636,3 +636,22 @@ export function handReturns(): Map<string, string> {
   }
   return out
 }
+
+/**
+ * Drafts under way: picks in, the roster not yet full, and a reader heard from
+ * in the last ten minutes. The home screen follows them with a Resume bar, as
+ * it does football's. Mocks count — following one is a draft like any other.
+ */
+export function liveDrafts(includeTest = false): { id: string; label: string; leagueId: string; mock: boolean }[] {
+  const out: { id: string; label: string; leagueId: string; mock: boolean }[] = []
+  for (const l of load().leagues) {
+    if (l.id.endsWith('-test') && !includeTest) continue
+    if (!sessions.has(l.id) && !existsSync(fileOf(l.id))) continue
+    const s = session(l.id)
+    if (!s || !s.draft.picks.length || draftDone(l.id)) continue
+    const heard = Math.max(s.draft.sensor.at ?? 0, ...s.draft.feed.map((f) => f.at ?? 0))
+    if (Date.now() - heard > 10 * 60_000) continue
+    out.push({ id: l.id, label: l.label, leagueId: l.mock?.baseId ?? l.id, mock: !!l.mock })
+  }
+  return out
+}

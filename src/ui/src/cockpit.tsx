@@ -12,7 +12,10 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 import './cockpit.css'
 import { Attribution } from './attribution'
-import type { SeasonTile } from '../../nba/seasonView'
+import type { SeasonTile, SeasonView } from '../../nba/seasonView'
+import { NbaLeague } from './nba/League'
+import { NbaMoves, NbaNews } from './nba/Cross'
+import './nba/league.css'
 
 type Urgency = 'act' | 'soon' | 'watch' | 'quiet' | 'blocked'
 type Verdict = 'act' | 'watch' | 'hold' | 'ignore'
@@ -992,14 +995,44 @@ type SportFilter = 'All' | 'Football' | 'Basketball'
 const SPORT_KEY = 'home-sport'
 
 /**
+ * The sport filter, at the top of Now, News and Moves alike, and one setting
+ * across all three: choosing Basketball on Now means Basketball when News is
+ * opened next. Each button counts the leagues of its sport that need you, so a
+ * filter never hides that the other sport is waiting.
+ */
+function SportBar({ on, set, need }: { on: SportFilter; set: (v: SportFilter) => void; need: { nfl: number; nba: number } }) {
+  return (
+    <div className="ckseg cksportseg" role="tablist" aria-label="Sport">
+      {(['All', 'Football', 'Basketball'] as SportFilter[]).map((o) => {
+        const n = o === 'Football' ? need.nfl : o === 'Basketball' ? need.nba : 0
+        return (
+          <button key={o} role="tab" aria-selected={o === on} className={o === on ? 'on' : ''} onClick={() => set(o)}>
+            {o === 'Football' && <SportMark sport="nfl" />}{o === 'Basketball' && <SportMark sport="nba" />}
+            {o}{n > 0 && <span className="ckbadge">{n}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Sections for both sports under All, each under its own mark, so a long page says which is which. */
+function SportHead({ sport }: { sport: 'nfl' | 'nba' }) {
+  return <h2 className="cksporthead"><SportMark sport={sport} /> {sport === 'nfl' ? 'Football' : 'Basketball'}</h2>
+}
+
+/**
  * A basketball league's card. Same shape and colours as football's, so the
  * home list reads as one list worst-first; it opens the league's own page,
  * because basketball's season screens live in their own bundle.
  */
-function NbaCard({ t }: { t: SeasonTile }) {
+function NbaCard({ t, onOpen }: { t: SeasonTile; onOpen: (id: string) => void }) {
   const s = t.score
+  // The league's page opens inside the app; a draft under way opens its draft room.
+  const inside = t.link === `/nba/league/${t.id}`
   return (
-    <a className={`ck tap ${t.urgency}`} href={t.link} style={leagueStyle(t.id)}>
+    <a className={`ck tap ${t.urgency}`} href={t.link} style={leagueStyle(t.id)}
+       onClick={(e) => { if (inside && !e.metaKey && !e.ctrlKey) { e.preventDefault(); onOpen(t.id) } }}>
       <div className="ckhead">
         <SportMark sport="nba" />
         <span className="cknm" title={t.label}>{t.label}</span>
@@ -1020,11 +1053,12 @@ function NbaCard({ t }: { t: SeasonTile }) {
   )
 }
 
-function Now({ tiles, onOpen, marks, closeCalls, nba = [] }: {
-  tiles: Tile[]; onOpen: (id: string) => void
+function Now({ tiles, onOpen, onOpenNba, marks, closeCalls, nba = [], sport, setSport, need: needBy }: {
+  tiles: Tile[]; onOpen: (id: string) => void; onOpenNba: (id: string) => void
   marks?: Record<string, { count: number; worst: number; first: string }>
   closeCalls?: Record<string, number>
   nba?: SeasonTile[]
+  sport: SportFilter; setSport: (v: SportFilter) => void; need: { nfl: number; nba: number }
 }) {
   /* Counted from what the tiles are actually marked with, so the heading
      cannot say "nothing needs you" over a card that says otherwise. */
@@ -1039,16 +1073,8 @@ function Now({ tiles, onOpen, marks, closeCalls, nba = [] }: {
   ) || need.length
   const next = tiles.map((t) => t.draft).filter((d): d is NonNullable<Tile['draft']> => !!d && d.inMs > 0)
     .sort((a, b) => a.inMs - b.inMs)[0]
-  /* Remembered on this device: on a busy night you look at one sport at a time. */
-  const [sport, setSportState] = useState<SportFilter>(() => {
-    try { return (localStorage.getItem(SPORT_KEY) as SportFilter) || 'All' } catch { return 'All' }
-  })
-  const setSport = (v: SportFilter) => { setSportState(v); try { localStorage.setItem(SPORT_KEY, v) } catch { /* private window */ } }
   const both = tiles.length > 0 && nba.length > 0
   const shown = both ? sport : 'All'
-  /* How many need you in each, on the buttons, so a filter never hides that the other sport is waiting. */
-  const needFb = tiles.filter((t) => marks?.[t.id] || closeCalls?.[t.id] || t.urgency === 'act' || t.urgency === 'soon').length
-  const needNba = nba.filter((t) => t.urgency === 'act' || t.urgency === 'soon').length
   return (
     <>
       {/*
@@ -1071,25 +1097,13 @@ function Now({ tiles, onOpen, marks, closeCalls, nba = [] }: {
           ? `Next draft in ${inWords(next.inMs)} · ${new Date(next.at).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`
           : undefined}
       />
-      {both && (
-        <div className="ckseg cksportseg" role="tablist" aria-label="Sport">
-          {(['All', 'Football', 'Basketball'] as SportFilter[]).map((o) => {
-            const n = o === 'Football' ? needFb : o === 'Basketball' ? needNba : 0
-            return (
-              <button key={o} role="tab" aria-selected={o === shown} className={o === shown ? 'on' : ''} onClick={() => setSport(o)}>
-                {o === 'Football' && <SportMark sport="nfl" />}{o === 'Basketball' && <SportMark sport="nba" />}
-                {o}{n > 0 && <span className="ckbadge">{n}</span>}
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {both && <SportBar on={shown} set={setSport} need={needBy} />}
       <div className="ckgrid ckleagues">
         {/* Worst first across both sports; a basketball card goes ahead of football cards of the same urgency, since a daily lineup locks sooner. */}
         {[...(shown === 'Basketball' ? [] : tiles).map((t) => ({ u: URGENCY.indexOf(t.urgency), el: (
           <LeagueCard key={t.id} t={t} mark={marks?.[t.id]} close={closeCalls?.[t.id]}
                       onOpen={() => onOpen(t.id)} />
-        ) })), ...(shown === 'Football' ? [] : nba).map((t) => ({ u: URGENCY.indexOf(t.urgency) - 0.5, el: <NbaCard key={t.id} t={t} /> }))]
+        ) })), ...(shown === 'Football' ? [] : nba).map((t) => ({ u: URGENCY.indexOf(t.urgency) - 0.5, el: <NbaCard key={t.id} t={t} onOpen={onOpenNba} /> }))]
           .map((x, i) => ({ ...x, i }))
           .sort((a, b) => a.u - b.u || a.i - b.i)
           .map((x) => x.el)}
@@ -3702,6 +3716,31 @@ function Cockpit() {
   const [openLeague, setOpenLeague] = useState<string | null>(null)
   const [tiles, setTiles] = useState<Tile[] | null>(null)
   const [nba, setNba] = useState<SeasonTile[]>([])
+  const [nbaAll, setNbaAll] = useState<{ views: SeasonView[]; drafts: { id: string; label: string; leagueId: string; mock: boolean }[] }>({ views: [], drafts: [] })
+  /*
+   * A basketball league's page has an address of its own, /nba/league/<id>, so
+   * a notification or a draft room can link straight to it and the phone's back
+   * gesture leaves it. Football's leagues open in place, as they always have.
+   */
+  const nbaFromPath = () => location.pathname.match(/^\/nba\/league\/([\w-]+)/)?.[1] ?? null
+  const [nbaOpen, setNbaOpenState] = useState<string | null>(nbaFromPath)
+  const openNba = (id: string | null) => {
+    setNbaOpenState(id)
+    setOpenLeague(null)
+    if (id) { setTab('now'); history.pushState(null, '', `/nba/league/${id}`) }
+    else if (location.pathname !== '/home') history.pushState(null, '', '/home')
+    window.scrollTo(0, 0)
+  }
+  useEffect(() => {
+    const pop = () => setNbaOpenState(nbaFromPath())
+    window.addEventListener('popstate', pop)
+    return () => window.removeEventListener('popstate', pop)
+  }, [])
+  /* One sport setting for Now, News and Moves, remembered on this device. */
+  const [sport, setSportState] = useState<SportFilter>(() => {
+    try { return (localStorage.getItem(SPORT_KEY) as SportFilter) || 'All' } catch { return 'All' }
+  })
+  const setSport = (v: SportFilter) => { setSportState(v); try { localStorage.setItem(SPORT_KEY, v) } catch { /* private window */ } }
   const [marks, setMarks] = useState<Record<string, any>>({})
   const [closeCalls, setCloseCalls] = useState<Record<string, number>>({})
   const [news, setNews] = useState<{ items: Item[]; scanned: number; baseline: number | null } | null>(null)
@@ -3753,6 +3792,7 @@ function Cockpit() {
         })
         .catch(() => setErr('The companion is not answering on :4600'))
       fetch('/api/cockpit/news').then((r) => r.json()).then(setNews).catch(() => {})
+      fetch('/api/nba/season/all').then((r) => r.json()).then((d) => { if (d?.views) setNbaAll(d) }).catch(() => {})
       fetch('/api/cockpit/sources').then((r) => r.json()).then((d) => setSources(d.sources)).catch(() => {})
       fetch('/api/cockpit/notifications').then((r) => r.json()).then(setAlerts).catch(() => {})
     }
@@ -3769,6 +3809,13 @@ function Cockpit() {
     }).then(() => fetch('/api/cockpit/notifications')).then((r) => r.json()).then(setAlerts)
 
   const unread = alerts?.unread ?? 0
+  const both = !!tiles?.length && nba.length > 0
+  const shown: SportFilter = both ? sport : nba.length && !tiles?.length ? 'Basketball' : 'All'
+  const needBy = {
+    nfl: (tiles ?? []).filter((t) => marks?.[t.id] || closeCalls?.[t.id] || t.urgency === 'act' || t.urgency === 'soon').length,
+    nba: nba.filter((t) => t.urgency === 'act' || t.urgency === 'soon').length,
+  }
+  const fb = shown !== 'Basketball', bb = shown !== 'Football'
   /* The server says whether a draft is running. Asking instead whether the
      draft time had passed and the tile was urgent also described a league that
      drafted yesterday and has not been captured since — which is how an
@@ -3804,7 +3851,7 @@ function Cockpit() {
                already on — which is what every tab bar on the platform does,
                and the only way back from a league without hunting for the
                crumb at the top of a long page. */
-            onClick={() => { setTab(t.id); setOpenLeague(null) }}
+            onClick={() => { setTab(t.id); setOpenLeague(null); if (nbaOpen) openNba(null) }}
             aria-current={tab === t.id ? 'page' : undefined}>
             {t.label}
             {t.id === 'news' && unread > 0 && <span className="ckbadge">{unread}</span>}
@@ -3821,11 +3868,26 @@ function Cockpit() {
         {!err && !tiles && <div className="ckempty">Reading four leagues…</div>}
         {!err && tiles && (
           <div className="ckwrap">
-            {tab === 'now' && (openLeague
+            {tab === 'now' && (nbaOpen
+              ? <NbaLeague key={nbaOpen} id={nbaOpen} onBack={() => openNba(null)} />
+              : openLeague
               ? <League id={openLeague} onBack={() => setOpenLeague(null)} />
-              : <><Now tiles={tiles} onOpen={setOpenLeague} marks={marks} closeCalls={closeCalls} nba={nba} /></>)}
-            {tab === 'news' && <NewsTab news={news} alerts={alerts} onRead={markRead} />}
-            {tab === 'plan' && <MovesTab tiles={tiles} />}
+              : <Now tiles={tiles} onOpen={setOpenLeague} onOpenNba={openNba} marks={marks} closeCalls={closeCalls} nba={nba}
+                     sport={sport} setSport={setSport} need={needBy} />)}
+            {tab === 'news' && <>
+              {both && <SportBar on={shown} set={setSport} need={needBy} />}
+              {fb && bb && <SportHead sport="nfl" />}
+              {fb && <NewsTab news={news} alerts={alerts} onRead={markRead} />}
+              {fb && bb && <SportHead sport="nba" />}
+              {bb && <NbaNews views={nbaAll.views} open={(id) => openNba(id)} />}
+            </>}
+            {tab === 'plan' && <>
+              {both && <SportBar on={shown} set={setSport} need={needBy} />}
+              {fb && bb && <SportHead sport="nfl" />}
+              {fb && <MovesTab tiles={tiles} />}
+              {fb && bb && <SportHead sport="nba" />}
+              {bb && <NbaMoves views={nbaAll.views} open={(id) => openNba(id)} />}
+            </>}
             {tab === 'settings' && <Settings sources={sources} />}
           </div>
         )}
@@ -3835,6 +3897,13 @@ function Cockpit() {
         {yahooShown && <Attribution />}
       </main>
       {/* A draft in progress follows you everywhere, so stepping out is safe. */}
+      {!live && nbaAll.drafts[0] && (
+        <a className="ckdraftbar" href={`/nba/draft/${nbaAll.drafts[0].id}`}>
+          <span className="ckdot" />
+          <span className="ckdtx"><b>{nbaAll.drafts[0].label}</b>{nbaAll.drafts[0].mock ? 'Mock draft in progress' : 'Draft in progress'}</span>
+          <span className="ckdgo">Resume</span>
+        </a>
+      )}
       {live && (
         <a className="ckdraftbar" href={`/draft?league=${live.id}`}>
           <span className="ckdot" />

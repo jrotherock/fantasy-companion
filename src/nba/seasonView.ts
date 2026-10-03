@@ -125,7 +125,7 @@ export function seasonTile(v: SeasonView, now: number): SeasonTile {
   const link = `/nba/league/${v.league.id}`
   const base = { id: v.league.id, label: v.league.label, sport: 'nba' as const, link }
   if (v.phase === 'before-draft') {
-    return { ...base, link: `/nba/draft/${v.league.id}`, urgency: 'quiet', action: 'Draft', why: 'Not drafted yet', score: null }
+    return { ...base, urgency: 'quiet', action: 'Draft prep', why: 'Not drafted yet — mocks and the draft room are on its page', score: null }
   }
   const w = v.week
   const score = w ? {

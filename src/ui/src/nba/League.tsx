@@ -47,16 +47,6 @@ function useSeason(id: string) {
   return { view, error, refresh }
 }
 
-function Seg<T extends string>({ opts, on, set }: { opts: readonly T[]; on: T; set: (v: T) => void }) {
-  return (
-    <div className="ckseg" role="tablist">
-      {opts.map((o) => (
-        <button key={o} role="tab" aria-selected={o === on} className={o === on ? 'on' : ''} onClick={() => set(o)}>{o}</button>
-      ))}
-    </div>
-  )
-}
-
 function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
     <section className="nl-sect">
@@ -66,18 +56,22 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   )
 }
 
-export function League() {
-  const id = location.pathname.match(/^\/nba\/league\/([\w-]+)/)?.[1] ?? ''
+/**
+ * One basketball league, inside the home app under its tab bar. Before the
+ * draft it is the league's draft prep — the draft room, mocks and what they
+ * say; after it, the season.
+ */
+export function NbaLeague({ id, onBack }: { id: string; onBack: () => void }) {
   const { view, error, refresh } = useSeason(id)
-  const [tab, setTab] = useState<Tab>(() => (sessionStorage.getItem(`nl-tab-${id}`) as Tab) || 'Today')
+  const [tab, setTab] = useState<Tab>(() => { try { return (sessionStorage.getItem(`nl-tab-${id}`) as Tab) || 'Today' } catch { return 'Today' } })
   useEffect(() => { try { sessionStorage.setItem(`nl-tab-${id}`, tab) } catch { /* private window */ } }, [id, tab])
-  if (!id) return <div className="ckwrap"><div className="ckempty">No league in the address.</div></div>
-  if (!view) return <div className="ckwrap"><div className="ckempty">{error ?? 'Reading the league…'}</div></div>
+  const crumb = <div className="ckcrumb"><button onClick={onBack}>‹ Now</button></div>
+  if (!view) return <div className="nl">{crumb}<div className="ckempty">{error ?? 'Reading the league…'}</div></div>
   const v = view
   const rec = v.standing && v.standing.w != null ? `${v.standing.w}-${v.standing.l}${v.standing.t ? `-${v.standing.t}` : ''}${v.standing.rank ? ` · ${ordinal(v.standing.rank)}` : ''}` : null
   return (
-    <div className="ckwrap nl">
-      <a className="ckcrumb" href="/home">‹ Home</a>
+    <div className="nl">
+      {crumb}
       <header className="ckhdr">
         <div className="ckbig">{v.league.label}</div>
         <div className="cksub">
@@ -87,14 +81,11 @@ export function League() {
         </div>
       </header>
       {error && <div className="nl-warn">{error}</div>}
-      {v.phase === 'before-draft' ? (
-        <div className="ckempty">
-          Not drafted yet. The season screens start once Yahoo has rosters.{' '}
-          <a href={`/nba/draft/${v.league.id}`}>Open the draft screen</a>
-        </div>
-      ) : (
+      {v.phase === 'before-draft' ? <Prep leagueId={v.league.id} /> : (
         <>
-          <Seg opts={TABS} on={tab} set={setTab} />
+          <div className="ckseg" role="tablist">
+            {TABS.map((o) => <button key={o} role="tab" aria-selected={o === tab} className={o === tab ? 'on' : ''} onClick={() => setTab(o)}>{o}</button>)}
+          </div>
           {tab === 'Today' && <Today v={v} />}
           {tab === 'Week' && <Week v={v} />}
           {tab === 'Adds' && <Adds v={v} />}
@@ -102,8 +93,106 @@ export function League() {
           {tab === 'Season' && <Season v={v} />}
         </>
       )}
-      <div className="nl-attr">Fantasy data provided by Yahoo Fantasy. Stats and projections from Sleeper; injury timelines from CBS Sports.</div>
     </div>
+  )
+}
+
+// ── Before the draft: the league's draft prep ──
+
+type DraftLeague = { id: string; label: string; scoring: string; teams: number; picks: number; mock: { baseId: string; apiOk: boolean | null; createdAt: number } | null }
+type Lesson = { leagueId: string; label: string; scoring: string; report: import('../../../nba/tendencies').MockReport }
+
+async function post(path: string, data: unknown = {}) {
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+  return res.json()
+}
+
+/**
+ * Everything for getting ready: the draft room, this league's mocks, and what
+ * they say. Mocks copy this league's settings; their lessons are kept apart
+ * from the other league's, since points and categories teach different things.
+ */
+function Prep({ leagueId }: { leagueId: string }) {
+  const [all, setAll] = useState<DraftLeague[] | null>(null)
+  const [lessons, setLessons] = useState<Lesson[] | null>(null)
+  const [link, setLink] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+  const base = leagueId.replace(/-test$/, '')
+  const load = () => {
+    fetch('/api/nba/leagues').then((r) => r.json()).then(setAll).catch(() => setAll([]))
+    fetch('/api/nba/tendencies').then((r) => r.json()).then(setLessons).catch(() => setLessons([]))
+  }
+  useEffect(load, [])
+  useEffect(() => { if (location.hash === '#mocks') document.getElementById('mocks')?.scrollIntoView() }, [lessons])
+  const me = all?.find((l) => l.id === leagueId)
+  const mocks = (all ?? []).filter((l) => l.mock?.baseId === base).sort((a, b) => b.mock!.createdAt - a.mock!.createdAt)
+  const lesson = lessons?.find((l) => l.leagueId === base)
+  const follow = async () => {
+    setErr(null)
+    try {
+      const r = await post('/api/nba/mock', { link, baseId: base })
+      location.href = `/nba/draft/${r.leagueId}`
+    } catch (e) { setErr((e as Error).message) }
+  }
+  const discard = async (id: string) => { await post(`/api/nba/draft/${id}/discard`); load() }
+  const fmt = (x: number) => (lesson?.report.scoring === 'categories' ? x.toFixed(2) : String(Math.round(x)))
+  return (
+    <>
+      <a className="nl-room" href={`/nba/draft/${leagueId}`}>
+        <span className="nl-roomk">Draft room</span>
+        <span>{me?.picks ? `${me.picks} picks in — resume` : 'Open it when the draft starts; Yahoo\u2019s picks arrive by themselves'}</span>
+        <span className="ckchev">›</span>
+      </a>
+      <Section title="Mock drafts" hint="each copies this league">
+        <p className="nl-note" style={{ marginTop: 0 }}>Start an Instant Mock Draft on Yahoo with the extension loaded and it appears here by itself. If it does not, paste the room's address.</p>
+        {mocks.map((m) => (
+          <div key={m.id} className="nl-mock">
+            <a href={`/nba/draft/${m.id}`}>{new Date(m.mock!.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</a>
+            <span className="nl-dim"> · {m.picks} picks · {m.mock!.apiOk === true ? 'read by the Yahoo API' : m.mock!.apiOk === false ? 'read by the extension' : 'checking the API…'}</span>
+            <span className="cksp" /><button className="nl-link" onClick={() => discard(m.id)}>Discard</button>
+          </div>
+        ))}
+        <div className="nl-follow">
+          <input className="field" value={link} placeholder="Mock draft room address" onChange={(e) => setLink(e.target.value)} />
+          <button className="ckbtn" onClick={follow} disabled={!link.trim()}>Follow</button>
+        </div>
+        {err && <div className="nl-warn">{err}</div>}
+      </Section>
+      <section className="nl-sect" id="mocks">
+        <h2 className="nl-h">What your mocks say{lesson && <span className="nl-hint">{lesson.report.headline}</span>}</h2>
+        {!lesson ? <div className="nl-none">No finished mocks yet.</div> : (() => {
+          const r = lesson.report
+          return <>
+            {r.playbook.length > 0 && (
+              <ol className="nl-playbook">
+                {r.playbook.map((p) => (
+                  <li key={p.id}>
+                    <div><b>{p.action}</b> <span className="nl-kind">{p.strength}</span></div>
+                    <div className="nl-dim">When: {p.when} · Because: {p.because} · Check: {p.check}</div>
+                  </li>
+                ))}
+              </ol>
+            )}
+            {r.tendencies.map((t) => (
+              <div key={t.id} className="nl-news"><div className="nl-newsh">{t.headline} <span className="nl-kind">{t.strength}</span></div><div className="nl-dim">{t.detail}{t.tryNext ? ` Try: ${t.tryNext}` : ''}</div></div>
+            ))}
+            {r.table.length > 0 && (
+              <table className="nl-table">
+                <thead><tr><th className="l">Mock</th><th>Seat</th><th className="l">Build</th><th>Result</th><th>Advice</th></tr></thead>
+                <tbody>{r.table.map((m) => (
+                  <tr key={m.id}>
+                    <td className="l"><a href={`/nba/draft/${m.id}`}>{m.when ? new Date(m.when).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : m.id}</a></td>
+                    <td>{m.seat ?? '—'}</td><td className="l">{m.build}</td><td>{fmt(m.result)}</td><td>{m.followed}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            )}
+            <p className="nl-note">{r.caveat}</p>
+          </>
+        })()}
+      </section>
+    </>
   )
 }
 
@@ -299,6 +388,7 @@ function Season({ v }: { v: SeasonView }) {
   const CAT_ORDER: Cat[] = ['fg', 'ft', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to']
   return (
     <>
+      <a className="nl-room" href={`/nba/draft/${v.league.id}`}><span className="nl-roomk">Draft</span><span>How the draft came out, and the room</span><span className="ckchev">›</span></a>
       <Section title="Power" hint={cats ? 'categories a week against an average team' : 'chance of beating an average team'}>
         <table className="nl-table">
           <thead><tr><th>#</th><th className="l">Team</th><th>{cats ? 'Cats' : 'Win'}</th>{cats && CAT_ORDER.map((c) => <th key={c} className="nl-edgeh">{LABEL[c]}</th>)}</tr></thead>

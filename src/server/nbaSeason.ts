@@ -19,6 +19,7 @@
  *   GET  :id                 the league screen
  *   GET  tiles               one tile per league, for the home screen
  *   GET  exposure            players rostered in more than one league
+ *   GET  all                 every league's screen and the drafts under way
  *   POST :id/refresh         read this league again now
  *   POST :id/snapshot        a test league's snapshot, by hand
  */
@@ -28,7 +29,7 @@ import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { parseStandings, parseTransactions } from './yahooParse.js'
 import type { Alert } from './alerts.js'
-import { handReturns, injuryNotesNow, nbaPlayers, neverIds, seasonLeagues } from './nbaDraft.js'
+import { handReturns, injuryNotesNow, liveDrafts, nbaPlayers, neverIds, seasonLeagues } from './nbaDraft.js'
 import { parseGameWeeks, parseLeagueRosters, parseNbaScoreboard, parsePlayers, parseRosterDay, parseSeasonSettings } from '../nba/yahooSeason.js'
 import { easternDate } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
@@ -299,7 +300,18 @@ export function seasonView(id: string): SeasonView | null {
 const showTest = () => !!process.env.NBA_NOW && !process.env.RAILWAY_ENVIRONMENT
 
 export function seasonTiles(): SeasonTile[] {
-  return leagues().filter((l) => !isTest(l.id) || showTest()).map((l) => seasonTile(seasonView(l.id)!, clock()))
+  const live = new Map(liveDrafts(showTest()).filter((d) => !d.mock).map((d) => [d.id, d]))
+  return leagues().filter((l) => !isTest(l.id) || showTest()).map((l) => {
+    const t = seasonTile(seasonView(l.id)!, clock())
+    // A draft under way outranks everything else the league could say.
+    return live.has(l.id) ? { ...t, urgency: 'act' as const, action: 'Resume draft', why: 'Your draft is under way', link: `/nba/draft/${l.id}` } : t
+  })
+}
+
+/** Every league's whole screen, for the cross-league News and Moves tabs, and the drafts under way. */
+export function seasonAll(): { views: SeasonView[]; drafts: ReturnType<typeof liveDrafts> } {
+  const views = leagues().filter((l) => !isTest(l.id) || showTest()).map((l) => seasonView(l.id)!).filter(Boolean)
+  return { views, drafts: liveDrafts(showTest()) }
 }
 
 // ── Across leagues ──
@@ -414,6 +426,7 @@ export async function handleNbaSeason(parts: string[], req: any, res: any, json:
   const [, , , id, action] = parts
   if (req.method === 'GET' && id === 'tiles') { json(res, 200, seasonTiles()); return true }
   if (req.method === 'GET' && id === 'exposure') { json(res, 200, exposure()); return true }
+  if (req.method === 'GET' && id === 'all') { json(res, 200, seasonAll()); return true }
   const l = leagues().find((x) => x.id === id)
   if (!l) { json(res, 404, { error: 'no such league' }); return true }
   if (req.method === 'GET' && !action) { json(res, 200, seasonView(id)); return true }

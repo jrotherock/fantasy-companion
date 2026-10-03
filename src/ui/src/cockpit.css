@@ -1492,3 +1492,8 @@ a.ckswl:hover, a.ckswl:focus-visible {
 .cksportseg button { display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; }
 .cksportseg .cksport { font-size: 0.5625rem; padding: 0.12rem 0.22rem; }
 .cksportseg .ckbadge { position: static; margin-left: 0.15rem; }
+
+/* Under All, News and Moves run football then basketball, each under its mark. */
+.cksporthead { display: flex; align-items: center; gap: 0.5rem; margin: 1.6rem 0 0.8rem; padding-top: 1rem;
+  border-top: 1px solid var(--line); font-family: var(--cond); font-weight: 600; font-size: 1.5rem; }
+.cksporthead:first-of-type { margin-top: 0.4rem; padding-top: 0; border-top: 0; }

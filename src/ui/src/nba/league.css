@@ -4,7 +4,6 @@
  * Only what basketball has and football does not lives here — daily lineups,
  * category races, the add budget.
  */
-body { background: var(--bg); color: var(--ink); font-family: var(--ui); margin: 0; }
 .nl a { color: var(--blue); }
 .nl .ckcrumb { text-decoration: none; color: var(--dim); }
 .nl .ckseg { margin-bottom: 1rem; }
@@ -95,3 +94,21 @@ body { background: var(--bg); color: var(--ink); font-family: var(--ui); margin:
 .nl-chip.hurt { border-color: var(--red); }
 .nl-trade { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 0.5rem 0.7rem; margin-bottom: 0.35rem; font-size: var(--t-md); }
 .nl-trade .nl-dim { font-size: var(--t-sm); margin-top: 0.15rem; }
+
+/* Draft prep */
+.nl-room { display: flex; align-items: center; gap: 0.6rem; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  border-radius: 5px; padding: 0.6rem 0.8rem; margin-bottom: 0.8rem; color: var(--ink) !important; text-decoration: none; font-size: var(--t-md); }
+.nl-room .ckchev { margin-left: auto; }
+.nl-roomk { font-family: var(--cond); font-weight: 600; font-size: 1.25rem; white-space: nowrap; }
+.nl-mock { display: flex; align-items: baseline; gap: 0.3rem; font-size: var(--t-sm); padding: 0.3rem 0; border-bottom: 1px solid var(--line); }
+.nl-mock .cksp { flex: 1; }
+.nl-follow { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
+.nl-follow .field { flex: 1; min-width: 0; }
+.nl-playbook { margin: 0 0 0.6rem; padding-left: 1.2rem; font-size: var(--t-md); display: flex; flex-direction: column; gap: 0.4rem; }
+.nl-playbook .nl-dim { font-size: var(--t-sm); }
+/* Cross-league chips */
+.nl-chiprow { margin-top: 0.35rem; }
+button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: var(--t-xs); }
+.nl-chip.nl-mine { border-color: var(--amber); }
+.nl-chip.nl-free { border-color: var(--blue); }
+.nl-lg { font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); }
