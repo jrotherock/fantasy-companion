@@ -323,10 +323,22 @@ export function roomOf(prep: Prepared, d: StoredDraft, teams: number, mySlot: nu
   return rows
 }
 
+/**
+ * Fewer expected games than this and a player is never advised. Value is
+ * measured over the games a player plays, so a man out for the season is
+ * worth exactly the replacement line — nought — and late in a draft, when
+ * everyone left is below the line, nought outranks them all. He stays on the
+ * board, with his injury note; he is just never the pick.
+ */
+export const MIN_GAMES = 10
+
+const gamesOf = (prep: Prepared, id: string) => prep.cats?.byId.get(id)?.games.gp ?? prep.points?.byId.get(id)?.games.gp ?? 0
+
 function canTakeFor(prep: Prepared, mine: string[], tags: Map<string, PrefTag>): CanTake {
   const have = mine.map(prep.positions)
   return (id, after) => {
     if (tags.get(id) === 'never') return false
+    if (gamesOf(prep, id) < MIN_GAMES) return false
     const roster = after ? [...have, prep.positions(after)] : have
     return stillFeasible(roster, prep.positions(id), prep.slots, prep.rounds - roster.length - 1)
   }

@@ -151,7 +151,7 @@ export function playoffPlan(ctx: Context, snap: Snapshot, myTeamId: string): Pla
   const owned = new Set<string>()
   for (const r of snap.rosters) for (const y of r.players) { const id = ctx.resolve(y); if (id) owned.add(id) }
   const targets = ctx.world.players
-    .filter((p) => p.projection && p.team && !owned.has(p.id) && !ctx.world.never.has(p.id))
+    .filter((p) => p.projection && p.team && !owned.has(p.id) && !ctx.world.never.has(p.id) && ctx.gamesLeft(p.id) >= 3)
     .map((p) => ({ id: p.id, name: p.name, team: p.team, games: gamesIn(p.team), worth: ctx.worth(p.id) }))
     .filter((p) => p.games > avgGames)
     .sort((a, b) => b.worth - a.worth)

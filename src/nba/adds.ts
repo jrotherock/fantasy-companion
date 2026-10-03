@@ -38,6 +38,9 @@ export interface Budget {
  */
 export const UPGRADE_PER_GAME = { categories: 0.5, points: 2 } as const
 
+/** A pickup has to play at least this many more games, or it is no pickup. */
+export const MIN_GAMES_LEFT = 3
+
 /** Adds kept back for injuries and the playoffs. */
 export const RESERVE = 8
 
@@ -101,7 +104,8 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
   const punts = opts.punts ?? []
   const worth = (id: string) => ctx.worth(id, punts)
   // Rest-of-season value: per-game worth above the free-agent line, times games left.
-  const pool = ctx.world.players.filter((p) => p.projection && p.team && !rostered.has(p.id) && !ctx.world.never.has(p.id))
+  // Nobody who will not play enough to matter: a man out for the season is worth nought, which can outrank a weak roster's tail.
+  const pool = ctx.world.players.filter((p) => p.projection && p.team && !rostered.has(p.id) && !ctx.world.never.has(p.id) && ctx.gamesLeft(p.id) >= MIN_GAMES_LEFT)
   const byWorth = [...pool].sort((a, b) => worth(b.id) - worth(a.id))
   const line = worth(byWorth[Math.min(10, byWorth.length - 1)]?.id ?? '') || 0
   const season = (id: string) => (worth(id) - line) * ctx.gamesLeft(id)

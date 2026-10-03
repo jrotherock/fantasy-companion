@@ -192,3 +192,24 @@ test('on the clock in a points league, the playoff note speaks only of the cards
     if (v.playoffNote) for (const w of v.canWait) assert.ok(!v.playoffNote.includes(w.name), v.playoffNote)
   }
 })
+
+test('a player out for the season is never advised, however late — in both formats', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  for (const [id, slot, at] of [['nba-hoops', 4, 123], ['nba-harker', 5, 123]] as const) {
+    const base = prepare(leagues.find((l: any) => l.id === id), players, noise, adpFor)
+    // The best player still on the board at this pick, made out for the season.
+    const d0 = { ...emptyDraft('t'), slot }
+    d0.picks = base.adpOrder.slice(0, at).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
+    const before = buildView(base, d0, new Map())
+    assert.equal(before.clock.onClock, true, `${id} on the clock at ${at + 1}`)
+    const star = before.takeNow[0].id
+    const name = players.find((p: any) => p.id === star).name
+    const returns = new Map([[star, { returnDate: null, outForSeason: true, source: 'cbs' as const, text: 'Out for the season' }]])
+    const hurt = prepare(leagues.find((l: any) => l.id === id), players, noise, adpFor, {}, { returns, teamDates: {}, today: '2026-10-02' })
+    const after = buildView(hurt, d0, new Map())
+    assert.ok(!after.advice.some((a) => a.id === star), `${id}: ${name} is out for the season and was still advised`)
+    assert.ok(after.board.some((r) => r.id === star), `${id}: he stays on the board`)
+  }
+})
