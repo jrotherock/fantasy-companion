@@ -234,21 +234,6 @@ test('a points mock places my roster against every team\'s season points total',
   assert.ok(r.place!.result >= 1 && r.place!.result <= 16)
 })
 
-test('after taking Giannis the lock is offered at once; once locked, the offer goes', () => {
-  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
-  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
-  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
-  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
-  const giannis = players.find((p: any) => p.name === 'Giannis Antetokounmpo').id
-  const d = { ...emptyDraft('t'), slot: 1 }
-  d.picks = [{ overall: 1, playerId: giannis, name: 'Giannis', source: 'manual' as const }]
-  const v = buildView(hoops, d, new Map())
-  assert.ok(v.anchor, 'offered after one pick, without waiting for the fourth')
-  assert.ok(v.anchor!.options.some((o) => o.punt.includes('ft')), JSON.stringify(v.anchor!.options))
-  const locked = buildView(hoops, { ...d, locks: ['ft'] }, new Map())
-  assert.equal(locked.anchor, null)
-})
-
 test('after Shai the cards say what each covers and what it stacks', () => {
   const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
   const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues

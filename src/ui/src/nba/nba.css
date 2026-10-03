@@ -176,7 +176,4 @@ div.nb-cat { cursor: default; }
 
 /* Which of my weak categories a card covers */
 .nb-fits { font-size: var(--t-xs); color: var(--green); font-family: var(--mono); letter-spacing: 0.02em; }
-/* After a pick drafted for a punt: the lock, one tap away */
-.nb-anchor { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; background: color-mix(in srgb, var(--blue) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--blue) 50%, var(--line)); border-radius: 4px; padding: 0.45rem 0.6rem; margin-bottom: 0.4rem; font-size: var(--t-sm); }
-.nb-anchor-acts { display: flex; gap: 0.35rem; margin-left: auto; }
 .nb-stacks { color: var(--blue); }

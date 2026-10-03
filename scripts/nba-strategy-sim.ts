@@ -23,10 +23,13 @@ import { categoryZ, rankBuild, rosterSpots, CATS, type Cat } from '../src/nba/va
 import { adpFor, adviseCategories, baseline, contribution, expectedCats, winChances, zero, BUILD_FROM, type Strength } from '../src/nba/draft.js'
 import { positionalSlots, stillFeasible } from '../src/nba/lineup.js'
 import { slotFor } from '../src/kernel/snake.js'
+import { PATHS } from '../src/nba/plan.js'
 
 const arg = (k: string) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : null }
 const SEEDS = Number(arg('seeds') ?? 20)
 const WINDOW = Number(arg('window') ?? 4)
+/** `--mode locks` compares when to lock a punt instead of how to choose for fit. */
+const MODE = arg('mode') ?? 'fit'
 
 const players: NbaPlayer[] = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
 const league = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues.find((l: any) => l.id === 'nba-hoops')
@@ -88,9 +91,10 @@ const strategies: Record<string, Pick> = {
 }
 
 /** The app's advice, with near-ties (within 0.02 categories, as on the screen) broken by fit or not at all. */
-function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack'): string {
+function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack', locks: Cat[] = []): string {
+  // As the app does: a lock drops the category and ends the four-pick wait.
   const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
-    { teams: league.teams, rounds, slot, overall }, base, { canTake: canTake(mine), neutralUntil: BUILD_FROM })
+    { teams: league.teams, rounds, slot, overall }, base, { canTake: canTake(mine), neutralUntil: locks.length ? 0 : BUILD_FROM, ignore: locks })
   if (!advice.length) return windowOf(avail, mine)[0]
   if (tie === 'none' || !mine.length) return advice[0].id
   const close = advice.filter((a) => advice[0].score - a.score <= 0.02).slice(0, 3).map((a) => a.id)
@@ -156,6 +160,55 @@ function weekWin(a: Strength, b: Strength): number {
   return win
 }
 
+// ── Lock timing ──
+//
+// A lock is decided from the roster as it stands, so it can be worked out from
+// the picks so far every time: the same roster always gives the same lock.
+
+const weakest = (ids: string[], n: number) => (ids.length ? ranked(ids).slice(0, n) : [])
+
+/** Lock my n weakest categories as they stood just before my k-th pick, and keep them. */
+const lockAt = (k: number, n: number): Pick => (avail, mine, overall, slot) =>
+  appPick(avail, mine, overall, slot, 'none', mine.length >= k - 1 && k > 1 ? weakest(mine.slice(0, k - 1), n) : [])
+
+/** From the fifth pick, lock the weakest category once it has been the weakest two picks running. */
+const lockWhenStable: Pick = (avail, mine, overall, slot) => {
+  let locks: Cat[] = []
+  for (let k = BUILD_FROM; k <= mine.length; k++) {
+    const a = weakest(mine.slice(0, k - 1), 1)[0], b = weakest(mine.slice(0, k), 1)[0]
+    if (k > BUILD_FROM && a && a === b) { locks = [a]; break }
+  }
+  return appPick(avail, mine, overall, slot, 'none', locks)
+}
+
+// Each player's rank in each build, to know who is drafted for a punt.
+const buildRanks = PATHS.map((path) => ({ path, rank: new Map(rankBuild(rows, league, path.punt).map((r) => [r.id, r.rank])) }))
+/** The build a pick is drafted for, as the app's lock offer works it out; null for an ordinary pick. */
+function anchorBuild(id: string): Cat[] | null {
+  const balanced = buildRanks[0].rank.get(id)
+  if (balanced == null) return null
+  const opts = buildRanks.slice(1).map((b) => ({ punt: b.path.punt, rank: b.rank.get(id) ?? 999 }))
+  const best = Math.min(...opts.map((o) => o.rank))
+  if (balanced - best < 20 || best > 150) return null
+  return opts.filter((o) => o.rank <= best + 5).sort((x, y) => x.punt.length - y.punt.length || x.rank - y.rank)[0].punt
+}
+/** Accept the lock offer the first time a pick is drafted for a punt. */
+const lockOnAnchor: Pick = (avail, mine, overall, slot) => {
+  let locks: Cat[] = []
+  for (const id of mine) { const b = anchorBuild(id); if (b) { locks = b; break } }
+  return appPick(avail, mine, overall, slot, 'none', locks)
+}
+
+if (MODE === 'locks') {
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  strategies['best value'] = (avail, mine) => windowOf(avail, mine)[0]
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none')
+  for (const k of [2, 3, 4, 5, 6, 8, 10]) strategies[`lock weakest at pick ${k}`] = lockAt(k, 1)
+  for (const k of [4, 6]) strategies[`lock 2 weakest at pick ${k}`] = lockAt(k, 2)
+  strategies['lock when stable (5+)'] = lockWhenStable
+  strategies['lock on anchor'] = lockOnAnchor
+}
+
 const results: Record<string, { allPlay: number[]; cats: number[]; bySlot: number[][] }> = {}
 const t0 = Date.now()
 for (const [name, pick] of Object.entries(strategies)) {
@@ -185,7 +238,7 @@ for (const [name, r] of Object.entries(results)) {
   console.log(`${name.padEnd(24)} ${(mean(r.allPlay) * 100).toFixed(1).padStart(6)}%  ${(2 * se(r.allPlay) * 100).toFixed(1).padStart(4)}   ${(mean(diff) * 100 >= 0 ? '+' : '') + (mean(diff) * 100).toFixed(1).padStart(5)} pts  ${(2 * se(diff) * 100).toFixed(1).padStart(4)}       ${mean(r.cats).toFixed(2)}`)
 }
 const app = results['the app (recommender)'].allPlay
-for (const name of ['app + cover tiebreak', 'app + stack tiebreak']) {
+for (const name of Object.keys(results).filter((n) => n !== 'the app (recommender)' && n !== 'best value' && (MODE === 'locks' || n.startsWith('app +')))) {
   const d = results[name].allPlay.map((x, i) => x - app[i])
   console.log(`${name} vs the app: ${(mean(d) * 100).toFixed(2)} pts ± ${(2 * se(d) * 100).toFixed(2)} (2se); changed the pick in ${d.filter((x) => x !== 0).length} of ${d.length} drafts`)
 }

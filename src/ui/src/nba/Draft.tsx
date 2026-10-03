@@ -120,7 +120,6 @@ function Screen({ id }: { id: string }) {
           : view.review ? null
           : <>
               <Notice view={view} />
-              <Anchor view={view} act={act} />
               <Take view={view} act={act} />
               {cats && <Build view={view} act={act} />}
             </>}
@@ -212,27 +211,6 @@ function reasons(contrib: Record<Cat, number> | undefined, locks: Cat[]) {
   const up = live.filter((c) => contrib[c] > 0.25).sort((a, b) => contrib[b] - contrib[a]).slice(0, 3)
   const down = live.filter((c) => contrib[c] < -0.25).sort((a, b) => contrib[a] - contrib[b]).slice(0, 2)
   return <>{up.map((c) => <span key={c} className="nb-up">+{LABEL[c]}</span>)}{down.map((c) => <span key={c} className="nb-down">−{LABEL[c]}</span>)}</>
-}
-
-/**
- * After a pick that is drafted for a punt — Giannis for free throws — the lock
- * is one tap away rather than something to remember. Dismissed for this pick
- * only; the next such pick asks again.
- */
-function Anchor({ view, act }: { view: DraftView; act: Act }) {
-  const a = view.anchor
-  const [gone, setGone] = useState<number | null>(null)
-  if (!a || gone === a.overall) return null
-  return (
-    <div className="nb-anchor">
-      <span className="nb-notice-h">BUILD</span>
-      <span>{a.name} is drafted for a punt: {a.balanced}th balanced, {a.options.map((o) => `${ordinal(o.rank)} in ${o.name}`).join(', ')}. Lock it so the advice stops counting what you are giving up?</span>
-      <span className="nb-anchor-acts">
-        {a.options.map((o) => <button key={o.name} className="btn primary" onClick={() => act('locks', { locks: o.punt })}>Lock {o.name.replace(/^Punt /, '')}</button>)}
-        <button className="btn" onClick={() => setGone(a.overall)}>Not now</button>
-      </span>
-    </div>
-  )
 }
 
 function Take({ view, act }: { view: DraftView; act: Act }) {
@@ -352,13 +330,14 @@ function Build({ view, act }: { view: DraftView; act: Act }) {
           <ul>
             <li><span className="nb-up">Green 60%+</span> — usually yours. Five or six is a contender.</li>
             <li><span className="nb-amber">Amber 35–50%</span> — the expensive middle: paid for, still lost half the time. Push it up or give it up.</li>
-            <li><span className="nb-down">Red under 35%</span> — mostly lost. Fine if chosen: lock it.</li>
+            <li><span className="nb-down">Red under 35%</span> — mostly lost. The advice already stops spending on it.</li>
             <li>All green is not the goal. A clear shape is.</li>
           </ul>
-          <h4>Locking a punt</h4>
+          <h4>Locking a punt — usually don't</h4>
           <ul>
-            <li>After your {b.buildFrom}th pick, when a tile is red and the direction says that punt leads, or that builds are tied.</li>
-            <li>At most two, ideally a pair: AST + TO, FT% + 3PM (bigs), REB + BLK (guards). Click a tile or a build chip to lock; click again to unlock.</li>
+            <li>From your {b.buildFrom}th pick the advice leans away from categories you are unlikely to win on its own, and keeps the lean soft: if later picks make one winnable again, it counts again.</li>
+            <li>A lock gives the category up for good. In 400 simulated Hoops drafts every lock lost to not locking — locking the weakest at pick 4 by 1.5 points of weekly win chance, at pick 2 by 2.6, two categories at pick 4 by 3.6, and locking straight after a punt-built pick like Giannis by 3.4. Later locks cost less; none gained.</li>
+            <li>Lock only to say something the app cannot know — that you will not chase a category whatever happens. Click a tile or a build chip to lock; click again to unlock.</li>
           </ul>
           <h4>Direction</h4>Where your picks so far point, and the top three builds with the categories each should win a week. Before pick {b.buildFrom} it is a lean; when builds are within about 0.15 it says so, and the best player is the right pick.
         </div>
@@ -449,7 +428,7 @@ function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
             <li><b>#</b> is value for your build; it re-ranks when you lock, and locked columns fade.</li>
             <li><b>Coloured cells</b>: what a player adds per category over a season. Read down the <span className="nb-amber">amber headers</span> — your coin flips — to find who tips one to green.</li>
             {!cats && <li><b>FP/g</b> fantasy points a game; <b>FP/min</b> per minute he is projected to play — high means he scores in what he gets, so more minutes would show; <b>FP season</b> a game times his games. <b>Value</b> is not the season total: it is points a game above the replacement line times games, so a replacement-level player is worth nought however much he scores.</li>}
-            {cats && <li><b>Blue note</b> beside a name: where he ranks in the build he is drafted for, when that is 20+ places higher than balanced — Giannis is a first-rounder only if you punt FT%. Lock that punt and the board re-ranks for it.</li>}
+            {cats && <li><b>Blue note</b> beside a name: where he ranks in the build he is drafted for, when that is 20+ places higher than balanced — Giannis is a first-rounder only if your roster ends up punting FT%. Information: the cards already weigh it once your roster leans that way, without a lock.</li>}
             <li><b>Next</b>: chance he lasts to your next pick. Above about 60%, he can wait. <b>PO</b>: games in your playoff weeks, the tiebreaker.</li>
             <li>Grey rows are your never list. A red note means he starts the season hurt; set your own return date beside it.</li>
             <li>Check a name here; let the cards above make the call.</li>

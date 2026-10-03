@@ -311,11 +311,6 @@ export interface DraftView {
   weakSpots: { cats: Cat[]; whose: string } | null
   /** Its strongest: what a pick could stack instead, for a build that leans into them. */
   strongSpots: Cat[]
-  /**
-   * After I take a player who is drafted for a punt, the builds to offer to lock,
-   * best first. Null once anything is locked, or when my last pick was not such a player.
-   */
-  anchor: { playerId: string; name: string; overall: number; balanced: number; options: { name: string; punt: Cat[]; rank: number }[] } | null
   playoffNorm: number | null
   /** How many players are on the never list, so an empty one is noticed. */
   neverCount: number
@@ -659,20 +654,6 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     playoffNote = tb.note
   }
 
-  // ── After a pick that is drafted for a punt: offer to lock it ──
-  let anchor: DraftView['anchor'] = null
-  const last = mineP[mineP.length - 1]
-  if (prep.cats && !d.locks.length && last) {
-    const bb = bestBuildOf(prep, last.playerId)
-    if (bb) {
-      const options = PATHS.slice(1)
-        .map((path) => ({ name: path.name, punt: path.punt, rank: buildValues(prep, path.punt).get(last.playerId)?.rank ?? 999 }))
-        .filter((o) => o.rank <= bb.rank + 5)
-        .sort((a, b) => a.punt.length - b.punt.length || a.rank - b.rank)
-        .slice(0, 2)
-      anchor = { playerId: last.playerId, name: p(last.playerId).name, overall: last.overall, balanced: bb.balanced, options }
-    }
-  }
   const canWait = advice.filter((a) => a.canWait && !takeNow.includes(a)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
 
   return {
@@ -685,7 +666,6 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     playoffNote,
     weakSpots,
     strongSpots,
-    anchor,
     playoffNorm: prep.playoffNorm,
     neverCount: [...tags.values()].filter((t) => t === 'never').length,
     league: { id: L.id, label: L.label, scoring: L.scoring, teams, rounds, slot, slotSource: d.slotSource, myTeamName: L.myTeamName },
