@@ -891,6 +891,7 @@ function LeagueCard({ t, onOpen, mark, close }: {
             aria-label={mark ? 'needs attention' : 'close call worth a look'}
           />
         )}
+        <SportMark sport="nfl" />
         <span className="cknm" title={t.label}>{t.label}</span>
         <span className="ckfmt">{t.format}</span>
         <span className="cksp" />
@@ -977,6 +978,20 @@ function LeagueCard({ t, onOpen, mark, close }: {
 const URGENCY: Tile['urgency'][] = ['act', 'soon', 'watch', 'quiet', 'blocked']
 
 /**
+ * Which sport a card is, before its name is read. The home list mixes both,
+ * worst first, and a football card and a basketball card are otherwise the
+ * same shape: the mark is the one thing that differs at a glance. Colour as
+ * well as letters — green for the field, orange for the ball — so it reads
+ * from across the room.
+ */
+function SportMark({ sport }: { sport: 'nfl' | 'nba' }) {
+  return <span className={`cksport ${sport}`} aria-label={sport === 'nfl' ? 'Football' : 'Basketball'}>{sport.toUpperCase()}</span>
+}
+
+type SportFilter = 'All' | 'Football' | 'Basketball'
+const SPORT_KEY = 'home-sport'
+
+/**
  * A basketball league's card. Same shape and colours as football's, so the
  * home list reads as one list worst-first; it opens the league's own page,
  * because basketball's season screens live in their own bundle.
@@ -986,8 +1001,8 @@ function NbaCard({ t }: { t: SeasonTile }) {
   return (
     <a className={`ck tap ${t.urgency}`} href={t.link} style={leagueStyle(t.id)}>
       <div className="ckhead">
+        <SportMark sport="nba" />
         <span className="cknm" title={t.label}>{t.label}</span>
-        <span className="ckfmt">NBA</span>
         <span className="cksp" />
         {s && s.mine != null && (
           <span className="ckrec" title={s.expected != null ? `${s.expected.toFixed(1)} categories expected` : undefined}>
@@ -1024,6 +1039,16 @@ function Now({ tiles, onOpen, marks, closeCalls, nba = [] }: {
   ) || need.length
   const next = tiles.map((t) => t.draft).filter((d): d is NonNullable<Tile['draft']> => !!d && d.inMs > 0)
     .sort((a, b) => a.inMs - b.inMs)[0]
+  /* Remembered on this device: on a busy night you look at one sport at a time. */
+  const [sport, setSportState] = useState<SportFilter>(() => {
+    try { return (localStorage.getItem(SPORT_KEY) as SportFilter) || 'All' } catch { return 'All' }
+  })
+  const setSport = (v: SportFilter) => { setSportState(v); try { localStorage.setItem(SPORT_KEY, v) } catch { /* private window */ } }
+  const both = tiles.length > 0 && nba.length > 0
+  const shown = both ? sport : 'All'
+  /* How many need you in each, on the buttons, so a filter never hides that the other sport is waiting. */
+  const needFb = tiles.filter((t) => marks?.[t.id] || closeCalls?.[t.id] || t.urgency === 'act' || t.urgency === 'soon').length
+  const needNba = nba.filter((t) => t.urgency === 'act' || t.urgency === 'soon').length
   return (
     <>
       {/*
@@ -1046,12 +1071,25 @@ function Now({ tiles, onOpen, marks, closeCalls, nba = [] }: {
           ? `Next draft in ${inWords(next.inMs)} · ${new Date(next.at).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`
           : undefined}
       />
+      {both && (
+        <div className="ckseg cksportseg" role="tablist" aria-label="Sport">
+          {(['All', 'Football', 'Basketball'] as SportFilter[]).map((o) => {
+            const n = o === 'Football' ? needFb : o === 'Basketball' ? needNba : 0
+            return (
+              <button key={o} role="tab" aria-selected={o === shown} className={o === shown ? 'on' : ''} onClick={() => setSport(o)}>
+                {o === 'Football' && <SportMark sport="nfl" />}{o === 'Basketball' && <SportMark sport="nba" />}
+                {o}{n > 0 && <span className="ckbadge">{n}</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
       <div className="ckgrid ckleagues">
         {/* Worst first across both sports; a basketball card goes ahead of football cards of the same urgency, since a daily lineup locks sooner. */}
-        {[...tiles.map((t) => ({ u: URGENCY.indexOf(t.urgency), el: (
+        {[...(shown === 'Basketball' ? [] : tiles).map((t) => ({ u: URGENCY.indexOf(t.urgency), el: (
           <LeagueCard key={t.id} t={t} mark={marks?.[t.id]} close={closeCalls?.[t.id]}
                       onOpen={() => onOpen(t.id)} />
-        ) })), ...nba.map((t) => ({ u: URGENCY.indexOf(t.urgency) - 0.5, el: <NbaCard key={t.id} t={t} /> }))]
+        ) })), ...(shown === 'Football' ? [] : nba).map((t) => ({ u: URGENCY.indexOf(t.urgency) - 0.5, el: <NbaCard key={t.id} t={t} /> }))]
           .map((x, i) => ({ ...x, i }))
           .sort((a, b) => a.u - b.u || a.i - b.i)
           .map((x) => x.el)}

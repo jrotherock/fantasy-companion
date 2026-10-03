@@ -1479,3 +1479,16 @@ a.ckswl:hover, a.ckswl:focus-visible {
 }
 /* And in the league table, where the name is the row's own heading. */
 .ckexpn a.ckswl { font-weight: inherit }
+
+/* Which sport a card is: green for the field, orange for the ball. */
+.cksport {
+  flex: none; align-self: center; font-family: var(--mono); font-size: 0.6875rem; font-weight: 600;
+  letter-spacing: 0.08em; line-height: 1; padding: 0.2rem 0.3rem; border-radius: 3px;
+  border: 1px solid currentColor;
+}
+.cksport.nfl { color: var(--green); }
+.cksport.nba { color: var(--dst); }
+/* The sport filter on Now: the marks double as the buttons' icons. */
+.cksportseg button { display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; }
+.cksportseg .cksport { font-size: 0.5625rem; padding: 0.12rem 0.22rem; }
+.cksportseg .ckbadge { position: static; margin-left: 0.15rem; }
