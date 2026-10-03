@@ -7,7 +7,7 @@ self.addEventListener('push', (event) => {
   let d = {}
   try { d = event.data ? event.data.json() : {} } catch { d = {} }
   event.waitUntil(
-    self.registration.showNotification(d.title || 'Fantasy companion', {
+    self.registration.showNotification(d.title || 'Fantasy Companion', {
       body: d.body || '',
       // The alert id, so a fact restated replaces its own notification rather
       // than stacking a second copy of itself.

@@ -1,21 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Fantasy Companion">
   <!--
-    College navy and action green — an original mark, since a palette is not a
-    trademark and the bird is.
-
-    A real ball: the seam runs the full length, the laces cluster in the middle
-    third where laces actually sit, and they are short. Spread across the whole
-    ball they read as a fish skeleton.
+    One ball for both sports: the left half a football, laced, in the app's
+    action green; the right half a basketball, seamed, in orange. Navy behind,
+    as before. The ball sits inside the middle 70% so a maskable crop on
+    Android never clips it.
   -->
+  <defs>
+    <!-- Each half of the ball, so its markings stop at the ball's edge. -->
+    <clipPath id="left"><path d="M32 10 A22 22 0 0 0 32 54 Z"/></clipPath>
+    <clipPath id="right"><path d="M32 10 A22 22 0 0 1 32 54 Z"/></clipPath>
+  </defs>
   <rect width="64" height="64" fill="#002244"/>
-  <g transform="rotate(-35 32 32)">
-    <path d="M4 32 A 36 36 0 0 1 60 32 A 36 36 0 0 1 4 32 Z" fill="#69be28"/>
-    <g fill="#002244">
-      <rect x="11" y="30.8" width="42" height="2.4" rx="1.2"/>
-      <rect x="24.4" y="27.6" width="2.9" height="8.8" rx="1.45"/>
-      <rect x="29.2" y="27.1" width="2.9" height="9.8" rx="1.45"/>
-      <rect x="34"   y="27.1" width="2.9" height="9.8" rx="1.45"/>
-      <rect x="38.8" y="27.6" width="2.9" height="8.8" rx="1.45"/>
-    </g>
+  <path d="M32 10 A22 22 0 0 0 32 54 Z" fill="#69be28"/>
+  <path d="M32 10 A22 22 0 0 1 32 54 Z" fill="#f58426"/>
+  <g fill="#002244" clip-path="url(#left)">
+    <rect x="12" y="30.8" width="20" height="2.4" rx="1.2"/>
+    <rect x="16" y="26" width="2.6" height="12" rx="1.3"/>
+    <rect x="21" y="25" width="2.6" height="14" rx="1.3"/>
+    <rect x="26" y="26" width="2.6" height="12" rx="1.3"/>
   </g>
+  <g fill="none" stroke="#002244" stroke-width="2.4" clip-path="url(#right)">
+    <path d="M32 32h22"/>
+    <path d="M37 9 C49 19 49 45 37 55"/>
+  </g>
+  <rect x="31" y="10" width="2" height="44" fill="#002244"/>
 </svg>
