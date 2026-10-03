@@ -44,8 +44,10 @@ export interface MockRecord {
   id: string
   when: number
   seat: number | null
-  /** Expected categories won a week (nine-cat) or season value (points). */
+  /** Expected categories won a week (nine-cat) or season value over replacement (points). */
   result: number
+  /** Points leagues: the roster's fantasy points over the season, a game times games. */
+  fpSeason?: number | null
   /** Categories under a 35% weekly win chance at the end. */
   punting: Cat[]
   win: Record<Cat, number> | null
@@ -64,7 +66,7 @@ export interface MockReport {
   tendencies: Tendency[]
   byBuild: { build: string; mocks: number; avg: number }[]
   byRound: { round: number; picks: number; avgCost: number; worst: { took: string; advised: string; cost: number } | null }[]
-  table: { id: string; when: number; seat: number | null; build: string; result: number; followed: string; cost: number }[]
+  table: { id: string; when: number; seat: number | null; build: string; result: number; fpSeason: number | null; followed: string; cost: number }[]
   caveat: string
 }
 
@@ -90,7 +92,7 @@ export function analyseMocks(mocks: MockRecord[], scoring: 'categories' | 'point
   const table = [...mocks].sort((a, b) => b.when - a.when).map((m) => {
     const k = m.picks.filter((p) => p.cost != null)
     return {
-      id: m.id, when: m.when, seat: m.seat, build: cats ? buildOf(m) : '—', result: m.result,
+      id: m.id, when: m.when, seat: m.seat, build: cats ? buildOf(m) : '—', result: m.result, fpSeason: m.fpSeason ?? null,
       followed: `${k.filter((p) => p.advised === p.took).length}/${k.length}`,
       cost: k.reduce((n, p) => n + (p.cost ?? 0), 0),
     }

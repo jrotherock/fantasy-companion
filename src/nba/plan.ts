@@ -687,6 +687,7 @@ export function recordOf(prep: Prepared, d: StoredDraft, tags: Map<string, PrefT
     when: d.feed[0]?.at ?? d.turns?.[mine[0]?.overall ?? 0]?.at ?? 0,
     seat: d.slot,
     result: view.review.expected ?? view.review.value ?? 0,
+    fpSeason: prep.points ? mine.reduce((n, x) => n + (prep.points!.byId.get(x.playerId)?.season ?? 0), 0) : null,
     punting: view.review.punting,
     win: view.review.win,
     locks: d.locks,

@@ -136,7 +136,8 @@ function Prep({ leagueId }: { leagueId: string }) {
     } catch (e) { setErr((e as Error).message) }
   }
   const discard = async (id: string) => { await post(`/api/nba/draft/${id}/discard`); load() }
-  const fmt = (x: number) => (lesson?.report.scoring === 'categories' ? x.toFixed(2) : String(Math.round(x)))
+  const cats = lesson?.report.scoring === 'categories'
+  const fmt = (x: number) => (cats ? x.toFixed(2) : Math.round(x).toLocaleString())
   return (
     <>
       <a className="nl-room" href={`/nba/draft/${leagueId}`}>
@@ -179,16 +180,27 @@ function Prep({ leagueId }: { leagueId: string }) {
             ))}
             {r.table.length > 0 && (
               <table className="nl-table">
-                <thead><tr><th className="l">Mock</th><th>Seat</th><th className="l">Build</th><th>Result</th><th>Advice</th></tr></thead>
+                <thead><tr><th className="l">Mock</th><th>Seat</th>
+                  {cats
+                    ? <><th className="l" title="The punt your roster ended with, or the one you locked">Build</th><th title="Categories a week against an average team">Cats/wk</th></>
+                    : <><th title="Season value over replacement: points a game above the waiver line, times games, summed over your roster">Value</th><th title="Your roster's fantasy points over the season: a game times games">FP season</th></>}
+                  <th title="Picks where you took what the cards advised">Advice</th></tr></thead>
                 <tbody>{r.table.map((m) => (
                   <tr key={m.id}>
                     <td className="l"><a href={`/nba/draft/${m.id}`}>{m.when ? new Date(m.when).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : m.id}</a></td>
-                    <td>{m.seat ?? '—'}</td><td className="l">{m.build}</td><td>{fmt(m.result)}</td><td>{m.followed}</td>
+                    <td>{m.seat ?? '—'}</td>
+                    {cats
+                      ? <><td className="l">{m.build}</td><td>{fmt(m.result)}</td></>
+                      : <><td>{fmt(m.result)}</td><td>{m.fpSeason != null ? Math.round(m.fpSeason).toLocaleString() : '—'}</td></>}
+                    <td>{m.followed}</td>
                   </tr>
                 ))}</tbody>
               </table>
             )}
-            <p className="nl-note">{r.caveat}</p>
+            <p className="nl-note">{cats
+              ? 'Cats/wk: categories your roster wins a week against an average team. Build: the categories it gave up.'
+              : 'Value: points a game above the waiver line, times games, over your roster — what the board ranks by. FP season: the raw total. Value is the one to compare; a roster can score more points by stacking games without being better.'}
+              {' '}{r.caveat}</p>
           </>
         })()}
       </section>
