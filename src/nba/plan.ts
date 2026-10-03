@@ -243,7 +243,7 @@ export interface PathView {
   locked: boolean
   leading: boolean
   /** Who this path takes at each of my next picks, in the forward draft. */
-  plan: { overall: number; round: number; id: string; name: string }[]
+  plan: { overall: number; round: number; id: string; name: string; positions: string[] }[]
 }
 
 export interface DraftView {
@@ -263,7 +263,7 @@ export interface DraftView {
     locks: Cat[]
     expected: number | null
   }
-  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null })[]
+  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null })[]
   /**
    * The three cards: the best players to take with this pick. A player the
    * room will very likely leave until my next turn is not an option for this
@@ -394,15 +394,18 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   let advice: DraftView['advice'] = []
   let playoffNote: string | null = null
   if (spot) {
+    // Off the clock the question is who will be there at my pick, so anyone more likely gone than not is left out.
+    const there = (id: string) => onClock || survival(prep.adp(id), myNext!) >= 0.5
     const raw = prep.cats
-      ? adviseCategories(prep.cats.rows.filter((r) => !taken.has(r.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
+      ? adviseCategories(prep.cats.rows.filter((r) => !taken.has(r.id) && there(r.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
         { canTake, neutralUntil: BUILD_FROM, ignore: d.locks })
-      : advisePoints(prep.points!.rows.filter((r) => !taken.has(r.id)), spot, 25, canTake)
+      : advisePoints(prep.points!.rows.filter((r) => !taken.has(r.id) && there(r.id)), spot, 25, canTake)
     // Fifteen, though the screen shows six: comparing mocks needs the score of whoever I took instead.
     advice = raw.slice(0, 15).map((a) => ({
       ...a, team: p(a.id).team, positions: prep.positions(a.id), tag: tags.get(a.id) ?? null,
       // "There next time" is the turn after this one; a player who will very likely still be there can wait.
       survives: nextAfter == null ? 0 : survival(prep.adp(a.id), nextAfter),
+      there: onClock ? null : survival(prep.adp(a.id), myNext!),
       canWait: nextAfter != null && survival(prep.adp(a.id), nextAfter) >= 0.6,
       contrib: prep.cats ? contribution(prep.cats.byId.get(a.id)!) : undefined,
       fpg: prep.points?.byId.get(a.id)?.fpg,
@@ -410,9 +413,6 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       playoff: prep.playoff(a.id),
       returnNote: prep.returnNote(a.id),
     }))
-    const tb = playoffTiebreak(advice, prep.cats ? 0.02 : Math.abs(advice[0]?.score ?? 0) * 0.01)
-    advice = tb.advice
-    playoffNote = tb.note
   }
 
   // ── Paths and targets ahead ──
@@ -428,7 +428,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       const locked = d.locks.length > 0 && punt.length === d.locks.length && punt.every((c) => d.locks.includes(c))
       paths.push({
         name: prep.cats ? nameOfPunt(punt) : 'Best value', punt, expected, locked, leading: false,
-        plan: f.plan.map((x) => ({ overall: x.overall, round: roundFor(x.overall, teams), id: x.id, name: p(x.id).name })),
+        plan: f.plan.map((x) => ({ overall: x.overall, round: roundFor(x.overall, teams), id: x.id, name: p(x.id).name, positions: prep.positions(x.id) })),
       })
     }
     paths.sort((a, b) => b.expected - a.expected)
@@ -528,7 +528,13 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   }
 
   const urgent = advice.filter((a) => !a.canWait)
-  const takeNow = [...urgent, ...advice.filter((a) => a.canWait)].slice(0, 3)
+  let takeNow = [...urgent, ...advice.filter((a) => a.canWait)].slice(0, 3)
+  // The tiebreak orders the cards, never the players you are told can wait.
+  if (takeNow.length) {
+    const tb = playoffTiebreak(takeNow, prep.cats ? 0.02 : Math.abs(takeNow[0].score) * 0.01)
+    takeNow = tb.advice
+    playoffNote = tb.note
+  }
   const canWait = advice.filter((a) => a.canWait && !takeNow.includes(a)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
 
   return {

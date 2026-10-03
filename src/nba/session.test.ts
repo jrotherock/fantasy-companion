@@ -162,3 +162,33 @@ test('the three cards are players to take now; those likely back next turn go to
   assert.ok(v.takeNow.slice(0, Math.min(3, urgent)).every((a) => !a.canWait), 'a can-wait player only fills a card when fewer than three will be gone')
   assert.ok(v.canWait.every((w) => !v.takeNow.some((t) => t.name === w.name)))
 })
+
+test('off the clock, in both formats, the cards are players likely there at my pick', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  for (const [id, slot] of [['nba-harker', 5], ['nba-hoops', 8]] as const) {
+    const prep = prepare(leagues.find((l: any) => l.id === id), players, noise, adpFor)
+    const v = buildView(prep, { ...emptyDraft('t'), slot }, new Map())
+    assert.equal(v.clock.onClock, false)
+    assert.equal(v.takeNow.length, 3, id)
+    assert.ok(v.takeNow.every((a) => a.there != null && a.there >= 0.5), `${id}: ${v.takeNow.map((a) => `${a.name} ${a.there}`)}`)
+    // The best player on the board goes first and is not offered at pick 5 or 8.
+    assert.ok(!v.takeNow.some((a) => a.id === prep.adpOrder[0]), id)
+  }
+})
+
+test('on the clock in a points league, the playoff note speaks only of the cards', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)
+  for (const at of [4, 27, 36, 59]) {
+    const d = { ...emptyDraft('t'), slot: 5 }
+    d.picks = harker.adpOrder.slice(0, at).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
+    const v = buildView(harker, d, new Map())
+    assert.equal(v.clock.onClock, true)
+    assert.ok(v.takeNow.every((a) => a.there == null))
+    if (v.playoffNote) for (const w of v.canWait) assert.ok(!v.playoffNote.includes(w.name), v.playoffNote)
+  }
+})

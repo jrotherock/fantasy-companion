@@ -1,9 +1,9 @@
 /**
- * The basketball draft screen.
+ * The basketball draft screen, in football's layout and with football's parts.
  *
- * Read from the left: the clock and the pick (act), then where the build is
- * going and what is still open (decide), then the board (look things up).
- * The right column is context — my roster, what changed, who went where.
+ * Eyes go first to the fixed top: the clock, three players to take with this
+ * pick, the plan for the next one, and the build. Below it one panel scrolls:
+ * the next-picks strip and the board, for looking things up.
  *
  * Nothing here works anything out. The server sends the whole view, worked out
  * once per change, and this draws it; the screen polls every two seconds.
@@ -177,185 +177,394 @@ function Lessons() {
   )
 }
 
+// ── The draft screen ─────────────────────────────────────────────────────────
+//
+// Football's layout and football's parts (statusbar, clockpill, vhead, threeup,
+// vc, chip, btn from styles.css): a fixed decision area — the clock, three
+// players to take now, the plan, the build — over one scrolling panel holding
+// the next-picks strip and the board. Who picks before you is a drawer, since
+// it is wanted about once.
+
+type Act = (p: string, d?: unknown) => void
+
+/** Guard, big or mixed lean of a path's next picks, from their positions. */
+function lean(plan: PathView['plan']): 'guard' | 'big' | 'mixed' {
+  let g = 0, b = 0
+  for (const p of plan.slice(0, 4)) {
+    if (p.positions.includes('C')) b++
+    else if (p.positions.includes('PG') || (p.positions.includes('SG') && !p.positions.includes('PF'))) g++
+  }
+  return g >= b + 2 ? 'guard' : b >= g + 1 ? 'big' : 'mixed'
+}
+const LEAN_TEXT = { guard: 'leans guard', big: 'leans big', mixed: 'mixed guards and bigs' }
+const tone = (w: number) => (w >= 0.6 ? 'g' : w >= 0.5 ? '' : w >= 0.35 ? 'a' : 'r')
+
 function Screen({ id }: { id: string }) {
   const { view, error, act } = useDraft(id)
+  const [drawer, setDrawer] = useState(false)
+  const [rosterOpen, setRosterOpen] = useState(false)
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setDrawer(false) }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [])
   if (!view) return <div className="nb-pick"><p className="nb-dim">{error ?? 'Loading the board…'}</p></div>
   const cats = view.league.scoring === 'categories'
   return (
-    <div className="nb">
-      <Header view={view} error={error} act={act} />
-      <div className="nb-cols">
-        <section className="nb-act">
-          <Clock view={view} act={act} />
-          {view.review ? <Review view={view} act={act} /> : <TakeNow view={view} act={act} />}
-          <Entry id={id} view={view} act={act} />
-        </section>
-        <section className="nb-decide">
-          {cats && <Build view={view} act={act} />}
-          {cats && <Paths view={view} act={act} />}
-          <Ahead view={view} />
-          <Board view={view} act={act} />
-        </section>
-        <section className="nb-context">
-          <Before view={view} id={id} />
-          <Roster view={view} />
-          <Feed view={view} />
-          <Log view={view} />
-        </section>
+    <div className="nb-app">
+      <div className="nb-fixed">
+        <Status view={view} error={error} act={act} rosterOpen={rosterOpen} setRosterOpen={setRosterOpen} drawer={drawer} setDrawer={setDrawer} />
+        {rosterOpen && <RosterLine view={view} />}
+        {view.league.slot == null ? <Gate view={view} act={act} />
+          : view.review ? <Review view={view} act={act} />
+          : <>
+              <Notice view={view} />
+              <Take view={view} act={act} />
+              {cats && <Build view={view} act={act} />}
+            </>}
       </div>
-    </div>
-  )
-}
-
-// ── Header ───────────────────────────────────────────────────────────────────
-
-function Header({ view, error, act }: { view: DraftView; error: string | null; act: (p: string, d?: unknown) => void }) {
-  const s = view.sensor
-  const age = s.at ? Math.round((Date.now() - s.at) / 1000) : null
-  const tone = !s.at ? 'off' : !s.ok ? 'bad' : age! > 30 ? 'stale' : 'ok'
-  const said = !s.at ? 'Yahoo sensor not heard from — keep a Yahoo basketball tab open, or enter picks by hand'
-    : !s.ok ? `Yahoo sensor: ${s.error}` : `${s.source === 'api' ? 'Yahoo API' : 'Yahoo page via extension'} · ${age}s ago${s.unresolved.length ? ` · couldn't place ${s.unresolved.slice(0, 3).join(', ')}` : ''}`
-  return (
-    <header className="nb-hdr">
-      <a className="nb-home" href="/home">← Home</a>
-      <div className="nb-title">
-        <span>{view.league.label}</span>
-        <span className="nb-badge">{view.league.scoring === 'points' ? 'Points' : '9-cat'} · {view.league.teams} teams</span>
-        {view.mock && <span className="nb-badge nb-mockbadge">Mock</span>}
-        <span className={`nb-badge ${view.neverCount ? '' : 'nb-warnbadge'}`} title="Players the advice will never offer; tag them from the board">
-          {view.neverCount ? `Never list: ${view.neverCount}` : 'Never list is empty'}
-        </span>
-        {view.league.slot != null && (
-          <button className="nb-badge slotedit" title="Change your draft slot — Yahoo can reshuffle the order before the draft" onClick={() => act('slot', { slot: null })}>
-            Slot {view.league.slot}{view.league.slotSource === 'yahoo' ? ' (Yahoo)' : ''}
-          </button>
-        )}
-      </div>
-      <div className={`nb-sensor nb-${tone}`} title={said}>{said}</div>
-      {error && <div className="nb-sensor nb-bad">{error}</div>}
-    </header>
-  )
-}
-
-// ── Act ──────────────────────────────────────────────────────────────────────
-
-function Clock({ view, act }: { view: DraftView; act: (p: string, d?: unknown) => void }) {
-  const c = view.clock
-  // Football's slot gate, same look and the same reason to exist: almost every number depends on it.
-  if (view.league.slot == null) {
-    return (
-      <div className="gate">
-        <h2>Which slot are you?</h2>
-        <p>
-          {view.league.label} · {view.league.teams} teams.{' '}
-          {view.mock
-            ? 'A mock uses made-up team names, so count your place in the draft room\'s order'
-            : 'Yahoo sets the order before the draft and the companion reads it the moment it is posted; until then, set it here'}{' '}
-          — almost every number in here depends on it.
-        </p>
-        <div className="slots">
-          {Array.from({ length: view.league.teams }, (_, i) => (
-            <button className="slotbtn" key={i} onClick={() => act('slot', { slot: i + 1 })}>{i + 1}</button>
-          ))}
+      {view.league.slot != null && (
+        <div className="nb-panel">
+          <NextPicks view={view} />
+          <Board view={view} act={act} id={id} />
         </div>
-      </div>
-    )
-  }
-  if (c.done) return <div className="nb-clock"><div className="nb-clock-big">Draft complete</div></div>
-  return (
-    <div className={`nb-clock ${c.onClock ? 'nb-onclock' : ''}`}>
-      <div className="nb-clock-big">{c.onClock ? 'On the clock' : `Your pick in ${c.picksUntil}`}</div>
-      <div className="nb-dim">Pick {c.overall} · round {c.round}{c.myNext && !c.onClock ? ` · yours is ${c.myNext}` : ''}</div>
+      )}
+      {drawer && <Before view={view} id={id} close={() => setDrawer(false)} />}
     </div>
   )
+}
+
+function Status({ view, error, act, rosterOpen, setRosterOpen, drawer, setDrawer }: {
+  view: DraftView; error: string | null; act: Act; rosterOpen: boolean; setRosterOpen: (b: boolean) => void; drawer: boolean; setDrawer: (b: boolean) => void
+}) {
+  const c = view.clock, s = view.sensor
+  const age = s.at ? Math.round((Date.now() - s.at) / 1000) : null
+  const feed = !s.at ? 'down' : !s.ok ? 'down' : age! > 30 ? 'stale' : 'ok'
+  const said = !s.at ? 'NO FEED — ENTER PICKS BY HAND' : !s.ok ? `FEED: ${s.error}` : `${s.source === 'api' ? 'YAHOO API' : 'YAHOO PAGE'} · ${age}s`
+  return (
+    <div className="statusbar">
+      <a className="nb-home" href="/nba/draft">←</a>
+      {c.done ? <span className="clockpill waiting">DONE</span>
+        : view.league.slot == null ? <span className="clockpill waiting">PICK {c.overall}</span>
+        : c.onClock ? <span className="clockpill">PICK {c.overall} — YOU</span>
+        : <span className="clockpill waiting">PICK {c.overall}</span>}
+      <span>RD {c.round}{c.myNext != null && !c.onClock ? ` · NEXT ${c.myNext} (${c.picksUntil} away)` : ''}</span>
+      <span className={`feed ${feed}`} title={s.unresolved.length ? `couldn't place ${s.unresolved.join(', ')}` : undefined}><i />{said}</span>
+      {error && <span className="nb-down">{error}</span>}
+      <span className="spacer" />
+      <span>{view.league.label.toUpperCase()} · {view.league.scoring === 'points' ? 'POINTS' : '9-CAT'}{view.mock ? ' · MOCK' : ''}</span>
+      {view.league.slot != null && (
+        <button className="chip" title="Change your draft slot — Yahoo can reshuffle the order before the draft" onClick={() => act('slot', { slot: null })}>SLOT {view.league.slot}</button>
+      )}
+      <span className={`chip ${view.neverCount ? 'nb-chip-ok' : 'nb-chip-warn'}`} title="Players the advice never offers; tag them on the board">
+        {view.neverCount ? `NEVER ${view.neverCount}` : 'NEVER LIST EMPTY'}
+      </span>
+      {view.history && <button className={`chip ${drawer ? 'on' : ''}`} onClick={() => setDrawer(!drawer)}>BEFORE YOU ▸</button>}
+      <button className={`chip ${rosterOpen ? 'on' : ''}`} onClick={() => setRosterOpen(!rosterOpen)}>ROSTER {view.roster.length} {rosterOpen ? '▾' : '▸'}</button>
+    </div>
+  )
+}
+
+function RosterLine({ view }: { view: DraftView }) {
+  return (
+    <div className="nb-roster">
+      {view.roster.map((r) => <span key={r.id}><span className="mono nb-dim">R{r.round}</span> {r.name} <span className="nb-dim">{r.positions.join(',')}</span></span>)}
+      {!view.roster.length && <span className="nb-dim">No picks yet.</span>}
+      {view.roster.length > 0 && view.openSeats.length > 0 && <span className="nb-amber">Still need: {view.openSeats.join(', ')}</span>}
+    </div>
+  )
+}
+
+/** Football's slot gate: the same look and the same reason to exist. */
+function Gate({ view, act }: { view: DraftView; act: Act }) {
+  return (
+    <div className="gate">
+      <h2>Which slot are you?</h2>
+      <p>
+        {view.league.label} · {view.league.teams} teams.{' '}
+        {view.mock ? 'A mock uses made-up team names, so count your place in the draft room\'s order'
+          : 'Yahoo sets the order before the draft and the companion reads it the moment it is posted; until then, set it here'}{' '}
+        — almost every number in here depends on it.
+      </p>
+      <div className="slots">
+        {Array.from({ length: view.league.teams }, (_, i) => <button className="slotbtn" key={i} onClick={() => act('slot', { slot: i + 1 })}>{i + 1}</button>)}
+      </div>
+    </div>
+  )
+}
+
+/** The latest change worth a glance, for a few minutes after it happens. */
+function Notice({ view }: { view: DraftView }) {
+  const f = view.feed[0]
+  if (!f || Date.now() - f.at > 3 * 60_000) return null
+  const kind = f.kind === 'build' ? 'BUILD' : f.kind === 'lock' ? 'LOCK' : f.kind === 'target' ? 'TARGET' : f.kind === 'run' ? 'RUN' : 'NOTE'
+  return <div className={`nb-notice ${f.kind === 'build' || f.kind === 'lock' ? 'nb-notice-build' : ''}`}><span className="nb-notice-h">{kind}</span>{f.text}</div>
 }
 
 function reasons(contrib: Record<Cat, number> | undefined, locks: Cat[]) {
-  if (!contrib) return { up: [] as Cat[], down: [] as Cat[] }
+  if (!contrib) return null
   const live = CATS.filter((c) => !locks.includes(c))
   const up = live.filter((c) => contrib[c] > 0.25).sort((a, b) => contrib[b] - contrib[a]).slice(0, 3)
   const down = live.filter((c) => contrib[c] < -0.25).sort((a, b) => contrib[a] - contrib[b]).slice(0, 2)
-  return { up, down }
+  return <>{up.map((c) => <span key={c} className="nb-up">+{LABEL[c]}</span>)}{down.map((c) => <span key={c} className="nb-down">−{LABEL[c]}</span>)}</>
 }
 
-function TakeNow({ view, act }: { view: DraftView; act: (p: string, d?: unknown) => void }) {
-  const [top, ...rest] = view.advice
-  if (!top) return null
+function Take({ view, act }: { view: DraftView; act: Act }) {
+  const cards = view.takeNow
+  if (!cards.length) return null
+  const onClock = view.clock.onClock
+  const close = cards.length > 1 && cards[0].score - cards[1].score < (view.league.scoring === 'categories' ? 0.02 : Math.abs(cards[0].score) * 0.01)
   const locks = view.build?.locks ?? []
-  const why = (a: typeof top) => {
-    const r = reasons(a.contrib, locks)
-    return (
-      <span className="nb-why">
-        {r.up.map((c) => <span key={c} className="nb-up">+{LABEL[c]}</span>)}
-        {r.down.map((c) => <span key={c} className="nb-down">−{LABEL[c]}</span>)}
-        {a.fpg != null && <span>{a.fpg.toFixed(1)} fp/g</span>}
-        <span className="nb-dim">{Math.round(a.gp)} g</span>
-        {a.returnNote && <span className="nb-down" title="Starts the season hurt">{a.returnNote}</span>}
-        {a.playoff != null && <span className={po(a.playoff, view.playoffNorm)} title="Games in your playoff weeks">PO {a.playoff}</span>}
-      </span>
-    )
-  }
-  const after = (a: typeof top) => a.canWait
-    ? <span className="nb-wait">{pct(a.survives)} he's back next turn — can wait</span>
-    : <span className="nb-gone">{pct(1 - a.survives)} gone by your next turn</span>
+  const next = view.ahead[0]
   return (
-    <div className="nb-take">
-      <div className="nb-h">{view.clock.onClock ? 'Take' : 'If it were your pick'}{top.tiebreak && <span className="nb-tag nb-lead">playoff tiebreak</span>}</div>
-      <div className="nb-top">
-        <div className="nb-top-name">{top.name}{top.tag === 'like' && <span className="nb-tag nb-like">like</span>}{top.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</div>
-        <div className="nb-dim">{top.team} · {top.positions.join(', ')}</div>
-        {why(top)}
-        <div>{after(top)}</div>
-        <button className="nb-btn" onClick={() => act('pick', { playerId: top.id })}>Mark {top.name.split(' ').slice(-1)[0]} drafted</button>
+    <div>
+      <div className="vhead">
+        <span className="vlabel">{onClock ? 'TAKE' : `LIKELY THERE AT YOUR PICK ${view.clock.myNext}`}</span>
+        {onClock && <span className={`conf ${close ? 'close' : 'clear'}`}>{close ? 'close call' : 'clear pick'}</span>}
+        {cards[0].tiebreak && <span className="conf close">playoff tiebreak</span>}
       </div>
-      {view.playoffNote && <div className="nb-ponote">{view.playoffNote}</div>}
-      <ul className="nb-alts">
-        {rest.slice(0, 5).map((a) => (
-          <li key={a.id}>
-            <button className="nb-link" title="Mark drafted" onClick={() => act('pick', { playerId: a.id })}>{a.name}</button>
-            <span className="nb-dim"> {a.positions.join(',')}</span>
-            {a.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}
-            {why(a)}
-            {a.canWait && <span className="nb-wait"> · can wait</span>}
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function Review({ view, act }: { view: DraftView; act: (p: string, d?: unknown) => void }) {
-  const r = view.review!
-  return (
-    <div className="nb-take">
-      <div className="nb-h">How it came out</div>
-      {r.expected != null && (
-        <div className="nb-top">
-          <div className="nb-top-name">{r.expected.toFixed(1)} <span className="nb-dim nb-small">of 9 a week vs an average team</span></div>
-          <div className="nb-cats nb-cats-sm">
-            {CATS.map((c) => (
-              <div key={c} className={`nb-cat ${r.win![c] < 0.35 ? 'nb-cat-punt' : r.win![c] >= 0.65 ? 'nb-cat-strong' : r.win![c] < 0.5 ? 'nb-cat-edge' : ''}`}>
-                <span className="nb-cat-l">{LABEL[c]}</span><span className="nb-cat-v">{pct(r.win![c])}</span>
-              </div>
-            ))}
+      <div className="threeup">
+        {cards.map((a, i) => (
+          <div key={a.id} className={`vc ${i === 0 ? 'sel' : ''}`}>
+            <span className="rk">{i + 1}{i === 0 && onClock ? ' · TAKE' : ''}</span>
+            <span className="nm">{a.name}{a.tag === 'like' && <span className="nb-tag nb-like">like</span>}{a.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
+            <span className="sub">{a.team} · {a.positions.join(', ')}</span>
+            <div className="nb-reason">
+              {reasons(a.contrib, locks)}
+              {a.fpg != null && <span>{a.fpg.toFixed(1)} fp/g</span>}
+              <span className="nb-dim">{Math.round(a.gp)} g</span>
+              {a.playoff != null && <span className={po(a.playoff, view.playoffNorm)}>{a.playoff} PO g</span>}
+              {a.returnNote && <span className="nb-down">{a.returnNote}</span>}
+            </div>
+            <div className={`nb-fate ${a.there != null || a.canWait ? 'nb-wait' : 'nb-gone'}`}>
+              {a.there != null ? `${pct(a.there)} there at pick ${view.clock.myNext}` : a.canWait ? `${pct(a.survives)} back next turn — can wait` : `${pct(1 - a.survives)} gone by your next turn`}
+            </div>
+            <button className={`btn ${i === 0 && onClock ? 'primary' : ''}`} onClick={() => act('pick', { playerId: a.id })}>Mark drafted</button>
           </div>
-          <div className="nb-dim nb-small">{r.punting.length ? `Punted ${r.punting.map((c) => LABEL[c]).join(', ')}` : 'Nothing punted'}</div>
+        ))}
+      </div>
+      {onClock && (
+        <div className="nb-plan">
+          <span className="vlabel">PLAN</span> {cards[0].name} now
+          {view.canWait.length > 0 && next ? <> → {view.canWait.map((w, i) => <span key={w.name}>{i ? ', ' : ''}{w.name} <span className="nb-dim">{pct(w.survives)}</span></span>)} — likely still there at pick {next.overall}</> : null}
         </div>
       )}
-      {r.value != null && <div className="nb-top"><div className="nb-top-name">{Math.round(r.value)}</div><div className="nb-dim">season value over replacement</div></div>}
-      <p>Took the advice at {r.followed} of {r.advisedPicks} picks.</p>
-      {r.departures.length > 0 && (
-        <ul className="nb-alts">
-          {r.departures.map((d, i) => <li key={i}><span className="nb-dim">R{d.round}</span> took {d.took} <span className="nb-dim">— advice was {d.advised}</span></li>)}
-        </ul>
-      )}
-      {view.mock && <a className="nb-small" href="/nba/draft#mocks">What all your mocks of this league say →</a>}
-      {view.mock && <button className="nb-btn nb-quiet" onClick={async () => { if (confirm('Discard this mock? It will drop out of the comparison.')) { await post(`/api/nba/draft/${view.league.id}/discard`); location.href = '/nba/draft' } }}>Discard this mock</button>}
+      {view.playoffNote && <div className="nb-ponote">{view.playoffNote}</div>}
     </div>
   )
 }
 
-function Entry({ id, view, act }: { id: string; view: DraftView; act: (p: string, d?: unknown) => void }) {
+function Build({ view, act }: { view: DraftView; act: Act }) {
+  const b = view.build!
+  const [confirm, setConfirm] = useState<Cat | null>(null)
+  const [help, setHelp] = useState(false)
+  const win = b.win
+  const live = CATS.filter((c) => !b.locks.includes(c))
+  const count = (t: string) => (win ? live.filter((c) => tone(win[c]) === t).length : 0)
+  const tap = (c: Cat) => (b.locks.includes(c) ? act('locks', { locks: b.locks.filter((x) => x !== c) }) : setConfirm(c))
+  const p = view.paths
+  const gap = p.length > 1 ? p[0].expected - p[1].expected : 0
+  const spread = p.length > 2 ? p[0].expected - p[2].expected : gap
+  const lead = p[0] ? lean(p[0].plan) : 'mixed'
+  return (
+    <div className="nb-build">
+      <div className="nb-bhead">
+        <span className="vlabel">YOUR BUILD</span><span className="nb-dim nb-small">weekly win chance per category</span>
+        <span className="spacer" /><button className="nb-link" onClick={() => setHelp(!help)}>{help ? 'Hide help' : 'How to read this'}</button>
+      </div>
+      <div className="nb-cats">
+        {CATS.map((c) => b.locks.includes(c)
+          ? <button key={c} className="nb-cat nb-cat-lock" onClick={() => tap(c)} title="Locked as a punt — click to unlock"><span className="l">{LABEL[c]}</span><span className="v">punt 🔒</span></button>
+          : <button key={c} className={`nb-cat ${win ? `nb-cat-${tone(win[c]) || 'even'}` : 'nb-cat-open'}`} onClick={() => tap(c)} title="Click to lock as a punt"><span className="l">{LABEL[c]}</span><span className="v">{win ? pct(win[c]) : '—'}</span></button>)}
+      </div>
+      <div className="nb-bfoot">
+        {win ? (
+          <div className="nb-meter">
+            <span><i className="nb-dot" style={{ background: 'var(--green)' }} />{count('g')} winning</span>
+            <span><i className="nb-dot" style={{ background: 'var(--amber)' }} />{count('a')} coin flips</span>
+            <span><i className="nb-dot" style={{ background: 'var(--red)' }} />{count('r') + b.locks.length} given up</span>
+            <span className="mono">{live.reduce((s, c) => s + win[c], 0).toFixed(1)} of 9 a week</span>
+            <span className="nb-dim">Goal: 5–6 winning, 2–3 given up on purpose.</span>
+          </div>
+        ) : <div className="nb-meter nb-dim">Win chances read from your {b.buildFrom}th pick. Until then take the best player; the direction is a lean, not a plan.</div>}
+        {p.length > 1 && (
+          <div className="nb-dir">
+            <div className="nb-arrow">{gap < 0.15 ? `→ Open · top builds within ${spread.toFixed(2)}` : `→ ${p[0].name} · ${LEAN_TEXT[lead]}`}</div>
+            <div className="nb-small">
+              {gap < 0.15 ? `No build is clearly better — take the best player. The leader ${LEAN_TEXT[lead]}.`
+                : `Leads by ${gap.toFixed(2)} a week${view.roster.length < b.buildFrom ? '; a lean from your first picks, not a plan yet' : ''}. Next: ${p[0].plan.slice(0, 3).map((x) => x.name).join(', ')}.`}
+              {gap >= 0.15 && p[0].punt.length > 0 && !p[0].locked && <> <button className="nb-link" onClick={() => act('locks', { locks: p[0].punt })}>Lock {p[0].name}</button></>}
+            </div>
+            <div className="nb-builds">
+              {p.slice(0, 3).map((x, i) => (
+                <button key={x.name} className={`chip ${i === 0 ? 'on' : ''}`} title={`next: ${x.plan.slice(0, 3).map((q) => q.name).join(', ')}`}
+                  onClick={() => x.punt.length ? act('locks', { locks: x.locked ? [] : x.punt }) : undefined}>
+                  {x.name} · {lean(x.plan)} · {x.expected.toFixed(2)}{x.locked ? ' 🔒' : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      {confirm && (
+        <div className="nb-confirm">
+          Lock <b>{LABEL[confirm]}</b> as a punt? You win it {win ? pct(win[confirm]) : '—'} of weeks. The advice stops paying for {LABEL[confirm]} and spends picks on the rest. Unlock any time.
+          <button className="btn primary" onClick={() => { act('locks', { locks: [...b.locks, confirm] }); setConfirm(null) }}>Lock it</button>
+          <button className="nb-link" onClick={() => setConfirm(null)}>Cancel</button>
+        </div>
+      )}
+      {help && (
+        <div className="nb-help">
+          <h4>Your build</h4>Each tile is your chance of winning that category in a typical week against an average team. You win a week with 5 of 9.
+          <ul>
+            <li><span className="nb-up">Green 60%+</span> — usually yours. Five or six is a contender.</li>
+            <li><span className="nb-amber">Amber 35–50%</span> — the expensive middle: paid for, still lost half the time. Push it up or give it up.</li>
+            <li><span className="nb-down">Red under 35%</span> — mostly lost. Fine if chosen: lock it.</li>
+            <li>All green is not the goal. A clear shape is.</li>
+          </ul>
+          <h4>Locking a punt</h4>
+          <ul>
+            <li>After your {b.buildFrom}th pick, when a tile is red and the direction says that punt leads, or that builds are tied.</li>
+            <li>At most two, ideally a pair: AST + TO, FT% + 3PM (bigs), REB + BLK (guards). Click a tile or a build chip to lock; click again to unlock.</li>
+          </ul>
+          <h4>Direction</h4>Where your picks so far point, and the top three builds with the categories each should win a week. Before pick {b.buildFrom} it is a lean; when builds are within about 0.15 it says so, and the best player is the right pick.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Review({ view }: { view: DraftView; act: Act }) {
+  const r = view.review!
+  return (
+    <div className="nb-build">
+      <div className="nb-bhead"><span className="vlabel">HOW IT CAME OUT</span><span className="spacer" />{view.mock && <a className="nb-link" href="/nba/draft#mocks">What all your mocks say →</a>}</div>
+      {r.expected != null && r.win && <>
+        <div className="nb-bignum">{r.expected.toFixed(1)} <span className="nb-dim">of 9 categories a week</span></div>
+        <div className="nb-cats">{CATS.map((c) => <div key={c} className={`nb-cat nb-cat-${tone(r.win![c]) || 'even'}`}><span className="l">{LABEL[c]}</span><span className="v">{pct(r.win![c])}</span></div>)}</div>
+        <div className="nb-meter">{r.punting.length ? `Punted ${r.punting.map((c) => LABEL[c]).join(', ')}` : 'Nothing punted'}</div>
+      </>}
+      {r.value != null && <div className="nb-bignum">{Math.round(r.value)} <span className="nb-dim">season value over replacement</span></div>}
+      <div>Took the advice at {r.followed} of {r.advisedPicks} picks.</div>
+      {r.departures.length > 0 && <ul className="nb-list">{r.departures.map((d, i) => <li key={i}><span className="mono nb-dim">R{d.round}</span> took {d.took} <span className="nb-dim">— advice was {d.advised}</span></li>)}</ul>}
+      {view.mock && <button className="btn" onClick={async () => { if (confirm('Discard this mock? It drops out of the comparison.')) { await post(`/api/nba/draft/${view.league.id}/discard`); location.href = '/nba/draft' } }}>Discard this mock</button>}
+    </div>
+  )
+}
+
+/** Your next picks in one line; open for the alternatives at each. */
+function NextPicks({ view }: { view: DraftView }) {
+  const [open, setOpen] = useState(false)
+  if (!view.ahead.length) return null
+  return (
+    <div className="nb-box nb-strip">
+      <button className="nb-striphead" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span className="nb-ph">NEXT PICKS {open ? '▾' : '▸'}</span>
+        <span className="nb-stripline">
+          {view.ahead.map((a) => { const p = a.players.find((x) => x.planned) ?? a.players[0]; return <span key={a.overall}><span className="mono nb-dim">R{a.round} #{a.overall}</span> {p.name} <span className="nb-dim">{pct(p.survives)}</span></span> })}
+        </span>
+      </button>
+      {open && <>
+        <ul className="nb-ahead">
+          {view.ahead.map((a) => (
+            <li key={a.overall}>
+              <span className="mono nb-dim">R{a.round} · pick {a.overall}</span>
+              <span className="nb-who">{a.players.map((p) => <span key={p.id} className={p.planned ? 'nb-planned' : ''}>{p.name} <span className="nb-dim">{p.positions[0]} {pct(p.survives)}</span></span>)}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="nb-small nb-dim">Bold is the plan for that pick under {view.aheadBuild}; the others are worth having and likely there. Percent: chance he lasts to that pick.</p>
+      </>}
+    </div>
+  )
+}
+
+function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
+  const [pos, setPos] = useState('All')
+  const [q, setQ] = useState('')
+  const [showTaken, setShowTaken] = useState(false)
+  const [help, setHelp] = useState(false)
+  const cats = view.league.scoring === 'categories'
+  const locks = view.build?.locks ?? []
+  const win = view.build?.win ?? null
+  const need = win ? CATS.filter((c) => !locks.includes(c) && win[c] >= 0.35 && win[c] < 0.5) : []
+  const rows = view.board.filter((r) =>
+    (showTaken || r.takenAt == null) && (pos === 'All' || r.positions.includes(pos)) && (!q || r.name.toLowerCase().includes(q.toLowerCase()))).slice(0, 150)
+  const tag = (r: BoardRow, t: Tag) => act('tag', { playerId: r.id, tag: r.tag === t ? null : t })
+  const heat = (v: number) => { const a = Math.min(1, Math.abs(v) / 1.2) * 0.55; return { background: v >= 0 ? `rgba(69,217,160,${a})` : `rgba(255,92,99,${a})` } }
+  return (
+    <div className="nb-box">
+      <div className="nb-boardhead">
+        <span className="nb-ph">BOARD · RANKED FOR {cats ? (locks.length ? 'YOUR LOCKED PUNT' : (view.aheadBuild || 'BALANCED').toUpperCase()) : 'POINTS'}</span>
+        <Entry id={id} view={view} act={act} />
+        <span className="spacer" />
+        <button className="nb-link" onClick={() => setHelp(!help)}>{help ? 'Hide help' : 'How to use the board'}</button>
+      </div>
+      {help && (
+        <div className="nb-help">
+          <ul>
+            <li><b>#</b> is value for your build; it re-ranks when you lock, and locked columns fade.</li>
+            <li><b>Coloured cells</b>: what a player adds per category over a season. Read down the <span className="nb-amber">amber headers</span> — your coin flips — to find who tips one to green.</li>
+            <li><b>Next</b>: chance he lasts to your next pick. Above about 60%, he can wait. <b>PO</b>: games in your playoff weeks, the tiebreaker.</li>
+            <li>Grey rows are your never list. A red note means he starts the season hurt; set your own return date beside it.</li>
+            <li>Check a name here; let the cards above make the call.</li>
+          </ul>
+        </div>
+      )}
+      <div className="filters nb-filters">
+        <input className="field" value={q} placeholder="Filter" onChange={(e) => setQ(e.target.value)} />
+        {POSITIONS.map((p) => <button key={p} className={`chip ${pos === p ? 'on' : ''}`} onClick={() => setPos(p)}>{p.toUpperCase()}</button>)}
+        <button className={`chip ${showTaken ? 'on' : ''}`} onClick={() => setShowTaken(!showTaken)}>DRAFTED</button>
+      </div>
+      <div className="nb-tablewrap">
+        <table className="nb-table">
+          <thead>
+            <tr>
+              <th>#</th><th className="nb-l">Player</th><th>Pos</th><th>G</th><th title="Games in your playoff weeks">PO</th><th>ADP</th><th title="Chance he lasts to your next decision">Next</th>
+              {cats ? CATS.map((c) => <th key={c} className={locks.includes(c) ? 'nb-off' : need.includes(c) ? 'nb-need' : ''}>{LABEL[c]}</th>) : <><th>FP/g</th><th>Value</th></>}
+              <th title="never · avoid · like">Tag</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className={`${r.tag === 'never' ? 'nb-never' : ''} ${r.takenAt != null ? 'nb-taken' : ''} ${r.mine ? 'nb-mine' : ''}`}>
+                <td className="nb-dim">{r.rank}</td>
+                <td className="nb-l">
+                  {r.name}
+                  {r.tag && <span className={`nb-tag nb-${r.tag}`}>{r.tag}</span>}
+                  {r.injury && !r.returnNote && <span className="nb-inj">{r.injury}</span>}
+                  {r.returnNote && (
+                    <span className="nb-return" title="When he is expected back; set your own date to override">
+                      {r.returnNote}
+                      <input type="date" aria-label={`Return date for ${r.name}`} onChange={(e) => act('return', { playerId: r.id, date: e.target.value || null })} />
+                    </span>
+                  )}
+                  {r.takenAt != null && <span className="nb-dim nb-small"> #{r.takenAt}{r.takenBy ? ` ${r.takenBy}` : ''}</span>}
+                  <span className="nb-dim nb-small"> {r.team}</span>
+                </td>
+                <td className="nb-dim">{r.positions.join(',')}</td>
+                <td>{Math.round(r.gp)}</td>
+                <td className={r.playoff != null ? po(r.playoff, view.playoffNorm) : 'nb-dim'}>{r.playoff ?? '—'}</td>
+                <td className="nb-dim">{r.adp != null ? r.adp.toFixed(0) : '—'}</td>
+                <td>{r.takenAt == null && r.survives != null ? pct(r.survives) : ''}</td>
+                {cats ? CATS.map((c) => <td key={c} className={`mono ${locks.includes(c) ? 'nb-off' : ''}`} style={locks.includes(c) ? undefined : heat(r.contrib![c])}>{r.contrib![c].toFixed(1)}</td>)
+                  : <><td className="mono">{r.fpg?.toFixed(1)}</td><td className="mono">{Math.round(r.value)}</td></>}
+                <td className="nb-tags">
+                  <button className={r.tag === 'never' ? 'nb-on' : ''} title="Never draft" onClick={() => tag(r, 'never')}>✕</button>
+                  <button className={r.tag === 'avoid' ? 'nb-on' : ''} title="Avoid" onClick={() => tag(r, 'avoid')}>↓</button>
+                  <button className={r.tag === 'like' ? 'nb-on' : ''} title="Like" onClick={() => tag(r, 'like')}>★</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+/** Typed entry for any team's pick, for when Yahoo is slow: "/" jumps here. */
+function Entry({ id, view, act }: { id: string; view: DraftView; act: Act }) {
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<{ id: string; name: string; team: string | null; positions: string[] }[]>([])
   const box = useRef<HTMLInputElement>(null)
@@ -367,289 +576,58 @@ function Entry({ id, view, act }: { id: string; view: DraftView; act: (p: string
     }, 120)
     return () => clearTimeout(t)
   }, [q, taken])
-  // "/" focuses the box from anywhere, so a pick is two keystrokes and a name.
   useEffect(() => {
-    const k = (e: KeyboardEvent) => {
-      if (e.key === '/' && document.activeElement !== box.current) { e.preventDefault(); box.current?.focus() }
-    }
+    const k = (e: KeyboardEvent) => { if (e.key === '/' && document.activeElement !== box.current) { e.preventDefault(); box.current?.focus() } }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
   }, [])
   const pick = (playerId: string) => { act('pick', { playerId }); setQ(''); setHits([]) }
+  void id
   return (
-    <div className="nb-entry">
-      <div className="nb-h">Enter a pick <span className="nb-dim">— any team; press / to jump here</span></div>
-      <div className="nb-entry-row">
-        <input ref={box} value={q} placeholder="Player name" onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && hits[0]) pick(hits[0].id); if (e.key === 'Escape') setQ('') }} />
-        <button className="nb-btn nb-quiet" onClick={() => act('undo')}>Undo</button>
-      </div>
+    <span className="nb-entry">
+      <input ref={box} className="field" value={q} placeholder={`Enter pick ${view.clock.overall} ( / )`} onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && hits[0]) pick(hits[0].id); if (e.key === 'Escape') setQ('') }} />
+      <button className="btn" onClick={() => act('undo')} title="Take back the last pick you typed">Undo</button>
       {hits.length > 0 && (
         <ul className="nb-hits">
-          {hits.map((h, i) => (
-            <li key={h.id}><button className={i === 0 ? 'nb-first' : ''} onClick={() => pick(h.id)}>{h.name} <span className="nb-dim">{h.team} · {h.positions.join(',')}</span></button></li>
-          ))}
+          {hits.map((h, i) => <li key={h.id}><button className={i === 0 ? 'nb-first' : ''} onClick={() => pick(h.id)}>{h.name} <span className="nb-dim">{h.team} · {h.positions.join(',')}</span></button></li>)}
         </ul>
       )}
-      <p className="nb-dim nb-small">Picks Yahoo reports replace typed ones; undo takes back the last one you typed. Next pick is {view.clock.overall}.</p>
-    </div>
+    </span>
   )
 }
-
-// ── Decide ───────────────────────────────────────────────────────────────────
-
-function Build({ view, act }: { view: DraftView; act: (p: string, d?: unknown) => void }) {
-  const b = view.build!
-  const toggle = (c: Cat) => act('locks', { locks: b.locks.includes(c) ? b.locks.filter((x) => x !== c) : [...b.locks, c] })
-  const made = view.roster.length
-  const state = (c: Cat) => {
-    if (b.locks.includes(c)) return 'locked'
-    if (!b.win) return 'open'
-    const w = b.win[c]
-    return w < 0.35 ? 'punt' : w < 0.5 ? 'edge' : w >= 0.65 ? 'strong' : 'even'
-  }
-  return (
-    <div className="nb-panel">
-      <div className="nb-h">
-        Your build
-        <span className={`nb-stage nb-stage-${b.stage}`}>
-          {b.stage === 'open' ? `open — read from pick ${b.buildFrom} (${made} made)` : b.stage === 'leaning' ? `leaning — firm from pick ${b.buildFirm}` : 'firm'}
-        </span>
-        {b.expected != null && <span className="nb-dim"> · now {b.expected.toFixed(1)} of 9 a week vs an average team at this stage</span>}
-      </div>
-      <div className="nb-cats">
-        {CATS.map((c) => (
-          <button key={c} className={`nb-cat nb-cat-${state(c)}`} onClick={() => toggle(c)}
-            title={b.locks.includes(c) ? 'Locked as a punt — click to unlock' : 'Click to lock as a punt'}>
-            <span className="nb-cat-l">{LABEL[c]}</span>
-            <span className="nb-cat-v">{b.locks.includes(c) ? 'punt 🔒' : b.win ? pct(b.win[c]) : '—'}</span>
-          </button>
-        ))}
-      </div>
-      <p className="nb-dim nb-small">
-        {b.stage === 'open'
-          ? 'Weekly win chance per category appears from your fourth pick; until then the advice is the best player, not a fit. Click a category to lock it as a punt at any time.'
-          : `${b.punting.length ? `Punting ${b.punting.map((c) => LABEL[c]).join(', ')}. ` : 'Nothing given up. '}${b.edge.length ? `On the edge: ${b.edge.map((c) => LABEL[c]).join(', ')}. ` : ''}${b.locks.length ? `Locked: ${b.locks.map((c) => LABEL[c]).join(', ')} — the advice ignores them.` : 'Click a category to lock it as a punt.'}`}
-      </p>
-    </div>
-  )
-}
-
-function Paths({ view, act }: { view: DraftView; act: (p: string, d?: unknown) => void }) {
-  const [open, setOpen] = useState<string | null>(null)
-  const ps = view.paths
-  if (!ps.length) return null
-  const best = ps[0].expected
-  const shown = [...ps.slice(0, 4), ...ps.filter((p, i) => i >= 4 && p.locked)]
-  const lock = (p: PathView) => act('locks', { locks: p.locked ? [] : p.punt })
-  return (
-    <div className="nb-panel">
-      <div className="nb-h">Paths from here <span className="nb-dim">— each drafted forward against a room that follows Yahoo ADP</span></div>
-      <ul className="nb-paths">
-        {shown.map((p) => (
-          <li key={p.name} className={p.locked ? 'nb-path-locked' : ''}>
-            <button className="nb-path-row" onClick={() => setOpen(open === p.name ? null : p.name)}>
-              <span className="nb-path-name">{p.name}</span>
-              {p.leading && <span className="nb-tag nb-lead">best</span>}
-              {p.locked && <span className="nb-tag nb-lockt">locked</span>}
-              <span className="nb-path-e">{p.expected.toFixed(2)}</span>
-              <span className="nb-dim nb-path-d">{p.leading ? '' : `−${(best - p.expected).toFixed(2)}`}</span>
-            </button>
-            {(p.punt.length > 0 || (view.build?.locks.length ?? 0) > 0) && (
-              <button className="nb-btn nb-quiet nb-small" onClick={() => lock(p)}>{p.locked ? 'Unlock' : p.punt.length ? 'Lock' : 'Clear locks'}</button>
-            )}
-            {open === p.name && (
-              <div className="nb-plan">{p.plan.map((x) => <span key={x.overall}>R{x.round} · {x.name}</span>)}</div>
-            )}
-          </li>
-        ))}
-      </ul>
-      <p className="nb-dim nb-small">Expected categories won a week by the end of the draft. Close scores are a tie: a real room strays from ADP.</p>
-    </div>
-  )
-}
-
-function Ahead({ view }: { view: DraftView }) {
-  if (!view.ahead.length) return null
-  return (
-    <div className="nb-panel">
-      <div className="nb-h">Targets for your next picks <span className="nb-dim">— {view.aheadBuild}</span></div>
-      <ul className="nb-ahead">
-        {view.ahead.map((a) => (
-          <li key={a.overall}>
-            <span className="nb-ahead-when">R{a.round} · #{a.overall} <span className="nb-dim">in {a.overall - view.clock.overall}</span></span>
-            <span className="nb-ahead-who">
-              {a.players.map((p) => (
-                <span key={p.id} className={p.planned ? 'nb-planned' : ''}>{p.name} <span className="nb-dim">{p.positions[0]} {pct(p.survives)}</span></span>
-              ))}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <p className="nb-dim nb-small">First name is the plan's pick; the others are worth having and likely there. Percent: chance he lasts to that pick.</p>
-    </div>
-  )
-}
-
-function Board({ view, act }: { view: DraftView; act: (p: string, d?: unknown) => void }) {
-  const [pos, setPos] = useState('All')
-  const [q, setQ] = useState('')
-  const [showTaken, setShowTaken] = useState(false)
-  const cats = view.league.scoring === 'categories'
-  const locks = view.build?.locks ?? []
-  const rows = view.board.filter((r) =>
-    (showTaken || r.takenAt == null) &&
-    (pos === 'All' || r.positions.includes(pos)) &&
-    (!q || r.name.toLowerCase().includes(q.toLowerCase()))).slice(0, 150)
-  const tag = (r: BoardRow, t: Tag) => act('tag', { playerId: r.id, tag: r.tag === t ? null : t })
-  const heat = (v: number) => {
-    const a = Math.min(1, Math.abs(v) / 1.2) * 0.55
-    return { background: v >= 0 ? `rgba(69,217,160,${a})` : `rgba(255,92,99,${a})` }
-  }
-  return (
-    <div className="nb-panel nb-board">
-      <div className="nb-h">Board <span className="nb-dim">— ranked for {cats ? (locks.length ? `your locked punt` : view.aheadBuild || 'balanced') : 'points'}</span></div>
-      <div className="nb-board-ctl">
-        <input value={q} placeholder="Filter" onChange={(e) => setQ(e.target.value)} />
-        <div className="nb-seg">{POSITIONS.map((p) => <button key={p} className={pos === p ? 'nb-on' : ''} onClick={() => setPos(p)}>{p}</button>)}</div>
-        <label className="nb-dim"><input type="checkbox" checked={showTaken} onChange={(e) => setShowTaken(e.target.checked)} /> drafted</label>
-      </div>
-      <div className="nb-table-wrap">
-        <table className="nb-table">
-          <thead>
-            <tr>
-              <th>#</th><th className="nb-l">Player</th><th>Pos</th><th>G</th><th title="Games in your playoff weeks">PO</th><th>ADP</th><th title="Chance he lasts to your next decision — the pick after this one when you are on the clock">Next</th>
-              {cats ? CATS.map((c) => <th key={c} className={locks.includes(c) ? 'nb-col-off' : ''}>{LABEL[c]}</th>) : <><th>FP/g</th><th>Value</th></>}
-              <th title="never · avoid · like">Tag</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className={`${r.tag === 'never' ? 'nb-never' : ''} ${r.takenAt != null ? 'nb-taken' : ''} ${r.mine ? 'nb-mine' : ''}`}>
-                <td className="nb-dim">{r.rank}</td>
-                <td className="nb-l">
-                  {r.name}
-                  {r.injury && <span className="nb-inj">{r.injury}</span>}
-                  {r.returnNote && (
-                    <span className="nb-return" title="When he is expected back; set your own date to override">
-                      {r.returnNote}
-                      <input type="date" aria-label={`Return date for ${r.name}`} onChange={(e) => act('return', { playerId: r.id, date: e.target.value || null })} />
-                    </span>
-                  )}
-                  {r.tag && <span className={`nb-tag nb-${r.tag}`}>{r.tag}</span>}
-                  {r.takenAt != null && <span className="nb-dim nb-small"> #{r.takenAt}{r.takenBy ? ` ${r.takenBy}` : ''}</span>}
-                  <span className="nb-dim nb-small"> {r.team}</span>
-                </td>
-                <td className="nb-dim">{r.positions.join(',')}</td>
-                <td>{Math.round(r.gp)}</td>
-                <td className={r.playoff != null ? po(r.playoff, view.playoffNorm) : 'nb-dim'}>{r.playoff ?? '—'}</td>
-                <td className="nb-dim">{r.adp != null ? r.adp.toFixed(0) : '—'}</td>
-                <td>{r.takenAt == null && r.survives != null ? pct(r.survives) : ''}</td>
-                {cats ? CATS.map((c) => (
-                  <td key={c} className={`nb-num ${locks.includes(c) ? 'nb-col-off' : ''}`} style={locks.includes(c) ? undefined : heat(r.contrib![c])}>{r.contrib![c].toFixed(1)}</td>
-                )) : <><td className="nb-num">{r.fpg?.toFixed(1)}</td><td className="nb-num">{Math.round(r.value)}</td></>}
-                <td className="nb-tags">
-                  <button className={r.tag === 'never' ? 'nb-on' : ''} title="Never draft" onClick={() => tag(r, 'never')}>✕</button>
-                  <button className={r.tag === 'avoid' ? 'nb-on' : ''} title="Avoid" onClick={() => tag(r, 'avoid')}>↓</button>
-                  <button className={r.tag === 'like' ? 'nb-on' : ''} title="Like" onClick={() => tag(r, 'like')}>★</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="nb-dim nb-small">
-        {cats ? 'Category cells: season contribution, per-game strength weighted by games played. ' : ''}
-        Never-list players stay on the board, greyed, so you can see where they go; the advice never offers them.
-      </p>
-    </div>
-  )
-}
-
-// ── Context ──────────────────────────────────────────────────────────────────
 
 /**
- * Who picks between now and my next turn, and what their own history says
- * about how they draft. Information, not prediction: the advice does not use
- * it, because most habits in these leagues have not held year to year.
+ * Who picks between now and my next turn, and what their own history says.
+ * A drawer, opened when wanted: information, not prediction — the habits did
+ * not beat ADP over twelve seasons, so the advice ignores them.
  */
-function Before({ view, id }: { view: DraftView; id: string }) {
+function Before({ view, id, close }: { view: DraftView; id: string; close: () => void }) {
   const [asked, setAsked] = useState(false)
-  if (!view.history) return null
-  const h = view.history
+  const h = view.history!
   const load = async () => {
     setAsked(true)
     try { await post(`/api/nba/history/${id.replace(/-test$/, '')}`) } catch (e) { alert((e as Error).message) }
   }
   const rows = view.pickingBefore.filter((p) => p.manager)
   return (
-    <div className="nb-panel">
-      <div className="nb-h">Picking before you{h.seasons ? <span className="nb-dim"> · {h.seasons} seasons of this league</span> : null}</div>
-      {!h.seasons && (
-        <p className="nb-small nb-dim">
-          League history isn't loaded. <button className="nb-link" onClick={load} disabled={asked}>{asked ? 'Reading it from Yahoo…' : 'Read it from Yahoo'}</button> — only seasons you played in are used.
-        </p>
-      )}
-      {h.seasons > 0 && rows.length === 0 && <p className="nb-small nb-dim">{view.clock.onClock ? 'You are on the clock.' : 'Yahoo has not posted who sits where yet.'}</p>}
-      <ul className="nb-before">
-        {rows.map((p) => (
-          <li key={p.overall}>
-            <span className="nb-dim">#{p.overall}</span> <strong>{p.manager}</strong>
-            {p.habits.length === 0 && <span className="nb-dim nb-small">{p.seasons ? ' — drafts close to the league norm' : ' — no history'}</span>}
-            {p.habits.map((x) => (
-              <div key={x.metric} className="nb-small">
-                {x.text} <span className={`nb-str ${x.consistent ? 'nb-str-clear' : 'nb-str-thin'}`}>{x.consistent ? 'holds year to year' : 'unproven'}</span>
-              </div>
-            ))}
-          </li>
-        ))}
-      </ul>
-      {h.seasons > 0 && (
-        <p className="nb-small nb-dim">
-          {h.consistent.length
-            ? `Only ${h.consistent.map((c) => ({ reach: 'reaching', bigEarly: 'early centres', guardEarly: 'early point guards' } as Record<string, string>)[c]).join(' and ')} has held from one season to the next in this league.`
-            : 'No habit has held from one season to the next in this league, so the advice ignores them.'}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function Roster({ view }: { view: DraftView }) {
-  return (
-    <div className="nb-panel">
-      <div className="nb-h">Your roster <span className="nb-dim">{view.roster.length} of {view.league.rounds}</span></div>
-      {view.openSeats.length > 0 && view.roster.length > 0 && <div className="nb-need">Still need: {view.openSeats.join(', ')}</div>}
-      <ol className="nb-roster">
-        {view.roster.map((r) => <li key={r.id}><span className="nb-dim">R{r.round}</span> {r.name} <span className="nb-dim">{r.positions.join(',')}</span></li>)}
-        {!view.roster.length && <li className="nb-dim">No picks yet.</li>}
-      </ol>
-    </div>
-  )
-}
-
-function Feed({ view }: { view: DraftView }) {
-  if (!view.feed.length) return null
-  return (
-    <div className="nb-panel">
-      <div className="nb-h">What changed</div>
-      <ul className="nb-feed">
-        {view.feed.map((f, i) => <li key={i} className={`nb-feed-${f.kind}`}>{f.text}</li>)}
-      </ul>
-    </div>
-  )
-}
-
-function Log({ view }: { view: DraftView }) {
-  return (
-    <div className="nb-panel">
-      <div className="nb-h">Draft log</div>
-      <ol className="nb-log">
-        {view.log.map((l) => (
-          <li key={l.overall} className={l.mine ? 'nb-mine' : ''}><span className="nb-dim">#{l.overall}</span> {l.name} <span className="nb-dim">{l.manager ?? ''}</span></li>
-        ))}
-        {!view.log.length && <li className="nb-dim">Nothing drafted yet.</li>}
-      </ol>
-    </div>
+    <>
+      <div className="nb-scrim" onClick={close} />
+      <aside className="nb-drawer" role="dialog" aria-label="Picking before you">
+        <div className="nb-bhead"><span className="vlabel">PICKING BEFORE YOU</span>{h.seasons ? <span className="nb-dim nb-small">{h.seasons} seasons</span> : null}<span className="spacer" /><button className="chip" onClick={close}>✕</button></div>
+        {!h.seasons && <p className="nb-small nb-dim">League history isn't loaded. <button className="nb-link" onClick={load} disabled={asked}>{asked ? 'Reading it from Yahoo…' : 'Read it from Yahoo'}</button> — only seasons you played in are used.</p>}
+        {h.seasons > 0 && rows.length === 0 && <p className="nb-small nb-dim">{view.clock.onClock ? 'You are on the clock — nobody picks before you.' : 'Yahoo has not posted who sits where yet.'}</p>}
+        <ul className="nb-list">
+          {rows.map((p) => (
+            <li key={p.overall}>
+              <span className="mono nb-dim">#{p.overall}</span> <b>{p.manager}</b>
+              {p.habits.length === 0 && <span className="nb-dim nb-small">{p.seasons ? ' — close to the league norm' : ' — no history'}</span>}
+              {p.habits.map((x) => <div key={x.metric} className="nb-small">{x.text} <span className={`nb-tag ${x.consistent ? 'nb-hold' : ''}`}>{x.consistent ? 'holds' : 'unproven'}</span></div>)}
+            </li>
+          ))}
+        </ul>
+        {h.seasons > 0 && <p className="nb-small nb-dim">Information only: these habits did not predict picks better than ADP over this league's history, so the advice ignores them.</p>}
+      </aside>
+    </>
   )
 }

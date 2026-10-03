@@ -370,13 +370,15 @@ function viewOf(s: Session): DraftView {
   if (!s.dirty && s.view) return s.view
   const next = buildView(s.prep, s.draft, tagsFor(s.league.id), s.league.mock ? null : opponentReport(s.league.id.replace(/-test$/, '')))
   // What the advice said when I was on the clock, so the review can say where I went my own way.
-  if (next.clock.onClock && next.advice[0]) {
-    s.draft.advised = { ...(s.draft.advised ?? {}), [next.clock.overall]: next.advice[0].id }
+  if (next.clock.onClock && next.takeNow[0]) {
+    s.draft.advised = { ...(s.draft.advised ?? {}), [next.clock.overall]: next.takeNow[0].id }
     s.draft.turns = {
       ...(s.draft.turns ?? {}),
       [next.clock.overall]: {
         at: Date.now(),
-        advice: next.advice.map((a) => ({ id: a.id, score: a.score, survives: a.survives, canWait: a.canWait })),
+        // The cards first, in the order shown: the review judges a pick against what the screen said to take.
+        advice: [...next.takeNow, ...next.advice.filter((a) => !next.takeNow.some((t) => t.id === a.id))]
+          .map((a) => ({ id: a.id, score: a.score, survives: a.survives, canWait: a.canWait })),
         locks: [...s.draft.locks],
         stage: next.build?.stage ?? null,
       },
