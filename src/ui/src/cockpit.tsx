@@ -1094,6 +1094,8 @@ function Now({ tiles, onOpen, marks, closeCalls, nba = [] }: {
           .sort((a, b) => a.u - b.u || a.i - b.i)
           .map((x) => x.el)}
       </div>
+      {/* Football's cross-league exposure: football names, so not under the basketball filter. */}
+      {shown !== 'Basketball' && <Exposure />}
     </>
   )
 }
@@ -3821,7 +3823,7 @@ function Cockpit() {
           <div className="ckwrap">
             {tab === 'now' && (openLeague
               ? <League id={openLeague} onBack={() => setOpenLeague(null)} />
-              : <><Now tiles={tiles} onOpen={setOpenLeague} marks={marks} closeCalls={closeCalls} nba={nba} /><Exposure /></>)}
+              : <><Now tiles={tiles} onOpen={setOpenLeague} marks={marks} closeCalls={closeCalls} nba={nba} /></>)}
             {tab === 'news' && <NewsTab news={news} alerts={alerts} onRead={markRead} />}
             {tab === 'plan' && <MovesTab tiles={tiles} />}
             {tab === 'settings' && <Settings sources={sources} />}
