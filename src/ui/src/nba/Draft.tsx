@@ -354,7 +354,7 @@ function Review({ view }: { view: DraftView; act: Act }) {
         <div className="nb-bhead"><span className="vlabel">THE ROOM</span><span className="nb-dim nb-small">{r.expected != null ? 'categories a week against an average team' : 'season value over replacement'}</span></div>
         <ol className="nb-room">{r.room.map((t) => (
           <li key={t.seat} className={t.mine ? 'mine' : ''}>
-            <span className="mono nb-dim">{t.rank}.</span> {t.mine ? 'You' : t.manager ?? `Seat ${t.seat}`}{(t.mine || t.manager) && <span className="nb-dim"> seat {t.seat}</span>}
+            <span className="mono nb-dim">{t.rank}.</span> {t.mine ? 'You' : t.manager ?? `Pick ${t.seat}`}{(t.mine || t.manager) && <span className="nb-dim"> pick {t.seat}</span>}
             {t.picks < t.of && <span className="nb-dim nb-small">{t.picks} of {t.of} picks read</span>}
             <span className="spacer" /><b className="mono">{r.expected != null ? t.score.toFixed(2) : Math.round(t.score)}</b>
           </li>

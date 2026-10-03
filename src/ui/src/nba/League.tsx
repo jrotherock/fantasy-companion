@@ -181,7 +181,7 @@ function Prep({ leagueId }: { leagueId: string }) {
             ))}
             {r.table.length > 0 && (
               <table className="nl-table">
-                <thead><tr><th className="l">Mock</th><th>Seat</th>
+                <thead><tr><th className="l">Mock</th><th title="Your draft position: where you picked in round one">Pick</th>
                   {cats
                     ? <><th className="l" title="The punt your roster ended with, or the one you locked">Build</th><th title="Categories a week against an average team">Cats/wk</th><th title="Where that placed in the room">Place</th></>
                     : <><th title="Season value over replacement: points a game above the waiver line, times games, summed over your roster">Value</th><th title="Where your Value placed in the room">Place</th><th title="Your roster's fantasy points over the season: a game times games">FP season</th><th title="Where your season points placed in the room">Place</th></>}
