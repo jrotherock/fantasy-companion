@@ -96,6 +96,13 @@ function Screen({ id }: { id: string }) {
   const { view, error, act } = useDraft(id)
   const [drawer, setDrawer] = useState(false)
   const [rosterOpen, setRosterOpen] = useState(false)
+  // The review arrives at the top of the scrolling panel; bring it into view, since the eyes were on the board.
+  const reviewed = !!view?.review
+  useEffect(() => {
+    if (!reviewed) return
+    document.querySelector('.nb-panel')?.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [reviewed])
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setDrawer(false) }
     window.addEventListener('keydown', k)
@@ -140,6 +147,7 @@ function Status({ view, error, act, rosterOpen, setRosterOpen, drawer, setDrawer
     <div className="statusbar">
       <a className="nb-home" href={leaguePage(view)} title="The league's page">←</a>
       {c.done ? <span className="clockpill waiting">DONE</span>
+        : view.review ? <span className="clockpill waiting">YOUR DRAFT IS DONE</span>
         : view.league.slot == null ? <span className="clockpill waiting">PICK {c.overall}</span>
         : c.onClock ? <span className="clockpill">PICK {c.overall} — YOU</span>
         : <span className="clockpill waiting">PICK {c.overall}</span>}
@@ -347,6 +355,7 @@ function Review({ view }: { view: DraftView; act: Act }) {
         <ol className="nb-room">{r.room.map((t) => (
           <li key={t.seat} className={t.mine ? 'mine' : ''}>
             <span className="mono nb-dim">{t.rank}.</span> {t.mine ? 'You' : t.manager ?? `Seat ${t.seat}`}{(t.mine || t.manager) && <span className="nb-dim"> seat {t.seat}</span>}
+            {t.picks < t.of && <span className="nb-dim nb-small">{t.picks} of {t.of} picks read</span>}
             <span className="spacer" /><b className="mono">{r.expected != null ? t.score.toFixed(2) : Math.round(t.score)}</b>
           </li>
         ))}</ol>

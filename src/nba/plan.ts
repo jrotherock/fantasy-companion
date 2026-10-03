@@ -305,13 +305,13 @@ export interface DraftView {
      * Every team's draft on the same yardstick as mine, once every pick is in:
      * expected categories a week against an average team, or season value.
      */
-    room: { seat: number; manager: string | null; score: number; mine: boolean; rank: number }[] | null
+    room: { seat: number; manager: string | null; score: number; mine: boolean; rank: number; picks: number; of: number }[] | null
   }
   mock: NbaLeague['mock'] | null
 }
 
 /** How every team's draft came out, measured as mine is. */
-export function roomOf(prep: Prepared, d: StoredDraft, teams: number, mySlot: number): NonNullable<NonNullable<DraftView['review']>['room']> {
+export function roomOf(prep: Prepared, d: StoredDraft, teams: number, mySlot: number, rounds: number): NonNullable<NonNullable<DraftView['review']>['room']> {
   const bySeat = new Map<number, string[]>()
   for (const x of d.picks) {
     const seat = slotFor(x.overall, teams)
@@ -321,7 +321,7 @@ export function roomOf(prep: Prepared, d: StoredDraft, teams: number, mySlot: nu
     const score = prep.cats
       ? expectedCats(strengthOf(prep, ids), ids.length, prep.cats.base)
       : ids.reduce((n, id) => n + (prep.points!.byId.get(id)?.value ?? 0), 0)
-    return { seat, manager: d.managers?.[seat - 1] ?? null, score, mine: seat === mySlot, rank: 0 }
+    return { seat, manager: d.managers?.[seat - 1] ?? null, score, mine: seat === mySlot, rank: 0, picks: ids.length, of: rounds }
   }).sort((a, b) => b.score - a.score)
   rows.forEach((r, i) => (r.rank = i + 1))
   return rows
@@ -549,7 +549,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       followed: asked.length - departures.length,
       advisedPicks: asked.length,
       departures,
-      room: d.picks.length >= teams * rounds ? roomOf(prep, d, teams, slot!) : null,
+      // As soon as my roster is full: a mock room often closes before Yahoo reports its last few picks.
+      room: roomOf(prep, d, teams, slot!, rounds),
     }
   }
 
