@@ -93,10 +93,16 @@ test('names join across accents and suffixes, and a shared name needs the team',
 
 test('a season lost to injury counts against durability; a rookie has none', () => {
   const s = (season: number, gp: number) => ({ season, gp } as Season)
-  // In the league three seasons, missed the last entirely.
+  // In the league three seasons, missed the last entirely after two healthy ones: a one-off, at half weight.
   const hurt = durability([s(2023, 82), s(2024, 82)], 5, 2025)
   assert.equal(hurt.seasons, 3)
-  assert.equal(hurt.gpShare, (0 * 3 + 1 * 2 + 1 * 1) / 6)
+  assert.equal(hurt.gpShare, (0 * 1.5 + 1 * 2 + 1 * 1) / 4.5)
+  // Two lost seasons is a pattern: full weight.
+  const chronic = durability([s(2023, 82), s(2024, 15), s(2025, 20)], 5, 2025)
+  assert.equal(chronic.gpShare, ((20 / 82) * 3 + (15 / 82) * 2 + 1 * 1) / 6)
+  // A lost season beside thin ones is a pattern too.
+  const thin = durability([s(2023, 40), s(2024, 40), s(2025, 10)], 5, 2025)
+  assert.equal(thin.gpShare, ((10 / 82) * 3 + (40 / 82) * 2 + (40 / 82) * 1) / 6)
   // A second-year player is measured over his one season only.
   assert.deepEqual(durability([s(2025, 41)], 1, 2025), { seasons: 1, gpShare: 0.5 })
   assert.deepEqual(durability([], 0, 2025), { seasons: 0, gpShare: null })

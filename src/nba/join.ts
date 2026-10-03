@@ -86,24 +86,39 @@ export function consensus(lines: SourceLine[], durability: Durability, teamGames
   return { perGame, shooting, gp, gpSource, sources: lines.map((l) => l.source) as SourceId[] }
 }
 
+/** A season under this share of games is one lost to injury. */
+export const LOST_SEASON = 0.3
+/** The other seasons must average at least this for the lost one to count as a one-off. */
+export const OTHERWISE_HEALTHY = 0.6
+
 /**
  * Share of team games played over the last three seasons, weighted 3-2-1 from
  * the newest. A season the player was in the league for but has no row in
  * counts as nought: that is a season lost to injury, which is the point.
+ *
+ * One such season among healthy ones counts at half weight. A single
+ * season-ending injury — an Achilles, a broken leg — says less about the next
+ * season than a pattern does, and at full weight it dragged players back from
+ * one long injury far below where every expert board had them (Haliburton's
+ * lost 2025-26 put him at 43%). Two lost seasons, or a lost one beside thin
+ * ones, is a pattern and keeps its full weight. Whether he is still hurt is a
+ * separate question, answered by his return date.
  */
 export function durability(history: Season[], yearsExp: number | null, lastSeason: number, teamGames = 82): Durability {
   const bySeason = new Map(history.map((s) => [s.season, s]))
-  let weighted = 0, weights = 0, seasons = 0
+  const rows: { w: number; share: number }[] = []
   for (let i = 0; i < 3; i++) {
     const season = lastSeason - i
     const inLeague = bySeason.has(season) || (yearsExp != null && season > lastSeason - yearsExp)
     if (!inLeague) continue
-    const w = 3 - i
-    weighted += w * Math.min(1, (bySeason.get(season)?.gp ?? 0) / teamGames)
-    weights += w
-    seasons++
+    rows.push({ w: 3 - i, share: Math.min(1, (bySeason.get(season)?.gp ?? 0) / teamGames) })
   }
-  return { seasons, gpShare: weights ? weighted / weights : null }
+  const lost = rows.filter((r) => r.share < LOST_SEASON)
+  const others = rows.filter((r) => r.share >= LOST_SEASON)
+  const oneOff = lost.length === 1 && others.length >= 1 && others.reduce((s, r) => s + r.share, 0) / others.length >= OTHERWISE_HEALTHY
+  if (oneOff) lost[0].w /= 2
+  const weights = rows.reduce((s, r) => s + r.w, 0)
+  return { seasons: rows.length, gpShare: weights ? rows.reduce((s, r) => s + r.w * r.share, 0) / weights : null }
 }
 
 const nextDay = (d: string) => {

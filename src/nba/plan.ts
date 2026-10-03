@@ -210,6 +210,28 @@ function buildValues(prep: Prepared, punt: Cat[]) {
   return cache.get(key)!
 }
 
+/**
+ * A player whose rank jumps this far under one build is drafted for that build:
+ * Giannis is 37th balanced and 4th punting free throws, which is the price the
+ * expert boards quote. Shown beside the balanced rank, never instead of it.
+ */
+export const BUILD_JUMP = 20
+
+export interface BestBuild { name: string; rank: number; balanced: number }
+
+/** The build a player is worth most in, where it is worth a good deal more than balanced. */
+export function bestBuildOf(prep: Prepared, id: string): BestBuild | null {
+  if (!prep.cats) return null
+  const balanced = buildValues(prep, []).get(id)?.rank
+  if (balanced == null) return null
+  let best: BestBuild | null = null
+  for (const path of PATHS.slice(1)) {
+    const rank = buildValues(prep, path.punt).get(id)?.rank
+    if (rank != null && (!best || rank < best.rank)) best = { name: path.name, rank, balanced }
+  }
+  return best && balanced - best.rank >= BUILD_JUMP && best.rank <= 150 ? best : null
+}
+
 export interface BoardRow {
   id: string
   name: string
@@ -224,6 +246,8 @@ export interface BoardRow {
   contrib?: Record<Cat, number>
   /** Fantasy points per game (points leagues). */
   fpg?: number
+  /** Categories leagues: the build he ranks far higher in, if there is one. */
+  bestBuild?: BestBuild | null
   /** Fantasy points per projected minute (points leagues): who scores in the minutes he gets. */
   fpMin?: number | null
   /** Fantasy points over the season: per game times the games he is expected to play (points leagues). */
@@ -267,7 +291,7 @@ export interface DraftView {
     locks: Cat[]
     expected: number | null
   }
-  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null })[]
+  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; bestBuild: BestBuild | null })[]
   /**
    * The three cards: the best players to take with this pick. A player the
    * room will very likely leave until my next turn is not an option for this
@@ -469,6 +493,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       gp: (prep.cats?.byId.get(a.id)?.games.gp ?? prep.points?.byId.get(a.id)?.games.gp) ?? 0,
       playoff: prep.playoff(a.id),
       returnNote: prep.returnNote(a.id),
+      bestBuild: bestBuildOf(prep, a.id),
     }))
   }
 
@@ -531,6 +556,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       value: v.value, rank: v.rank,
       contrib: prep.cats ? contribution(r as CatRow) : undefined,
       fpg: prep.points ? (r as PointsRow).fpg : undefined,
+      bestBuild: bestBuildOf(prep, r.id),
       fpMin: prep.points ? ((pl.projection?.perGame.min ?? 0) > 0 ? (r as PointsRow).fpg / pl.projection!.perGame.min : null) : undefined,
       fpSeason: prep.points ? (r as PointsRow).season : undefined,
       // Chance he lasts to the next decision: the pick after this one when I am on the clock.

@@ -15,6 +15,7 @@ import type { Cat } from '../../../nba/value'
 const CATS: Cat[] = ['fg', 'ft', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to']
 const LABEL: Record<Cat, string> = { fg: 'FG%', ft: 'FT%', tpm: '3PM', pts: 'PTS', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO' }
 const pct = (x: number) => `${Math.round(x * 100)}%`
+const ordinal = (n: number) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`
 const POSITIONS = ['All', 'PG', 'SG', 'SF', 'PF', 'C']
 
 type Tag = 'never' | 'avoid' | 'like'
@@ -238,6 +239,7 @@ function Take({ view, act }: { view: DraftView; act: Act }) {
               <span className="nb-dim">{Math.round(a.gp)} g</span>
               {a.playoff != null && <span className={po(a.playoff, view.playoffNorm)}>{a.playoff} PO g</span>}
               {a.returnNote && <span className="nb-down">{a.returnNote}</span>}
+              {a.bestBuild && a.bestBuild.name !== view.aheadBuild && <span className="nb-bb">{ordinal(a.bestBuild.rank)} if {a.bestBuild.name.replace(/^Punt /, 'you punt ')}</span>}
             </div>
             <div className={`nb-fate ${a.there != null || a.canWait ? 'nb-wait' : 'nb-gone'}`}>
               {a.there != null ? `${pct(a.there)} there at pick ${view.clock.myNext}` : a.canWait ? `${pct(a.survives)} back next turn — can wait` : `${pct(1 - a.survives)} gone by your next turn`}
@@ -419,6 +421,7 @@ function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
             <li><b>#</b> is value for your build; it re-ranks when you lock, and locked columns fade.</li>
             <li><b>Coloured cells</b>: what a player adds per category over a season. Read down the <span className="nb-amber">amber headers</span> — your coin flips — to find who tips one to green.</li>
             {!cats && <li><b>FP/g</b> fantasy points a game; <b>FP/min</b> per minute he is projected to play — high means he scores in what he gets, so more minutes would show; <b>FP season</b> a game times his games. <b>Value</b> is not the season total: it is points a game above the replacement line times games, so a replacement-level player is worth nought however much he scores.</li>}
+            {cats && <li><b>Blue note</b> beside a name: where he ranks in the build he is drafted for, when that is 20+ places higher than balanced — Giannis is a first-rounder only if you punt FT%. Lock that punt and the board re-ranks for it.</li>}
             <li><b>Next</b>: chance he lasts to your next pick. Above about 60%, he can wait. <b>PO</b>: games in your playoff weeks, the tiebreaker.</li>
             <li>Grey rows are your never list. A red note means he starts the season hurt; set your own return date beside it.</li>
             <li>Check a name here; let the cards above make the call.</li>
@@ -446,6 +449,9 @@ function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
                 <td className="nb-l">
                   {r.name}
                   {r.tag && <span className={`nb-tag nb-${r.tag}`}>{r.tag}</span>}
+                  {r.bestBuild && r.bestBuild.name !== view.aheadBuild && !locks.length && (
+                    <span className="nb-bb" title={`${r.bestBuild.balanced}th balanced; ${ordinal(r.bestBuild.rank)} in a ${r.bestBuild.name} build`}>{ordinal(r.bestBuild.rank)} {r.bestBuild.name.replace(/^Punt /, 'punting ')}</span>
+                  )}
                   {r.injury && !r.returnNote && <span className="nb-inj">{r.injury}</span>}
                   {r.returnNote && (
                     <span className="nb-return" title="When he is expected back; set your own date to override">

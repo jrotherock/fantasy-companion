@@ -1,5 +1,5 @@
 {
- "built": "2026-10-03T03:34:29.650Z",
+ "built": "2026-10-03T15:11:14.568Z",
  "season": 2026,
  "players": [
   {
@@ -1124,7 +1124,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.541
+    "gpShare": 0.656
    }
   },
   {
@@ -1586,7 +1586,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.435
+    "gpShare": 0.58
    }
   },
   {
@@ -2838,7 +2838,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.508
+    "gpShare": 0.617
    }
   },
   {
@@ -3808,7 +3808,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.675
+    "gpShare": 0.712
    }
   },
   {
@@ -5584,7 +5584,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.565
+    "gpShare": 0.676
    }
   },
   {
@@ -6533,7 +6533,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.396
+    "gpShare": 0.508
    }
   },
   {
@@ -7183,7 +7183,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.482
+    "gpShare": 0.561
    }
   },
   {
@@ -7326,7 +7326,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.321
+    "gpShare": 0.428
    }
   },
   {
@@ -8709,7 +8709,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.368
+    "gpShare": 0.434
    }
   },
   {
@@ -9840,7 +9840,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.703
+    "gpShare": 0.754
    }
   },
   {
@@ -10432,7 +10432,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.671
+    "gpShare": 0.761
    }
   },
   {
@@ -10570,7 +10570,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.382
+    "gpShare": 0.509
    }
   },
   {
@@ -11014,7 +11014,7 @@
    ],
    "durability": {
     "seasons": 2,
-    "gpShare": 0.402
+    "gpShare": 0.517
    }
   },
   {
@@ -17981,7 +17981,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.604
+    "gpShare": 0.711
    }
   },
   {
@@ -19347,7 +19347,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.671
+    "gpShare": 0.705
    }
   },
   {
@@ -20415,7 +20415,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.567
+    "gpShare": 0.68
    }
   },
   {
@@ -20740,7 +20740,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.575
+    "gpShare": 0.641
    }
   },
   {
@@ -21387,7 +21387,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.756
+    "gpShare": 0.813
    }
   },
   {
@@ -21854,7 +21854,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.687
+    "gpShare": 0.725
    }
   },
   {
@@ -23603,7 +23603,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.392
+    "gpShare": 0.523
    }
   },
   {
@@ -24328,7 +24328,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.537
+    "gpShare": 0.585
    }
   },
   {
@@ -25026,7 +25026,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.642
+    "gpShare": 0.676
    }
   },
   {
@@ -25579,7 +25579,7 @@
      "fga": 7.57,
      "fta": 2.14
     },
-    "gp": 46,
+    "gp": 55.75,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -25633,7 +25633,7 @@
    ],
    "durability": {
     "seasons": 2,
-    "gpShare": 0.561
+    "gpShare": 0.68
    }
   },
   {
@@ -28850,7 +28850,7 @@
      "fga": 5.83,
      "fta": 0.97
     },
-    "gp": 65.667,
+    "gp": 69.818,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -28926,7 +28926,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.801
+    "gpShare": 0.851
    }
   },
   {
@@ -29392,7 +29392,7 @@
    ],
    "durability": {
     "seasons": 2,
-    "gpShare": 0.602
+    "gpShare": 0.683
    }
   },
   {
@@ -30744,7 +30744,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.583
+    "gpShare": 0.615
    }
   },
   {
@@ -31975,7 +31975,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.417
+    "gpShare": 0.507
    }
   },
   {
@@ -32395,7 +32395,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.358
+    "gpShare": 0.453
    }
   },
   {
@@ -34951,7 +34951,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.634
+    "gpShare": 0.667
    }
   },
   {
@@ -35576,7 +35576,7 @@
      "fga": 6.4,
      "fta": 1.08
     },
-    "gp": 49.667,
+    "gp": 54.8,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -35652,7 +35652,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.606
+    "gpShare": 0.668
    }
   },
   {
@@ -36421,7 +36421,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.459
+    "gpShare": 0.572
    }
   },
   {
@@ -38520,7 +38520,7 @@
      "fga": 6.28,
      "fta": 1.19
     },
-    "gp": 57.5,
+    "gp": 61.455,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -38596,7 +38596,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.701
+    "gpShare": 0.749
    }
   },
   {
@@ -38803,7 +38803,7 @@
      "fga": 4.87,
      "fta": 1.26
     },
-    "gp": 65,
+    "gp": 70.182,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -38879,7 +38879,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.793
+    "gpShare": 0.856
    }
   },
   {
@@ -42016,7 +42016,7 @@
      "fga": 5.44,
      "fta": 0.69
     },
-    "gp": 55,
+    "gp": 58.091,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -42092,7 +42092,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.671
+    "gpShare": 0.708
    }
   },
   {
@@ -43117,7 +43117,7 @@
      "fga": 6.04,
      "fta": 2.8
     },
-    "gp": 46.667,
+    "gp": 49.455,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -43193,7 +43193,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.569
+    "gpShare": 0.603
    }
   },
   {
@@ -43641,7 +43641,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.614
+    "gpShare": 0.664
    }
   },
   {
@@ -44360,7 +44360,7 @@
      "fga": 4.13,
      "fta": 1.37
     },
-    "gp": 51.5,
+    "gp": 54,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -44436,7 +44436,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.628
+    "gpShare": 0.659
    }
   },
   {
@@ -44501,7 +44501,7 @@
      "fga": 3.06,
      "fta": 0.61
     },
-    "gp": 52.667,
+    "gp": 56.727,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -44577,7 +44577,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.642
+    "gpShare": 0.692
    }
   },
   {
@@ -45762,7 +45762,7 @@
      "fga": 3,
      "fta": 0.73
     },
-    "gp": 56.833,
+    "gp": 62,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -45816,7 +45816,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.693
+    "gpShare": 0.756
    }
   },
   {
@@ -46938,7 +46938,7 @@
      "fga": 2.73,
      "fta": 0.52
     },
-    "gp": 46.4,
+    "gp": 53,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -46992,7 +46992,7 @@
    ],
    "durability": {
     "seasons": 2,
-    "gpShare": 0.566
+    "gpShare": 0.646
    }
   },
   {
@@ -48558,7 +48558,7 @@
      "fga": 6.13,
      "fta": 0.88
     },
-    "gp": 44.833,
+    "gp": 54.444,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -48634,7 +48634,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.547
+    "gpShare": 0.664
    }
   },
   {
@@ -50545,7 +50545,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.632
+    "gpShare": 0.745
    }
   },
   {
@@ -51262,7 +51262,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.439
+    "gpShare": 0.488
    }
   },
   {
@@ -51320,7 +51320,7 @@
      "fga": 4.83,
      "fta": 1.91
     },
-    "gp": 35,
+    "gp": 39.4,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -51396,7 +51396,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.427
+    "gpShare": 0.48
    }
   },
   {
@@ -52149,7 +52149,7 @@
      "fga": 6.33,
      "fta": 0.92
     },
-    "gp": 42.5,
+    "gp": 49,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -52225,7 +52225,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.518
+    "gpShare": 0.598
    }
   },
   {
@@ -52505,7 +52505,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.585
+    "gpShare": 0.695
    }
   },
   {
@@ -52560,7 +52560,7 @@
      "fga": 6.93,
      "fta": 1.37
     },
-    "gp": 26.5,
+    "gp": 35.333,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -52614,7 +52614,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.323
+    "gpShare": 0.431
    }
   },
   {
@@ -52898,7 +52898,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.478
+    "gpShare": 0.561
    }
   },
   {
@@ -53167,7 +53167,7 @@
      "fga": 6.25,
      "fta": 0.82
     },
-    "gp": 47.833,
+    "gp": 56.444,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -53243,7 +53243,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.583
+    "gpShare": 0.688
    }
   },
   {
@@ -54001,7 +54001,7 @@
      "fga": 4.38,
      "fta": 1.29
     },
-    "gp": 34,
+    "gp": 40.333,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -54077,7 +54077,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.415
+    "gpShare": 0.492
    }
   },
   {
@@ -54412,7 +54412,7 @@
      "fga": 5.1,
      "fta": 1.05
     },
-    "gp": 40.4,
+    "gp": 49.25,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -54466,7 +54466,7 @@
    ],
    "durability": {
     "seasons": 2,
-    "gpShare": 0.493
+    "gpShare": 0.601
    }
   },
   {
@@ -54629,7 +54629,7 @@
      "fga": 5.93,
      "fta": 2.17
     },
-    "gp": 29.5,
+    "gp": 39.333,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -54683,7 +54683,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.36
+    "gpShare": 0.48
    }
   },
   {
@@ -55514,7 +55514,7 @@
      "fga": 2.24,
      "fta": 1.48
     },
-    "gp": 42.167,
+    "gp": 49.556,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -55590,7 +55590,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.514
+    "gpShare": 0.604
    }
   },
   {
@@ -55643,7 +55643,7 @@
      "fga": 5.28,
      "fta": 0.5
     },
-    "gp": 39.833,
+    "gp": 53.111,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -55697,7 +55697,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.486
+    "gpShare": 0.648
    }
   },
   {
@@ -56143,7 +56143,7 @@
      "fga": 5.36,
      "fta": 0.72
     },
-    "gp": 46.833,
+    "gp": 50.636,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -56219,7 +56219,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.571
+    "gpShare": 0.618
    }
   },
   {
@@ -57814,7 +57814,7 @@
      "fga": 4.33,
      "fta": 1.04
     },
-    "gp": 27,
+    "gp": 36,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -57868,7 +57868,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.329
+    "gpShare": 0.439
    }
   },
   {
@@ -59289,7 +59289,7 @@
      "fga": 1.18,
      "fta": 0.36
     },
-    "gp": 39,
+    "gp": 49.667,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -59365,7 +59365,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.476
+    "gpShare": 0.606
    }
   },
   {
@@ -63253,7 +63253,7 @@
      "fga": 4.53,
      "fta": 0.59
     },
-    "gp": 50.333,
+    "gp": 53.364,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -63329,7 +63329,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.614
+    "gpShare": 0.651
    }
   },
   {
@@ -63383,7 +63383,7 @@
      "fga": 3.05,
      "fta": 0.32
     },
-    "gp": 38,
+    "gp": 44.667,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -63459,7 +63459,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.463
+    "gpShare": 0.545
    }
   },
   {
@@ -65482,7 +65482,7 @@
      "fga": 4,
      "fta": 1.07
     },
-    "gp": 29.5,
+    "gp": 36.333,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -65558,7 +65558,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.36
+    "gpShare": 0.443
    }
   },
   {
@@ -65826,7 +65826,7 @@
      "fga": 2.91,
      "fta": 0.62
     },
-    "gp": 32.5,
+    "gp": 43.333,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -65880,7 +65880,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.396
+    "gpShare": 0.528
    }
   },
   {
@@ -66497,7 +66497,7 @@
      "fga": 2.81,
      "fta": 0.44
     },
-    "gp": 27.333,
+    "gp": 34.444,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -66573,7 +66573,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.333
+    "gpShare": 0.42
    }
   },
   {
@@ -67665,7 +67665,7 @@
      "fga": 2.67,
      "fta": 0.43
     },
-    "gp": 39.333,
+    "gp": 45.111,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -67741,7 +67741,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.48
+    "gpShare": 0.55
    }
   },
   {
@@ -68663,7 +68663,7 @@
      "fga": 2,
      "fta": 0.14
     },
-    "gp": 52.167,
+    "gp": 56,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -68739,7 +68739,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.636
+    "gpShare": 0.683
    }
   },
   {
@@ -68984,7 +68984,7 @@
      "fga": 2.97,
      "fta": 0.74
     },
-    "gp": 34.167,
+    "gp": 43.556,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -69060,7 +69060,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.417
+    "gpShare": 0.531
    }
   },
   {
@@ -69916,7 +69916,7 @@
      "fga": 1.71,
      "fta": 0.23
     },
-    "gp": 35,
+    "gp": 43.333,
     "gpSource": "history",
     "sources": [
      "sleeper"
@@ -69992,7 +69992,7 @@
    ],
    "durability": {
     "seasons": 3,
-    "gpShare": 0.427
+    "gpShare": 0.528
    }
   },
   {

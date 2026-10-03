@@ -170,3 +170,6 @@ div.nb-cat { cursor: default; }
 .nb-room li { display: flex; gap: 0.4rem; align-items: baseline; padding: 0.2rem 0.4rem; border-radius: 3px; }
 .nb-room li.mine { background: color-mix(in srgb, var(--amber) 12%, transparent); }
 .nb-room .spacer { flex: 1; }
+
+/* A player's rank in the build he is drafted for, where it is far above balanced */
+.nb-bb { display: inline-block; margin-left: 0.4rem; font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 45%, transparent); border-radius: 3px; padding: 0 0.3rem; }
