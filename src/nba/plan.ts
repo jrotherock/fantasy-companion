@@ -291,7 +291,11 @@ export interface DraftView {
     locks: Cat[]
     expected: number | null
   }
-  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; bestBuild: BestBuild | null })[]
+  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; fitBreak?: boolean; returnNote: string | null; there: number | null; bestBuild: BestBuild | null
+    /** Which of my roster's weak categories he would help, from my first pick on. */
+    fits: Cat[]
+    /** Which of its strong ones he would add to: leaning in rather than covering. */
+    stacks: Cat[] })[]
   /**
    * The three cards: the best players to take with this pick. A player the
    * room will very likely leave until my next turn is not an option for this
@@ -303,6 +307,15 @@ export interface DraftView {
   canWait: { name: string; survives: number }[]
   /** When the first choices are too close to call and the playoff schedule separates them. */
   playoffNote: string | null
+  /** My roster's weakest categories as it stands, and whose they are ("Shai's" after one pick). */
+  weakSpots: { cats: Cat[]; whose: string } | null
+  /** Its strongest: what a pick could stack instead, for a build that leans into them. */
+  strongSpots: Cat[]
+  /**
+   * After I take a player who is drafted for a punt, the builds to offer to lock,
+   * best first. Null once anything is locked, or when my last pick was not such a player.
+   */
+  anchor: { playerId: string; name: string; overall: number; balanced: number; options: { name: string; punt: Cat[]; rank: number }[] } | null
   playoffNorm: number | null
   /** How many players are on the never list, so an empty one is noticed. */
   neverCount: number
@@ -471,6 +484,22 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     }
   }
 
+  // ── My roster's weak spots: what a pick could cover, from the first pick on ──
+  let weakSpots: DraftView['weakSpots'] = null
+  let strongSpots: Cat[] = []
+  if (prep.cats && mine.length) {
+    const w = winChances(strengthOf(prep, mine), mine.length, prep.cats.base)
+    const live = CATS.filter((c) => !d.locks.includes(c))
+    const cats = live.filter((c) => w[c] < 0.5).sort((a, b) => w[a] - w[b]).slice(0, 3)
+    strongSpots = live.filter((c) => w[c] >= 0.6).sort((a, b) => w[b] - w[a]).slice(0, 3)
+    const first = p(mine[0]).name.split(' ')
+    weakSpots = cats.length ? { cats, whose: mine.length === 1 ? `${first[first.length - 1]}'s` : 'your' } : null
+  }
+  const fitsOf = (contrib: Record<Cat, number> | undefined): Cat[] =>
+    weakSpots && contrib ? weakSpots.cats.filter((c) => contrib[c] >= FIT_MIN) : []
+  const stacksOf = (contrib: Record<Cat, number> | undefined): Cat[] =>
+    contrib ? strongSpots.filter((c) => contrib[c] >= FIT_MIN) : []
+
   // ── Advice ──
   let advice: DraftView['advice'] = []
   let playoffNote: string | null = null
@@ -479,7 +508,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     const there = (id: string) => onClock || survival(prep.adp(id), myNext!) >= 0.5
     const raw = prep.cats
       ? adviseCategories(prep.cats.rows.filter((r) => !taken.has(r.id) && there(r.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
-        { canTake, neutralUntil: BUILD_FROM, ignore: d.locks })
+        // A lock is a build you have declared: from then on the roster is read as it is.
+        { canTake, neutralUntil: d.locks.length ? 0 : BUILD_FROM, ignore: d.locks })
       : advisePoints(prep.points!.rows.filter((r) => !taken.has(r.id) && there(r.id)), spot, 25, canTake)
     // Fifteen, though the screen shows six: comparing mocks needs the score of whoever I took instead.
     advice = raw.slice(0, 15).map((a) => ({
@@ -494,6 +524,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       playoff: prep.playoff(a.id),
       returnNote: prep.returnNote(a.id),
       bestBuild: bestBuildOf(prep, a.id),
+      fits: prep.cats ? fitsOf(contribution(prep.cats.byId.get(a.id)!)) : [],
+      stacks: prep.cats ? stacksOf(contribution(prep.cats.byId.get(a.id)!)) : [],
     }))
   }
 
@@ -618,9 +650,30 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   let takeNow = [...urgent, ...advice.filter((a) => a.canWait)].slice(0, 3)
   // The tiebreak orders the cards, never the players you are told can wait.
   if (takeNow.length) {
-    const tb = playoffTiebreak(takeNow, prep.cats ? 0.02 : Math.abs(takeNow[0].score) * 0.01)
-    takeNow = tb.advice
-    playoffNote = tb.note
+    const margin = prep.cats ? 0.02 : Math.abs(takeNow[0].score) * 0.01
+    // Fit first: among cards too close to call, the one covering my weak spots. Then the playoff weeks.
+    const fb = fitTiebreak(takeNow, margin, (a) => fitScore(prep, a.id, weakSpots?.cats ?? []), weakSpots?.whose ?? 'your')
+    if (fb.note) { takeNow = fb.advice; playoffNote = fb.note }
+    else {
+      const tb = playoffTiebreak(takeNow, margin)
+      takeNow = tb.advice
+      playoffNote = tb.note
+    }
+  }
+
+  // ── After a pick that is drafted for a punt: offer to lock it ──
+  let anchor: DraftView['anchor'] = null
+  const last = mineP[mineP.length - 1]
+  if (prep.cats && !d.locks.length && last) {
+    const bb = bestBuildOf(prep, last.playerId)
+    if (bb) {
+      const options = PATHS.slice(1)
+        .map((path) => ({ name: path.name, punt: path.punt, rank: buildValues(prep, path.punt).get(last.playerId)?.rank ?? 999 }))
+        .filter((o) => o.rank <= bb.rank + 5)
+        .sort((a, b) => a.punt.length - b.punt.length || a.rank - b.rank)
+        .slice(0, 2)
+      anchor = { playerId: last.playerId, name: p(last.playerId).name, overall: last.overall, balanced: bb.balanced, options }
+    }
   }
   const canWait = advice.filter((a) => a.canWait && !takeNow.includes(a)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
 
@@ -632,6 +685,9 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     review,
     mock: L.mock ?? null,
     playoffNote,
+    weakSpots,
+    strongSpots,
+    anchor,
     playoffNorm: prep.playoffNorm,
     neverCount: [...tags.values()].filter((t) => t === 'never').length,
     league: { id: L.id, label: L.label, scoring: L.scoring, teams, rounds, slot, slotSource: d.slotSource, myTeamName: L.myTeamName },
@@ -749,6 +805,41 @@ export function recordOf(prep: Prepared, d: StoredDraft, tags: Map<string, PrefT
  * playoff weeks goes first. A clear gap is never overruled: the schedule is
  * three weeks of twenty.
  */
+/** A category counts as covered when a player adds at least this much of it over a season (in z, games-weighted). */
+export const FIT_MIN = 0.25
+
+/** How much a player shores up my weak categories: his season contribution in them, the positive part. */
+function fitScore(prep: Prepared, id: string, weak: Cat[]): number {
+  const r = prep.cats?.byId.get(id)
+  if (!r || !weak.length) return 0
+  const c = contribution(r)
+  return weak.reduce((s, k) => s + Math.max(0, c[k]), 0)
+}
+
+/** Fit has to differ by this much before it decides a close call; less is noise. */
+export const FIT_GAP = 0.3
+
+/**
+ * Among cards too close to call on value, the one that covers my weak spots
+ * goes first. It never overrules a clear gap: a better player still leads.
+ */
+export function fitTiebreak<T extends { name: string; score: number; fitBreak?: boolean; fits: Cat[] }>(
+  advice: T[], margin: number, fit: (a: T) => number, whose: string,
+): { advice: T[]; note: string | null } {
+  if (advice.length < 2) return { advice, note: null }
+  const close = advice.filter((a) => advice[0].score - a.score <= margin)
+  if (close.length < 2) return { advice, note: null }
+  const scored = close.map((a) => ({ a, f: fit(a) }))
+  const best = scored.reduce((x, y) => (y.f > x.f ? y : x))
+  if (best.a === advice[0] || best.f - fit(advice[0]) < FIT_GAP) return { advice, note: null }
+  const rest = advice.filter((a) => a !== best.a)
+  const covers = best.a.fits.map((c) => CAT_LABEL[c]).join(', ')
+  return {
+    advice: [{ ...best.a, fitBreak: true }, ...rest],
+    note: `${close.map((a) => a.name).join(', ')} are too close to call; ${best.a.name} covers ${whose} weak ${covers || 'categories'} — so he goes first.`,
+  }
+}
+
 export function playoffTiebreak<T extends { name: string; score: number; playoff: number | null; tiebreak?: boolean }>(advice: T[], margin: number): { advice: T[]; note: string | null } {
   if (advice.length < 2) return { advice, note: null }
   const top = advice[0].score

@@ -173,3 +173,10 @@ div.nb-cat { cursor: default; }
 
 /* A player's rank in the build he is drafted for, where it is far above balanced */
 .nb-bb { display: inline-block; margin-left: 0.4rem; font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 45%, transparent); border-radius: 3px; padding: 0 0.3rem; }
+
+/* Which of my weak categories a card covers */
+.nb-fits { font-size: var(--t-xs); color: var(--green); font-family: var(--mono); letter-spacing: 0.02em; }
+/* After a pick drafted for a punt: the lock, one tap away */
+.nb-anchor { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; background: color-mix(in srgb, var(--blue) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--blue) 50%, var(--line)); border-radius: 4px; padding: 0.45rem 0.6rem; margin-bottom: 0.4rem; font-size: var(--t-sm); }
+.nb-anchor-acts { display: flex; gap: 0.35rem; margin-left: auto; }
+.nb-stacks { color: var(--blue); }

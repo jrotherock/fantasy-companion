@@ -233,3 +233,51 @@ test('a points mock places my roster against every team\'s season points total',
   assert.ok(Math.abs(r.fpSeason! - totals.get(5)!) < 1e-6)
   assert.ok(r.place!.result >= 1 && r.place!.result <= 16)
 })
+
+test('after taking Giannis the lock is offered at once; once locked, the offer goes', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
+  const giannis = players.find((p: any) => p.name === 'Giannis Antetokounmpo').id
+  const d = { ...emptyDraft('t'), slot: 1 }
+  d.picks = [{ overall: 1, playerId: giannis, name: 'Giannis', source: 'manual' as const }]
+  const v = buildView(hoops, d, new Map())
+  assert.ok(v.anchor, 'offered after one pick, without waiting for the fourth')
+  assert.ok(v.anchor!.options.some((o) => o.punt.includes('ft')), JSON.stringify(v.anchor!.options))
+  const locked = buildView(hoops, { ...d, locks: ['ft'] }, new Map())
+  assert.equal(locked.anchor, null)
+})
+
+test('after Shai the cards say what each covers and what it stacks', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
+  const sga = players.find((p: any) => p.name === 'Shai Gilgeous-Alexander').id
+  const d = { ...emptyDraft('t'), slot: 3 }
+  // Shai at 3, then the room picks by ADP to my next turn (pick 18 in a 10-team snake).
+  const rest = hoops.adpOrder.filter((id) => id !== sga)
+  d.picks = Array.from({ length: 17 }, (_, i) => ({ overall: i + 1, playerId: i === 2 ? sga : rest[i < 2 ? i : i - 1], name: '', source: 'manual' as const }))
+  const v = buildView(hoops, d, new Map())
+  assert.equal(v.clock.onClock, true)
+  assert.ok(v.weakSpots && v.weakSpots.whose.endsWith("'s"))
+  assert.ok(v.weakSpots!.cats.some((c) => ['reb', 'blk', 'tpm'].includes(c)), `weak: ${v.weakSpots!.cats}`)
+  assert.ok(v.strongSpots.length > 0)
+  assert.ok(v.takeNow.every((a) => Array.isArray(a.fits) && Array.isArray(a.stacks)))
+  // Locking a punt takes it off the weak spots: going guard-heavy stops the push toward bigs.
+  const leaning = buildView(hoops, { ...d, locks: ['reb', 'blk'] }, new Map())
+  assert.ok(!leaning.weakSpots?.cats.some((c) => c === 'reb' || c === 'blk'))
+})
+
+test('fit decides a close call and never overrules a clear gap', async () => {
+  const { fitTiebreak } = await import('./plan.js')
+  const card = (name: string, score: number, fits: any[] = []) => ({ name, score, fits })
+  const fit = (a: { name: string }) => (a.name === 'Big' ? 1.2 : 0)
+  const close = fitTiebreak([card('Guard', 5.01), card('Big', 5.0, ['reb', 'blk'])], 0.02, fit, "Shai's")
+  assert.equal(close.advice[0].name, 'Big')
+  assert.match(close.note!, /covers Shai's weak REB, BLK/)
+  const clear = fitTiebreak([card('Guard', 5.2), card('Big', 5.0, ['reb'])], 0.02, fit, "Shai's")
+  assert.equal(clear.advice[0].name, 'Guard')
+  assert.equal(clear.note, null)
+})

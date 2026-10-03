@@ -120,6 +120,7 @@ function Screen({ id }: { id: string }) {
           : view.review ? null
           : <>
               <Notice view={view} />
+              <Anchor view={view} act={act} />
               <Take view={view} act={act} />
               {cats && <Build view={view} act={act} />}
             </>}
@@ -213,6 +214,27 @@ function reasons(contrib: Record<Cat, number> | undefined, locks: Cat[]) {
   return <>{up.map((c) => <span key={c} className="nb-up">+{LABEL[c]}</span>)}{down.map((c) => <span key={c} className="nb-down">−{LABEL[c]}</span>)}</>
 }
 
+/**
+ * After a pick that is drafted for a punt — Giannis for free throws — the lock
+ * is one tap away rather than something to remember. Dismissed for this pick
+ * only; the next such pick asks again.
+ */
+function Anchor({ view, act }: { view: DraftView; act: Act }) {
+  const a = view.anchor
+  const [gone, setGone] = useState<number | null>(null)
+  if (!a || gone === a.overall) return null
+  return (
+    <div className="nb-anchor">
+      <span className="nb-notice-h">BUILD</span>
+      <span>{a.name} is drafted for a punt: {a.balanced}th balanced, {a.options.map((o) => `${ordinal(o.rank)} in ${o.name}`).join(', ')}. Lock it so the advice stops counting what you are giving up?</span>
+      <span className="nb-anchor-acts">
+        {a.options.map((o) => <button key={o.name} className="btn primary" onClick={() => act('locks', { locks: o.punt })}>Lock {o.name.replace(/^Punt /, '')}</button>)}
+        <button className="btn" onClick={() => setGone(a.overall)}>Not now</button>
+      </span>
+    </div>
+  )
+}
+
 function Take({ view, act }: { view: DraftView; act: Act }) {
   const cards = view.takeNow
   if (!cards.length) return null
@@ -225,6 +247,7 @@ function Take({ view, act }: { view: DraftView; act: Act }) {
       <div className="vhead">
         <span className="vlabel">{onClock ? 'TAKE' : `LIKELY THERE AT YOUR PICK ${view.clock.myNext}`}</span>
         {onClock && <span className={`conf ${close ? 'close' : 'clear'}`}>{close ? 'close call' : 'clear pick'}</span>}
+        {cards[0].fitBreak && <span className="conf close">fit tiebreak</span>}
         {cards[0].tiebreak && <span className="conf close">playoff tiebreak</span>}
       </div>
       <div className="threeup">
@@ -241,6 +264,12 @@ function Take({ view, act }: { view: DraftView; act: Act }) {
               {a.returnNote && <span className="nb-down">{a.returnNote}</span>}
               {a.bestBuild && a.bestBuild.name !== view.aheadBuild && <span className="nb-bb">{ordinal(a.bestBuild.rank)} if {a.bestBuild.name.replace(/^Punt /, 'you punt ')}</span>}
             </div>
+            {(a.fits.length > 0 || a.stacks.length > 0) && (
+              <div className="nb-fits">
+                {a.fits.length > 0 && view.weakSpots && <span>covers {view.weakSpots.whose} weak {a.fits.map((c) => LABEL[c]).join(', ')}</span>}
+                {a.stacks.length > 0 && <span className="nb-stacks">{a.fits.length ? ' · ' : ''}stacks {view.weakSpots?.whose ?? 'your'} {a.stacks.map((c) => LABEL[c]).join(', ')}</span>}
+              </div>
+            )}
             <div className={`nb-fate ${a.there != null || a.canWait ? 'nb-wait' : 'nb-gone'}`}>
               {a.there != null ? `${pct(a.there)} there at pick ${view.clock.myNext}` : a.canWait ? `${pct(a.survives)} back next turn — can wait` : `${pct(1 - a.survives)} gone by your next turn`}
             </div>
