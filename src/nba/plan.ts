@@ -264,6 +264,15 @@ export interface DraftView {
     expected: number | null
   }
   advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null })[]
+  /**
+   * The three cards: the best players to take with this pick. A player the
+   * room will very likely leave until my next turn is not an option for this
+   * pick — taking him spends it on someone I can have later — so he goes to
+   * `canWait` instead, unless there are not three who will be gone.
+   */
+  takeNow: DraftView['advice']
+  /** Strong players likely still there at my next turn: the plan's next pick. */
+  canWait: { name: string; survives: number }[]
   /** When the first choices are too close to call and the playoff schedule separates them. */
   playoffNote: string | null
   playoffNorm: number | null
@@ -518,7 +527,13 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     consistent: opponents ? Object.entries(opponents.validation).filter(([, v]) => v.consistent).map(([k]) => k) : [],
   }
 
+  const urgent = advice.filter((a) => !a.canWait)
+  const takeNow = [...urgent, ...advice.filter((a) => a.canWait)].slice(0, 3)
+  const canWait = advice.filter((a) => a.canWait && !takeNow.includes(a)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
+
   return {
+    takeNow,
+    canWait,
     pickingBefore,
     history,
     review,

@@ -147,3 +147,18 @@ test('a hurt player is counted from when he is back, and CBS dates are pushed ba
   assert.equal(mine.gp, 4 * 0.9, 'your own date is taken as given')
   assert.equal(gamesAfterReturn(p, { returnDate: null, outForSeason: true, source: 'cbs', text: '' }, dates, '2026-10-02').gp, 0)
 })
+
+test('the three cards are players to take now; those likely back next turn go to the plan', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
+  const d = emptyDraft('t')
+  d.slot = 8
+  d.picks = hoops.adpOrder.slice(0, 7).map((id, i) => ({ overall: i + 1, playerId: id, name: id, source: 'manual' as const }))
+  const v = buildView(hoops, d, new Map())
+  assert.equal(v.takeNow.length, 3)
+  const urgent = v.advice.filter((a) => !a.canWait).length
+  assert.ok(v.takeNow.slice(0, Math.min(3, urgent)).every((a) => !a.canWait), 'a can-wait player only fills a card when fewer than three will be gone')
+  assert.ok(v.canWait.every((w) => !v.takeNow.some((t) => t.name === w.name)))
+})
