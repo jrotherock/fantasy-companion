@@ -28,7 +28,8 @@ import { buildView, changes, prepare, recordOf, type Availability, type DraftVie
 import { parseCbsInjuries, type InjuryNote } from '../nba/sources.js'
 import { analyseMocks, type MockRecord } from '../nba/tendencies.js'
 import { backtest, fetchHistory, historyStatus, opponentReport } from './nbaHistory.js'
-import { addManual, emptyDraft, ingestYahoo, setLocks, setSlot, undoManual, type StoredDraft, type YahooRow } from '../nba/session.js'
+import { addManual, emptyDraft, ingestYahoo, myPicks, setLocks, setSlot, undoManual, type StoredDraft, type YahooRow } from '../nba/session.js'
+import { slotFor } from '../kernel/snake.js'
 import { resolvePreferences, type PreferenceFile, type PrefTag } from '../nba/preferences.js'
 import { CATS, type Cat } from '../nba/value.js'
 import type { NbaPlayer } from '../nba/types.js'
@@ -360,6 +361,10 @@ function session(id: string): Session | null {
 
 function save(s: Session) {
   mkdirSync(STATE_DIR, { recursive: true })
+  if (s.draft.picks.length !== s.draft.pickCount) {
+    s.draft.pickCount = s.draft.picks.length
+    s.draft.lastPickAt = Date.now()
+  }
   s.draft.feed = s.draft.feed.slice(-200)
   writeFileSync(fileOf(s.league.id), JSON.stringify(s.draft))
   s.dirty = true
@@ -649,8 +654,13 @@ export function liveDrafts(includeTest = false): { id: string; label: string; le
     if (!sessions.has(l.id) && !existsSync(fileOf(l.id))) continue
     const s = session(l.id)
     if (!s || !s.draft.picks.length || draftDone(l.id)) continue
-    const heard = Math.max(s.draft.sensor.at ?? 0, ...s.draft.feed.map((f) => f.at ?? 0))
-    if (Date.now() - heard > 10 * 60_000) continue
+    // My roster full is my draft done, whatever the room: a mock closes before Yahoo reports its last picks.
+    const teams = s.draft.order.length || s.league.teams
+    if (s.draft.slot != null && myPicks(s.draft, teams, slotFor).length >= s.prep.rounds) continue
+    // A pick in the last ten minutes. A reader re-reading an unchanged results page is not a draft going on;
+    // a draft saved before picks were timed falls back to its feed.
+    const moved = s.draft.lastPickAt ?? Math.max(0, ...s.draft.feed.map((f) => f.at ?? 0))
+    if (Date.now() - moved > 10 * 60_000) continue
     out.push({ id: l.id, label: l.label, leagueId: l.mock?.baseId ?? l.id, mock: !!l.mock })
   }
   return out

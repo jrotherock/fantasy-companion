@@ -62,6 +62,9 @@ export interface StoredDraft {
    */
   turns?: Record<number, Turn>
   sensor: { at: number | null; ok: boolean; error: string | null; unresolved: string[]; source?: 'api' | 'page' }
+  /** When the number of picks last changed: whether a draft is going on, as distinct from a reader re-reading a quiet page. */
+  lastPickAt?: number
+  pickCount?: number
 }
 
 export interface Turn {
