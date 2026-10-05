@@ -33,6 +33,8 @@ import { seatPositions } from '../src/nba/inseason.js'
 
 const arg = (k: string) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : null }
 const SEEDS = Number(arg('seeds') ?? 20)
+/** `--seed-from 101`: a fresh set of rooms, to check a result found on the first ones. */
+const SEED_FROM = Number(arg('seed-from') ?? 1)
 const WINDOW = Number(arg('window') ?? 4)
 /** `--mode locks` compares when to lock a punt instead of how to choose for fit. */
 const MODE = arg('mode') ?? 'fit'
@@ -372,6 +374,31 @@ if (MODE === 'spread') {
   strategies['app, tight spread 2+0.08'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], { a: 2, b: 0.08 })
 }
 
+if (MODE === 'centers') {
+  // How many C-eligible players, whatever the build: one C seat a night, empty when my only center's team is off.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  const isC = (id: string) => seatPositions(posOf(id)).includes('C')
+  // At least `n` C-eligible by my pick `by`: if short, the best center among the top dozen by value.
+  const cMin = (n: number, by: number): Pick => (avail, mine, overall, slot) => {
+    if (mine.filter(isC).length < n && mine.length + 1 >= by) {
+      const top = new Set(avail.filter((id) => canTake(mine)(id)).sort((a, b) => value.get(b)! - value.get(a)!).slice(0, 12))
+      const c = avail.filter((id) => isC(id) && top.has(id)).sort((a, b) => value.get(b)! - value.get(a)!)[0]
+      if (c) return c
+    }
+    return appPick(avail, mine, overall, slot, 'none', [], H)
+  }
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  if (!process.argv.includes('--confirm')) {
+    strategies['2 C by my pick 6'] = cMin(2, 6)
+    strategies['2 C by my pick 9'] = cMin(2, 9)
+  }
+  strategies['2 C by my pick 12'] = cMin(2, 12)
+  strategies['3 C by my pick 11'] = cMin(3, 11)
+  strategies['3 C by my pick 12'] = cMin(3, 12)
+  strategies['3 C by my pick 13'] = cMin(3, 13)
+}
+
 if (MODE === 'survival') {
   // Survival given that he is on the board at my pick, against survival from ADP alone (the old way).
   for (const k of Object.keys(strategies)) delete strategies[k]
@@ -447,12 +474,13 @@ if (MODE === 'locks') {
 
 const results: Record<string, { allPlay: number[]; cats: number[]; bySlot: number[][]; idle: number[] }> = {}
 const catRates: Record<string, Record<Cat, number>[]> = {}
+const cCount: Record<string, number[]> = {}
 const modelRates: Record<string, Record<Cat, number>[]> = {}
 const t0 = Date.now()
 for (const [name, pick] of Object.entries(strategies)) {
   const res = { allPlay: [] as number[], cats: [] as number[], bySlot: Array.from({ length: league.teams }, () => [] as number[]), idle: [] as number[] }
   for (let slot = SLOT_FROM || 1; slot <= (SLOT_TO || league.teams); slot++) {
-    for (let seed = 1; seed <= SEEDS; seed++) {
+    for (let seed = SEED_FROM; seed < SEED_FROM + SEEDS; seed++) {
       const { mine, teams } = draft(slot, seed, pick)
       const score0 = LINEUPS ? startedStrength : strengthOf
       // --il: every team puts a player missing half the season or more on IL and plays the best free agent
@@ -479,6 +507,7 @@ for (const [name, pick] of Object.entries(strategies)) {
       const me = score(mine, slot - 1)
       const others = teams.map((t, i) => [t, i] as const).filter(([, i]) => i !== slot - 1).map(([t, i]) => score(t, i))
       res.idle.push(idleShare(mine))
+      if (MODE === 'centers') (cCount[name] ??= []).push(mine.filter((id) => seatPositions(posOf(id)).includes('C')).length)
       const ap = RAW ? rawAllPlay(teams, seed * 7919 + slot)[slot - 1] : others.reduce((s, o) => s + weekWin(me, o), 0) / others.length
       if (RAW) (catRates[name] ??= []).push(catRatesOf(lastRaw, slot - 1))
       if (process.argv.includes('--dump') && name.startsWith('the app')) for (const id of mine) { const sp = seasonPlayer(id); console.error('DUMP', mine.indexOf(id) + 1, byId.get(id)!.name, sp.team, sp.play.toFixed(2), sp.from ?? '', sp.box.pts.toFixed(1), (rowOf.get(id)?.games.gp ?? 0).toFixed(0), contribOf.get(id)!.pts.toFixed(2)) }
@@ -525,3 +554,4 @@ if (MODE === 'queue' && queueStats.length) {
   console.log(`cost when a timeout takes the queue's first left instead of the final top card: mean ${mean(costs).toFixed(3)} cats/wk, 90th pct ${[...costs].sort((a, b) => a - b)[Math.floor(costs.length * 0.9)].toFixed(3)}, share costing >0.02: ${(100 * costs.filter((c) => c > 0.02).length / costs.length).toFixed(0)}%`)
   for (const r of [1, 3, 6, 9, 12]) { const qs = queueStats.filter((q) => q.round === r); if (qs.length) console.log(`  round ${r}: unchanged ${(100 * qs.filter((q) => q.same).length / qs.length).toFixed(0)}%, first-left is top ${(100 * qs.filter((q) => q.firstIsTop).length / qs.length).toFixed(0)}%`) }
 }
+if (MODE === 'centers') for (const [k, v] of Object.entries(cCount)) console.log(`${k}: C-eligible players drafted, mean ${mean(v).toFixed(2)}; share with 1 or fewer ${(100 * v.filter((x) => x <= 1).length / v.length).toFixed(0)}%`)

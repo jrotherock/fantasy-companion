@@ -142,7 +142,20 @@ const queueStudy = (filtered: boolean, size: number): Pick => (avail, mine, over
   }
   return now[0]?.id ?? app()(avail, mine, overall, slot)
 }
-const strategies: Record<string, Pick> = MODE === 'survival' ? {
+const cMin = (n: number, by: number): Pick => (avail, mine, overall, slot) => {
+  if (mine.filter(isC).length < n && mine.length + 1 >= by) {
+    const top = avail.filter((id) => canTake(mine)(id)).sort((a, b) => rowOf.get(b)!.value - rowOf.get(a)!.value).slice(0, 16)
+    const c = top.find(isC)
+    if (c) return c
+  }
+  return app()(avail, mine, overall, slot)
+}
+const strategies: Record<string, Pick> = MODE === 'centers' ? {
+  'the app (recommender)': app(),
+  '2 C by my pick 5': cMin(2, 5),
+  '2 C by my pick 7': cMin(2, 7),
+  '2 C by my pick 9': cMin(2, 9),
+} : MODE === 'survival' ? {
   'the app (recommender)': app(),
   'app, survival from ADP alone': app(undefined, false, true),
 } : MODE === 'queue' ? {
