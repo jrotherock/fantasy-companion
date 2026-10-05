@@ -29,7 +29,7 @@ import { parseCbsInjuries, type InjuryNote } from '../nba/sources.js'
 import { analyseMocks, type MockRecord } from '../nba/tendencies.js'
 import { adpSpread, backtest, fetchHistory, historyStatus, opponentReport } from './nbaHistory.js'
 import { addManual, emptyDraft, ingestYahoo, myPicks, setLocks, setSlot, undoManual, type StoredDraft, type YahooRow } from '../nba/session.js'
-import { slotFor } from '../kernel/snake.js'
+import { nextPickFor, slotFor } from '../kernel/snake.js'
 import { resolvePreferences, type PreferenceFile, type PrefTag } from '../nba/preferences.js'
 import { CATS, type Cat } from '../nba/value.js'
 import type { NbaPlayer } from '../nba/types.js'
@@ -412,10 +412,31 @@ function cadence(s: Session): number {
   const d = s.draft
   const total = (d.order.length || s.league.teams) * s.prep.rounds
   if (d.picks.length >= total) return 900_000
+  // My turn close: the pick before mine is the one the cards are waiting on.
+  if (d.picks.length && nearMyTurn(s)) return 3_000
   // A mock the API cannot read has only the extension, and bots pick at once.
   if (s.league.mock && s.league.mock.apiOk !== true) return 6_000
   if (!d.picks.length) return 120_000
   return 15_000
+}
+
+/** Picks until my next one (0 when I am on the clock); null without a slot or after my last. */
+function picksUntilMine(s: Session): number | null {
+  const d = s.draft
+  if (d.slot == null) return null
+  const teams = d.order.length || s.league.teams
+  const overall = d.picks.length + 1
+  const mine = nextPickFor(d.slot, teams, s.prep.rounds, overall - 1)
+  return mine == null ? null : mine - overall
+}
+
+/** On the clock or two picks away: the window in which a slow read is felt. */
+const nearMyTurn = (s: Session) => { const n = picksUntilMine(s); return n != null && n <= 2 }
+
+/** For the API reader: whether this draft is in the window where reads should come fast. */
+export function draftNearMyTurn(leagueId: string): boolean {
+  const s = sessions.get(leagueId) ?? (existsSync(fileOf(leagueId)) ? session(leagueId) : null)
+  return !!s && s.draft.picks.length > 0 && nearMyTurn(s)
 }
 
 function leaguesForExtension() {

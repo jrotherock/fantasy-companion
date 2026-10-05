@@ -43,11 +43,13 @@ function useDraft(id: string) {
       setError(`Can't reach the companion (${(e as Error).message}) — showing the last board`)
     }
   }, [id])
+  // Every second when my turn is two picks away or less, where a stale screen is felt; every two otherwise.
+  const near = view != null && view.clock.picksUntil != null && view.clock.picksUntil <= 2 && !view.clock.done
   useEffect(() => {
     refresh()
-    const t = setInterval(refresh, 2000)
+    const t = setInterval(refresh, near ? 1000 : 2000)
     return () => clearInterval(t)
-  }, [refresh])
+  }, [refresh, near])
   const act = useCallback(async (path: string, data?: unknown) => {
     try {
       await post(`/api/nba/draft/${id}/${path}`, data)
@@ -339,7 +341,8 @@ function Build({ view, act }: { view: DraftView; act: Act }) {
           <h4>Your build</h4>Each tile is your chance of winning that category in a typical week against an average team. You win a week with 5 of 9.
           <ul>
             <li><span className="nb-up">Green 60%+</span> — usually yours. Five or six is a contender.</li>
-            <li><span className="nb-amber">Amber 35–50%</span> — the expensive middle: paid for, still lost half the time. Push it up or give it up.</li>
+            <li><b>No colour, 50–59%</b> — a slight edge: more often yours than not, not one to count on.</li>
+            <li><span className="nb-amber">Amber 35–49%</span> — the expensive middle: paid for, still lost half the time. Push it up or give it up.</li>
             <li><span className="nb-down">Red under 35%</span> — mostly lost. The advice already stops spending on it.</li>
             <li>All green is not the goal. A clear shape is.</li>
           </ul>

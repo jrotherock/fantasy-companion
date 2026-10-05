@@ -14,11 +14,21 @@
  */
 import * as yahooApi from './yahooApi.js'
 import { draftManagers, draftOrder, draftStatus, parseDraftResults, parsePlayerNames, parseTeams, type ApiTeam } from '../nba/yahooDraft.js'
-import { draftDone, nbaLeagues, ingestApi, onReadableMock, playerByYahooId } from './nbaDraft.js'
+import { draftDone, draftNearMyTurn, nbaLeagues, ingestApi, onReadableMock, playerByYahooId } from './nbaDraft.js'
 
 const HOUR = 60 * 60_000
 const ORDER_SET = 2 * 60_000
 const DRAFTING = 8_000
+/**
+ * Faster when my turn is two picks away or less: the pick before mine is what
+ * the cards wait on. Held to the normal pace once the day's Yahoo calls are
+ * past 60% of the cap, so a long mock never costs football its reads.
+ */
+const NEAR_MY_TURN = 2_500
+function draftingWait(leagueId: string): number {
+  const l = yahooApi.limitsNow()
+  return draftNearMyTurn(leagueId) && l.callsToday < 0.6 * l.cap ? NEAR_MY_TURN : DRAFTING
+}
 
 interface Watch {
   status: string | null
@@ -78,7 +88,7 @@ async function step(leagueId: string, key: string): Promise<number> {
       }
     }), order, managers)
     w.error = null
-    return w.status === 'postdraft' || draftDone(leagueId) ? Infinity : DRAFTING
+    return w.status === 'postdraft' || draftDone(leagueId) ? Infinity : draftingWait(leagueId)
   } catch (e) {
     w.error = (e as Error).message
     // Yahoo said slow down, or the day's budget is spent: wait long, and let the extension carry the draft.
