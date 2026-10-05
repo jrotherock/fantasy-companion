@@ -401,6 +401,12 @@ export interface DraftView {
   queue: { id: string; name: string }[] | null
   /** The 240 check for every team, most crowded first: for draft prep, not the advice. */
   teams: TeamLoad[]
+  /**
+   * Near-ties the three cards hide: players within the close-call margin of the last card
+   * (0.02 categories a week, or 1% in points) who will not last to my next pick either.
+   * Those who will last are in the plan line instead.
+   */
+  alsoClose: { id: string; name: string; behind: number }[]
   /** Yahoo's pick clock read off the draft room by the extension (server adds it; absent without the extension). */
   yahooClock?: { seconds: number; at: number } | null
   sensor: StoredDraft['sensor']
@@ -807,6 +813,11 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   // What each card would do to the build tiles: my roster with him added, as the tiles measure it.
   if (prep.cats) takeNow = takeNow.map((a) => ({ ...a, preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base) }))
   const canWait = advice.filter((a) => a.canWait && !takeNow.some((t) => t.id === a.id)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
+  const lastCard = takeNow.at(-1)
+  const closeMargin = prep.cats ? 0.02 : Math.abs(takeNow[0]?.score ?? 0) * 0.01
+  const alsoClose = !lastCard ? [] : advice
+    .filter((a) => !a.canWait && !takeNow.some((t) => t.id === a.id) && lastCard.score - a.score <= closeMargin)
+    .slice(0, 3).map((a) => ({ id: a.id, name: a.name, behind: lastCard.score - a.score }))
 
   // ── What to queue in Yahoo, two picks out or on the clock ──
   let queue: DraftView['queue'] = null
@@ -833,6 +844,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   return {
     takeNow,
     canWait,
+    alsoClose,
     queue,
     teams: [...prep.teams.values()].sort((a, b) => b.playsPct - a.playsPct),
     pickingBefore,

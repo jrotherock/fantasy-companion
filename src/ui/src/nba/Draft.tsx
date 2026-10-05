@@ -131,7 +131,7 @@ function Screen({ id }: { id: string }) {
           : view.review ? null
           : <>
               <Notice view={view} />
-              <Take view={view} act={act} previewId={previewId} setPreviewId={setPreviewId} pins={pins} pin={pin} />
+              <Take view={view} act={act} previewId={previewId} setPreviewId={setPreviewId} pins={pins} pin={pin} comparePair={(a, b) => setPins([a, b])} />
               {pins.length > 0 && <Compare id={id} view={view} act={act} pins={pins} pin={pin} clear={() => setPins([])} />}
               {cats && <Build view={view} act={act} preview={view.takeNow.find((a) => a.id === previewId) ?? null} />}
             </>}
@@ -249,7 +249,7 @@ function reasons(contrib: Record<Cat, number> | undefined, locks: Cat[]) {
   return <>{up.map((c) => <span key={c} className="nb-up">+{LABEL[c]}</span>)}{down.map((c) => <span key={c} className="nb-down">−{LABEL[c]}</span>)}</>
 }
 
-function Take({ view, act, previewId, setPreviewId, pins, pin }: { view: DraftView; act: Act; previewId: string | null; setPreviewId: (id: string | null) => void; pins: string[]; pin: (id: string) => void }) {
+function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { view: DraftView; act: Act; previewId: string | null; setPreviewId: (id: string | null) => void; pins: string[]; pin: (id: string) => void; comparePair: (a: string, b: string) => void }) {
   const setFor = useRef<{ pick: number; ids: string[]; names: string[] } | null>(null)
   const cards = view.takeNow
   if (!cards.length) return null
@@ -324,6 +324,16 @@ function Take({ view, act, previewId, setPreviewId, pins, pin }: { view: DraftVi
           </div>
         ))}
       </div>
+      {view.alsoClose.length > 0 && (
+        <div className="nb-also">
+          <span className="vlabel">ALSO CLOSE</span>{' '}
+          {view.alsoClose.map((x, i) => (
+            <span key={x.id}>{i ? ' · ' : ''}<button className="nb-name" title={`Compare with ${cards.at(-1)!.name}`} onClick={() => comparePair(cards.at(-1)!.id, x.id)}>{x.name}</button>
+              <span className="nb-dim"> ({view.league.scoring === 'categories' ? `−${x.behind.toFixed(3)}` : `−${Math.round(x.behind)}`})</span></span>
+          ))}
+          <span className="nb-dim"> — as good as card {cards.length}, and not back next turn either. Tap to compare.</span>
+        </div>
+      )}
       {onClock && (
         <div className="nb-plan">
           <span className="vlabel">PLAN</span> {cards[0].name} now
