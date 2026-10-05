@@ -27,7 +27,7 @@ import { adpFor } from '../nba/draft.js'
 import { buildView, changes, prepare, recordOf, type Availability, type DraftView, type InjuryInputs, type NbaLeague, type Prepared } from '../nba/plan.js'
 import { parseCbsInjuries, type InjuryNote } from '../nba/sources.js'
 import { analyseMocks, type MockRecord } from '../nba/tendencies.js'
-import { backtest, fetchHistory, historyStatus, opponentReport } from './nbaHistory.js'
+import { adpSpread, backtest, fetchHistory, historyStatus, opponentReport } from './nbaHistory.js'
 import { addManual, emptyDraft, ingestYahoo, myPicks, setLocks, setSlot, undoManual, type StoredDraft, type YahooRow } from '../nba/session.js'
 import { slotFor } from '../kernel/snake.js'
 import { resolvePreferences, type PreferenceFile, type PrefTag } from '../nba/preferences.js'
@@ -465,6 +465,11 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
       if (!yahooApi.connected() || yahooApi.replaying()) { json(res, 409, { error: 'reading history needs the Yahoo connection, which only the deployed app has' }); return true }
       void fetchHistory(league.id, league.leagueKey, league.history ?? []).then(() => { for (const s of sessions.values()) s.dirty = true })
       json(res, 202, { ok: true, started: true })
+      return true
+    }
+    if (action === 'spread') {
+      const r = adpSpread(league.id)
+      json(res, r ? 200 : 404, r ?? { error: 'no history read yet' })
       return true
     }
     if (action === 'backtest') {

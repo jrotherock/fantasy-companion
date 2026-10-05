@@ -123,3 +123,24 @@ export function backtest(leagueId: string) {
   const h = readHistory(leagueId)
   return h ? backtestHabits(h.seasons) : null
 }
+
+/**
+ * How far this league's picks land from the preseason ADP of their season:
+ * the spread the draft screen's "gone by your next turn" rests on. Root mean
+ * square of (pick - ADP) by ADP band, and the least-squares line through the
+ * squared misses, sd = a + b * ADP, so it can be compared with the model's.
+ */
+export function adpSpread(leagueId: string) {
+  const h = readHistory(leagueId)
+  if (!h) return null
+  const rows = h.seasons.flatMap((s) => s.picks.filter((p) => p.adp != null && p.adp > 0).map((p) => ({ season: s.season, adp: p.adp!, dev: p.pick - p.adp! })))
+  const bands = [[0, 30], [30, 60], [60, 90], [90, 130], [130, 200]].map(([lo, hi]) => {
+    const xs = rows.filter((r) => r.adp >= lo && r.adp < hi).map((r) => r.dev)
+    return { band: `${lo}-${hi}`, n: xs.length, rms: xs.length ? Math.sqrt(xs.reduce((a, b) => a + b * b, 0) / xs.length) : null, mean: xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null }
+  })
+  // Fit |dev| ~ a + b*adp (scaled by sqrt(pi/2) to read as a standard deviation).
+  const n = rows.length, mx = rows.reduce((s, r) => s + r.adp, 0) / n, my = rows.reduce((s, r) => s + Math.abs(r.dev), 0) / n
+  const b = rows.reduce((s, r) => s + (r.adp - mx) * (Math.abs(r.dev) - my), 0) / rows.reduce((s, r) => s + (r.adp - mx) ** 2, 0)
+  const k = Math.sqrt(Math.PI / 2)
+  return { picks: n, seasons: h.seasons.length, bands, fit: { a: (my - b * mx) * k, b: b * k }, model: 'sd = 2 + 0.18 * adp' }
+}
