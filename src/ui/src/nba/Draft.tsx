@@ -253,7 +253,7 @@ function Take({ view, act }: { view: DraftView; act: Act }) {
             </div>
             {(a.fits.length > 0 || a.stacks.length > 0) && (
               <div className="nb-fits">
-                {a.fits.length > 0 && view.weakSpots && <span>covers {view.weakSpots.whose} weak {a.fits.map((c) => LABEL[c]).join(', ')}</span>}
+                {a.fits.length > 0 && view.weakSpots && <span>moves {view.weakSpots.whose} close {a.fits.map((c) => LABEL[c]).join(', ')}</span>}
                 {a.stacks.length > 0 && <span className="nb-stacks">{a.fits.length ? ' · ' : ''}stacks {view.weakSpots?.whose ?? 'your'} {a.stacks.map((c) => LABEL[c]).join(', ')}</span>}
               </div>
             )}

@@ -407,7 +407,7 @@ export interface DraftView {
   playoffNote: string | null
   /** Every team in the room, measured from its picks so far; null before any pick. */
   liveRoom: RoomRow[] | null
-  /** My roster's weakest categories as it stands, and whose they are ("Shai's" after one pick). */
+  /** My roster's close categories (35-65%), nearest a coin flip first, and whose they are ("Shai's" after one pick). */
   weakSpots: { cats: Cat[]; whose: string } | null
   /** Its strongest: what a pick could stack instead, for a build that leans into them. */
   strongSpots: Cat[]
@@ -586,8 +586,9 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   if (prep.cats && mine.length) {
     const w = winChances(strengthOf(prep, mine), mine.length, prep.cats.base)
     const live = CATS.filter((c) => !d.locks.includes(c))
-    const cats = live.filter((c) => w[c] < 0.5).sort((a, b) => w[a] - w[b]).slice(0, 3)
-    strongSpots = live.filter((c) => w[c] >= 0.6).sort((a, b) => w[b] - w[a]).slice(0, 3)
+    // Close: where a pick moves the week most — near a coin flip, on either side. Under 35% is mostly lost, over 65% mostly won.
+    const cats = live.filter((c) => w[c] >= CLOSE_LOW && w[c] < CLOSE_HIGH).sort((a, b) => Math.abs(w[a] - 0.5) - Math.abs(w[b] - 0.5)).slice(0, 4)
+    strongSpots = live.filter((c) => w[c] >= CLOSE_HIGH).sort((a, b) => w[b] - w[a]).slice(0, 3)
     const first = p(mine[0]).name.split(' ')
     weakSpots = cats.length ? { cats, whose: mine.length === 1 ? `${first[first.length - 1]}'s` : 'your' } : null
   }
@@ -889,6 +890,9 @@ export function recordOf(prep: Prepared, d: StoredDraft, tags: Map<string, PrefT
  */
 /** A category counts as covered when a player adds at least this much of it over a season (in z, games-weighted). */
 export const FIT_MIN = 0.25
+/** The band in which a category is still in play: a pick moves its weekly win chance most here. */
+export const CLOSE_LOW = 0.35
+export const CLOSE_HIGH = 0.65
 
 
 export function playoffTiebreak<T extends { name: string; score: number; playoff: number | null; tiebreak?: boolean }>(advice: T[], margin: number): { advice: T[]; note: string | null } {

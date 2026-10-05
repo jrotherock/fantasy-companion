@@ -234,7 +234,7 @@ test('a points mock places my roster against every team\'s season points total',
   assert.ok(r.place!.result >= 1 && r.place!.result <= 16)
 })
 
-test('after Shai the cards say what each covers and what it stacks', () => {
+test('after Shai the cards say which close categories each moves and what it stacks', () => {
   const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
   const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
   const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
@@ -247,8 +247,9 @@ test('after Shai the cards say what each covers and what it stacks', () => {
   const v = buildView(hoops, d, new Map())
   assert.equal(v.clock.onClock, true)
   assert.ok(v.weakSpots && v.weakSpots.whose.endsWith("'s"))
-  assert.ok(v.weakSpots!.cats.some((c) => ['reb', 'blk', 'tpm'].includes(c)), `weak: ${v.weakSpots!.cats}`)
-  assert.ok(v.strongSpots.length > 0)
+  // Close categories are those still in play (35-65%); after one star nothing is far from a coin flip yet.
+  assert.ok(v.weakSpots!.cats.some((c) => ['reb', 'blk', 'tpm'].includes(c)), `close: ${v.weakSpots!.cats}`)
+  assert.ok(v.strongSpots.every((c) => !v.weakSpots!.cats.includes(c)))
   assert.ok(v.takeNow.every((a) => Array.isArray(a.fits) && Array.isArray(a.stacks)))
   // Locking a punt takes it off the weak spots: going guard-heavy stops the push toward bigs.
   const leaning = buildView(hoops, { ...d, locks: ['reb', 'blk'] }, new Map())
