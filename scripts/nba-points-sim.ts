@@ -94,9 +94,9 @@ const posValue = positionalValue()
 // ── Strategies ──
 
 type Pick = (avail: string[], mine: string[], overall: number, slot: number) => string
-const app = (vals?: Map<string, number>, naiveTurns = false): Pick => (avail, mine, overall, slot) => {
+const app = (vals?: Map<string, number>, naiveTurns = false, unconditional = false): Pick => (avail, mine, overall, slot) => {
   const pool = avail.map((id) => rowOf.get(id)!).filter(Boolean).map((r) => (vals ? { ...r, value: vals.get(r.id) ?? r.value } : r))
-  const advice = advisePoints(pool, { teams: league.teams, rounds, slot, overall, spread: SPREAD, naiveTurns }, 25, canTake(mine))
+  const advice = advisePoints(pool, { teams: league.teams, rounds, slot, overall, spread: SPREAD, naiveTurns, unconditional }, 25, canTake(mine))
   return advice[0]?.id ?? pool.find((r) => canTake(mine)(r.id))!.id
 }
 const cBy = (n: number): Pick => (avail, mine, overall, slot) => {
@@ -142,7 +142,10 @@ const queueStudy = (filtered: boolean, size: number): Pick => (avail, mine, over
   }
   return now[0]?.id ?? app()(avail, mine, overall, slot)
 }
-const strategies: Record<string, Pick> = MODE === 'queue' ? {
+const strategies: Record<string, Pick> = MODE === 'survival' ? {
+  'the app (recommender)': app(),
+  'app, survival from ADP alone': app(undefined, false, true),
+} : MODE === 'queue' ? {
   'the app (recommender)': queueStudy(!process.argv.includes('--unfiltered'), Number(process.argv[process.argv.indexOf('--queue-size') + 1]) || 3),
 } : MODE === 'teammates' ? {
   'the app (recommender)': app(),

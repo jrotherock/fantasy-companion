@@ -37,6 +37,8 @@ export interface DraftSpot {
   spread?: AdpSpread
   /** Simulations only: treat a back-to-back turn like any other, as the advice did before 2026-10-05. */
   naiveTurns?: boolean
+  /** Simulations only: survival from ADP alone, not given that he is there at this pick (before 2026-10-05). */
+  unconditional?: boolean
 }
 
 /**
@@ -49,9 +51,20 @@ export interface DraftSpot {
 export interface AdpSpread { a: number; b: number }
 export const FOOTBALL_SPREAD: AdpSpread = { a: 2, b: 0.18 }
 
-/** The chance a player is still there at pick `n`, with this league's spread. */
-export function survives(adp: number, n: number, spread: AdpSpread = FOOTBALL_SPREAD): number {
-  return survival(adp, n, Math.max(2, spread.a + spread.b * adp))
+/**
+ * The chance a player is still there at pick `n`, with this league's spread —
+ * given, with `from`, that he is known to be there at pick `from`. A player
+ * still on the board has already outlasted every pick before it, which makes
+ * him likelier to outlast the next few: in five human Hoops mocks, survival
+ * from ADP alone said 50% where 66% came back, and conditioning on the board
+ * fit what happened far better (log-likelihood -633 against -743 over 2,490
+ * player-turns; scripts/nba-human-mocks.ts).
+ */
+export function survives(adp: number, n: number, spread: AdpSpread = FOOTBALL_SPREAD, from?: number): number {
+  const sd = Math.max(2, spread.a + spread.b * adp)
+  const s = survival(adp, n, sd)
+  if (from == null || from >= n) return s
+  return Math.min(1, s / Math.max(1e-6, survival(adp, from, sd)))
 }
 
 export interface Candidate {
@@ -70,10 +83,10 @@ export function adpFor(p: { yahoo: { adp: number | null; rank: number } | null }
  * already sorted best first. Each one counts only if he survives and everyone
  * better does not. If nobody listed survives, `floor` is what is left.
  */
-export function expectedBest(sorted: { value: number; adp: number }[], next: number, floor = 0, spread?: AdpSpread): number {
+export function expectedBest(sorted: { value: number; adp: number }[], next: number, floor = 0, spread?: AdpSpread, from?: number): number {
   let none = 1, e = 0
   for (const c of sorted) {
-    const s = survives(c.adp, next, spread)
+    const s = survives(c.adp, next, spread, from)
     e += c.value * s * none
     none *= 1 - s
     if (none < 1e-4) break
@@ -104,6 +117,9 @@ export interface Advice {
    */
   then?: string
 }
+
+/** The pick a player being scored is known to be there at: this one, mine (unless a simulation asks for the old way). */
+const at = (spot: DraftSpot): number | undefined => (spot.unconditional ? undefined : spot.overall)
 
 function nextTurn(spot: DraftSpot): number | null {
   return nextPickFor(spot.slot, spot.teams, spot.rounds, spot.overall)
@@ -149,13 +165,13 @@ export function advisePoints(
       let best = -Infinity, then: string | undefined
       for (const x of rest.slice(0, PAIR_PARTNERS)) {
         const left = rest.filter((z) => z.id !== x.id)
-        const v = x.value + (beyond == null ? 0 : expectedBest(left, beyond, 0, spot.spread))
+        const v = x.value + (beyond == null ? 0 : expectedBest(left, beyond, 0, spot.spread, at(spot)))
         if (v > best) { best = v; then = x.id }
       }
       return { id: c.id, name: c.name, now: c.value, score: c.value + (then ? best : 0), survives: 1, then }
     }
-    const later = next == null ? 0 : expectedBest(rest, next, 0, spot.spread)
-    return { id: c.id, name: c.name, now: c.value, score: c.value + later, survives: next == null ? 0 : survives(c.adp, next, spot.spread) }
+    const later = next == null ? 0 : expectedBest(rest, next, 0, spot.spread, at(spot))
+    return { id: c.id, name: c.name, now: c.value, score: c.value + later, survives: next == null ? 0 : survives(c.adp, next, spot.spread, at(spot)) }
   }).sort((a, b) => b.score - a.score)
 }
 
@@ -329,13 +345,13 @@ export function adviseCategories(
             const third = follow.filter((z) => z.id !== x.id)
               .map((z) => ({ value: expectedCats(add(sx, contribution(z.row)), k + 3, base, ignore), adp: z.adp }))
               .sort((a, b) => b.value - a.value)
-            v = expectedBest(third, beyond, x.value, spot.spread)
+            v = expectedBest(third, beyond, x.value, spot.spread, at(spot))
           }
           if (v > later) { later = v; then = x.id }
         }
         if (!then) later = e
-      } else later = expectedBest(follow, next, e, spot.spread)
+      } else later = expectedBest(follow, next, e, spot.spread, at(spot))
     }
-    return { id: c.id, name: c.name, now: e - before, score: later, survives: next == null ? 0 : pair ? 1 : survives(c.adp, next, spot.spread), ...(then ? { then } : {}) }
+    return { id: c.id, name: c.name, now: e - before, score: later, survives: next == null ? 0 : pair ? 1 : survives(c.adp, next, spot.spread, at(spot)), ...(then ? { then } : {}) }
   }).sort((a, b) => b.score - a.score)
 }

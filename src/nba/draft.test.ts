@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { adpFor, adviseCategories, contribution, advisePoints, baseline, expectedBest, expectedCats, readBuild, winChances, zero, BUILD_FROM, DEFAULT_LATE_ADP } from './draft.js'
+import { adpFor, adviseCategories, contribution, survives, advisePoints, baseline, expectedBest, expectedCats, readBuild, winChances, zero, BUILD_FROM, DEFAULT_LATE_ADP } from './draft.js'
 import { CATS, type Cat, type CatRow } from './value.js'
 
 const flatNoise = Object.fromEntries(CATS.map((c) => [c, 2])) as Record<Cat, number>
@@ -121,4 +121,16 @@ test('back to back in categories: the card names the partner that fits the pick 
     assert.equal(a.survives, 1)
     assert.ok(a.then && a.then !== a.id)
   }
+})
+
+test('a player still on the board is likelier to last than his ADP alone says', () => {
+  const sp = { a: 2, b: 0.12 }
+  // ADP 25, still there at pick 22: lasting to 30 is lasting to 30 given he got to 22.
+  const plain = survives(25, 30, sp), given = survives(25, 30, sp, 22)
+  assert.ok(given > plain)
+  assert.ok(Math.abs(given - plain / survives(25, 22, sp)) < 1e-12)
+  assert.ok(given <= 1)
+  // Known there at the pick asked about, or later: certain; no `from`, as before.
+  assert.equal(survives(20, 22, sp, 22), survives(20, 22, sp))
+  assert.equal(survives(60, 30, sp), survives(60, 30, sp, undefined))
 })
