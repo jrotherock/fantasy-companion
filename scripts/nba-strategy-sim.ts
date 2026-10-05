@@ -20,7 +20,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import type { NbaPlayer } from '../src/nba/types.js'
 import { categoryZ, rankBuild, rosterSpots, CATS, type Cat } from '../src/nba/value.js'
-import { adpFor, adviseCategories, FOOTBALL_SPREAD, type AdpSpread, baseline, contribution, expectedCats, winChances, zero, BUILD_FROM, type Strength } from '../src/nba/draft.js'
+import { adpFor, adviseCategories, survives, FOOTBALL_SPREAD, type AdpSpread, baseline, contribution, expectedCats, winChances, zero, BUILD_FROM, type Strength } from '../src/nba/draft.js'
 import { positionalSlots, stillFeasible } from '../src/nba/lineup.js'
 import { slotFor } from '../src/kernel/snake.js'
 import { PATHS, gamesAfterReturn } from '../src/nba/plan.js'
@@ -223,7 +223,10 @@ const gauss = (r: () => number) => Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.
 
 const pool = rows.filter((r) => r.adp < 400).map((r) => r.id)
 
+/** Every pick of the draft in progress, in order (the queue study replays the board as it stood two picks earlier). */
+let history: string[] = []
 function draft(slot: number, seed: number, pick: Pick): { mine: string[]; teams: string[][] } {
+  history = []
   const r = rng(seed * 7919 + slot)
   // Each team's view of every player, drawn once per room: same room for every strategy.
   const scatter = new Map(pool.map((id) => [id, adp(id) + gauss(r) * (ROOM.a + ROOM.b * adp(id))]))
@@ -244,6 +247,7 @@ function draft(slot: number, seed: number, pick: Pick): { mine: string[]; teams:
     }
     taken.add(id)
     teams[seat - 1].push(id)
+    history.push(id)
   }
   return { mine: teams[slot - 1], teams }
 }
@@ -392,6 +396,37 @@ if (MODE === 'teammates') {
   strategies['app + teammate tiebreak'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'mates', [], H)
 }
 
+if (MODE === 'queue') {
+  // The queue shown two picks out (the off-clock cards, as the app shows them) against the cards on the clock:
+  // how often the top card changes, and what a timeout costs if it takes the queue instead.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  const adv = (avail: string[], mine: string[], overall: number, slot: number, include: string[] = []) =>
+    adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
+      { teams: league.teams, rounds, slot, overall, spread: H }, base, { canTake: canTake(mine), neutralUntil: BUILD_FROM, include })
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => {
+    const now = adv(avail, mine, overall, slot)
+    const before = new Set(history.slice(0, overall - 3))
+    // Not when my last pick fell inside those two (the second of a back-to-back): there was no "two out" moment.
+    const mineSince = mine.some((m) => history.indexOf(m) >= overall - 3)
+    if (overall > 3 && !mineSince && now.length) {
+      const QN = Number(arg('queue-size') ?? 5)
+      const filtered = !process.argv.includes('--unfiltered')
+      const then = pool.filter((id) => !before.has(id) && (!filtered || survives(adp(id), overall, H) >= 0.5))
+      const shown = adv(then, mine, overall, slot)
+      const queue = [...new Set([shown[0]?.id, shown[0]?.then, ...shown.slice(1).map((a) => a.id)].filter(Boolean) as string[])].slice(0, QN)
+      const left = queue.filter((id) => avail.includes(id))
+      const first = left[0]
+      const scored = first ? adv(avail, mine, overall, slot, [first]) : now
+      const top = scored[0]
+      const fq = scored.find((a) => a.id === first)
+      queueStats.push({ same: shown[0]?.id === top.id, inQueue: queue.includes(top.id), firstIsTop: first === top.id, cost: first && fq ? top.score - fq.score : null, emptied: !first, round: mine.length + 1 })
+    }
+    return now[0].id
+  }
+}
+const queueStats: { same: boolean; inQueue: boolean; firstIsTop: boolean; cost: number | null; emptied: boolean; round: number }[] = []
+
 if (MODE === 'locks') {
   for (const k of Object.keys(strategies)) delete strategies[k]
   strategies['best value'] = (avail, mine) => windowOf(avail, mine)[0]
@@ -473,4 +508,12 @@ if (RAW) {
   for (const [name, rs] of Object.entries(catRates)) console.log(name.padEnd(24) + ' ' + CATS.map((c) => (mean(rs.map((r) => r[c])) * 100).toFixed(0).padStart(6)).join(''))
   console.log('the advice\'s own model of the same rosters (win chance vs an average team):')
   for (const [name, rs] of Object.entries(modelRates)) console.log(name.padEnd(24) + ' ' + CATS.map((c) => (mean(rs.map((r) => r[c])) * 100).toFixed(0).padStart(6)).join(''))
+}
+if (MODE === 'queue' && queueStats.length) {
+  const n = queueStats.length, pctOf = (f: (q: typeof queueStats[number]) => boolean) => `${(100 * queueStats.filter(f).length / n).toFixed(0)}%`
+  const costs = queueStats.map((q) => q.cost).filter((c): c is number => c != null)
+  console.log(`\nqueue study: ${n} turns with a "two picks out" moment`)
+  console.log(`top card unchanged from two out: ${pctOf((q) => q.same)}; final top card was in the queue: ${pctOf((q) => q.inQueue)}; the queue's first left player IS the final top card: ${pctOf((q) => q.firstIsTop)}; queue emptied: ${pctOf((q) => q.emptied)}`)
+  console.log(`cost when a timeout takes the queue's first left instead of the final top card: mean ${mean(costs).toFixed(3)} cats/wk, 90th pct ${[...costs].sort((a, b) => a - b)[Math.floor(costs.length * 0.9)].toFixed(3)}, share costing >0.02: ${(100 * costs.filter((c) => c > 0.02).length / costs.length).toFixed(0)}%`)
+  for (const r of [1, 3, 6, 9, 12]) { const qs = queueStats.filter((q) => q.round === r); if (qs.length) console.log(`  round ${r}: unchanged ${(100 * qs.filter((q) => q.same).length / qs.length).toFixed(0)}%, first-left is top ${(100 * qs.filter((q) => q.firstIsTop).length / qs.length).toFixed(0)}%`) }
 }

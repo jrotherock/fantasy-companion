@@ -14,7 +14,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import type { NbaPlayer } from '../src/nba/types.js'
 import { pointsValues, rosterSpots } from '../src/nba/value.js'
-import { adpFor, advisePoints } from '../src/nba/draft.js'
+import { adpFor, advisePoints, survives } from '../src/nba/draft.js'
 import { positionalSlots, stillFeasible } from '../src/nba/lineup.js'
 import { slotFor } from '../src/kernel/snake.js'
 import { calendar, startShares } from '../src/nba/starts.js'
@@ -126,7 +126,25 @@ const mateBreak: Pick = (avail, mine, overall, slot) => {
   const teamOf = (id: string) => byId.get(id)!.team
   return (close.find((a) => !mine.some((m) => teamOf(m) === teamOf(a.id))) ?? close[0]).id
 }
-const strategies: Record<string, Pick> = MODE === 'teammates' ? {
+// The queue study: the queue built two picks out (off-clock cards, or unfiltered) against the advice on the clock.
+const queueStats: { firstIsTop: boolean; inQueue: boolean; cost: number | null }[] = []
+const queueStudy = (filtered: boolean, size: number): Pick => (avail, mine, overall, slot) => {
+  const advise = (ids: string[], include: string[] = []) => advisePoints(ids.map((id) => rowOf.get(id)!).filter(Boolean), { teams: league.teams, rounds, slot, overall, spread: SPREAD }, 25, canTake(mine), include)
+  const now = advise(avail)
+  const before = new Set(history.slice(0, overall - 3))
+  if (overall > 3 && now.length && !mine.some((m) => history.indexOf(m) >= overall - 3)) {
+    const shown = advise(pool.filter((id) => !before.has(id) && (!filtered || survives(adp(id), overall, SPREAD) >= 0.5)))
+    const queue = [...new Set([shown[0]?.id, shown[0]?.then, ...shown.slice(1).map((a) => a.id)].filter(Boolean) as string[])].slice(0, size)
+    const first = queue.find((id) => avail.includes(id))
+    const scored = first ? advise(avail, [first]) : now
+    const fq = scored.find((a) => a.id === first)
+    queueStats.push({ firstIsTop: first === scored[0].id, inQueue: queue.includes(scored[0].id), cost: fq ? (scored[0].score - fq.score) / Math.abs(scored[0].score) : null })
+  }
+  return now[0]?.id ?? app()(avail, mine, overall, slot)
+}
+const strategies: Record<string, Pick> = MODE === 'queue' ? {
+  'the app (recommender)': queueStudy(!process.argv.includes('--unfiltered'), Number(process.argv[process.argv.indexOf('--queue-size') + 1]) || 3),
+} : MODE === 'teammates' ? {
   'the app (recommender)': app(),
   'app, one per NBA team': cappedTeam(1),
   'app + teammate tiebreak': mateBreak,
@@ -152,7 +170,9 @@ function rng(seed: number) { let s = seed >>> 0 || 1; return () => ((s = (s * 16
 const gauss = (r: () => number) => Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r())
 const pool = rows.filter((r) => r.adp < 400).map((r) => r.id)
 
+let history: string[] = []
 function draft(slot: number, seed: number, pick: Pick): string[][] {
+  history = []
   const r = rng(seed * 7919 + slot)
   const scatter = new Map(pool.map((id) => [id, adp(id) + gauss(r) * (SPREAD.a + SPREAD.b * adp(id))]))
   const taken = new Set<string>()
@@ -165,6 +185,7 @@ function draft(slot: number, seed: number, pick: Pick): string[][] {
       : byScatter(avail.filter((x) => canTake(teams[seat - 1])(x) || never.has(x)))[0] ?? byScatter(avail)[0]
     taken.add(id)
     teams[seat - 1].push(id)
+    history.push(id)
   }
   return teams
 }
@@ -253,4 +274,8 @@ for (const [name, r] of Object.entries(res)) {
   const d = r.ap.map((x, i) => x - ref.ap[i])
   const cs = [...r.c].sort((a, b) => a - b)
   console.log(`${name.padEnd(25)} ${(mean(r.ap) * 100).toFixed(1).padStart(6)}%   ${(mean(d) * 100 >= 0 ? '+' : '') + (mean(d) * 100).toFixed(2)} ± ${(2 * se(d) * 100).toFixed(2)}     ${mean(r.pts).toFixed(0)}     ${cs[Math.floor(cs.length / 2)]}`)
+}
+if (MODE === 'queue' && queueStats.length) {
+  const n = queueStats.length, costs = queueStats.map((q) => q.cost).filter((c): c is number => c != null)
+  console.log(`queue study: ${n} turns; final top in queue ${(100 * queueStats.filter((q) => q.inQueue).length / n).toFixed(0)}%; first left in queue IS the final top ${(100 * queueStats.filter((q) => q.firstIsTop).length / n).toFixed(0)}%; mean cost ${(100 * costs.reduce((a, b) => a + b, 0) / costs.length).toFixed(2)}% of the pick's score; over 1%: ${(100 * costs.filter((c) => c > 0.01).length / costs.length).toFixed(0)}%`)
 }

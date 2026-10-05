@@ -248,6 +248,7 @@ function reasons(contrib: Record<Cat, number> | undefined, locks: Cat[]) {
 }
 
 function Take({ view, act, previewId, setPreviewId, pins, pin }: { view: DraftView; act: Act; previewId: string | null; setPreviewId: (id: string | null) => void; pins: string[]; pin: (id: string) => void }) {
+  const setFor = useRef<{ pick: number; ids: string[]; names: string[] } | null>(null)
   const cards = view.takeNow
   if (!cards.length) return null
   const onClock = view.clock.onClock
@@ -257,9 +258,14 @@ function Take({ view, act, previewId, setPreviewId, pins, pin }: { view: DraftVi
   // Back to back at the end of a round: the pick after this one is mine too.
   const second = (onClock ? view.clock.overall : view.clock.myNext ?? 0) + 1
   // Two picks out or on the clock: what to have in Yahoo's queue, so a timeout takes the advice, not Yahoo's
-  // ranking (which knows nothing of the never list). The top card, its back-to-back partner, then the others.
-  const queue = view.clock.done || view.clock.picksUntil == null || view.clock.picksUntil > 2 ? []
-    : [...new Set([cards[0].name, ...(cards[0].thenName ? [cards[0].thenName] : []), ...cards.slice(1).map((a) => a.name)])].slice(0, 4)
+  // ranking (which knows nothing of the never list). Worked out by the server, ranked as if the pick were now.
+  const queue = view.queue ?? []
+  // The queue as set two picks out, kept for this pick: on the clock, say so if it would now take the wrong man.
+  if (!onClock && view.queue && view.clock.myNext != null) setFor.current = { pick: view.clock.myNext, ids: view.queue.map((q) => q.id), names: view.queue.map((q) => q.name) }
+  const takenNow = new Set(view.board.filter((r) => r.takenAt != null).map((r) => r.id))
+  const set = onClock && setFor.current?.pick === view.clock.overall ? setFor.current : null
+  const firstLeft = set ? set.ids.findIndex((x) => !takenNow.has(x)) : -1
+  const stale = set && firstLeft >= 0 && set.ids[firstLeft] !== cards[0].id ? set.names[firstLeft] : null
   return (
     <div>
       <div className="vhead">
@@ -267,10 +273,14 @@ function Take({ view, act, previewId, setPreviewId, pins, pin }: { view: DraftVi
         {onClock && <span className={`conf ${close ? 'close' : 'clear'}`}>{close ? 'close call' : 'clear pick'}</span>}
         {cards[0].tiebreak && <span className="conf close">playoff tiebreak</span>}
       </div>
-      {queue.length > 0 && (
+      {stale ? (
+        <div className="nb-queue nb-queue-stale">
+          <span className="vlabel">QUEUE CHANGED</span> Put <b>{cards[0].name}</b> first in Yahoo — your queue would take {stale}
+        </div>
+      ) : queue.length > 0 && (
         <div className="nb-queue">
-          <span className="vlabel">QUEUE IN YAHOO</span> {queue.map((n, i) => <span key={n}>{i ? ' · ' : ''}<b>{n}</b></span>)}
-          <span className="nb-dim"> — a timeout takes your queue's first, not Yahoo's ranking</span>
+          <span className="vlabel">QUEUE IN YAHOO</span> {queue.map((q, i) => <span key={q.id}>{i ? ' · ' : ''}<b>{q.name}</b></span>)}
+          <span className="nb-dim"> — in this order. Yahoo skips whoever goes first, so set it now and leave it: a timeout then takes the app's pick</span>
         </div>
       )}
       <div className="threeup">

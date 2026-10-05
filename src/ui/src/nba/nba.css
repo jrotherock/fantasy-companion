@@ -234,3 +234,5 @@ div.nb-cat { cursor: default; }
 .nb-yclock.urgent { background: var(--red); color: #fff; animation: nb-pulse 1s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .nb-yclock.urgent { animation: none; } }
 @keyframes nb-pulse { 50% { opacity: 0.6; } }
+.nb-queue-stale { border-color: var(--red); }
+.nb-queue-stale .vlabel { color: var(--red); }

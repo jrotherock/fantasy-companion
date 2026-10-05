@@ -374,6 +374,13 @@ export interface PathView {
 export interface DraftView {
   league: { id: string; label: string; scoring: NbaLeague['scoring']; teams: number; rounds: number; slot: number | null; slotSource: StoredDraft['slotSource']; myTeamName: string }
   clock: { overall: number; round: number; onClock: boolean; myNext: number | null; picksUntil: number | null; done: boolean }
+  /**
+   * Two picks out or on the clock: who to have in Yahoo's queue, best first, so a timeout takes the advice.
+   * Not the off-clock cards: those leave out anyone likely gone, and when one of them falls he is the pick.
+   * Ranked as if on the clock, Yahoo's autodraft skipping whoever has gone, the first left was the advice's
+   * own pick in 99% of simulated turns (Hoops and Harker); the off-clock cards, 42-45%.
+   */
+  queue: { id: string; name: string }[] | null
   /** Yahoo's pick clock read off the draft room by the extension (server adds it; absent without the extension). */
   yahooClock?: { seconds: number; at: number } | null
   sensor: StoredDraft['sensor']
@@ -780,9 +787,32 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   if (prep.cats) takeNow = takeNow.map((a) => ({ ...a, preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base) }))
   const canWait = advice.filter((a) => a.canWait && !takeNow.some((t) => t.id === a.id)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
 
+  // ── What to queue in Yahoo, two picks out or on the clock ──
+  let queue: DraftView['queue'] = null
+  if (spot && myNext != null && myNext - overall <= 2) {
+    // On the clock the cards are already unfiltered; off it, rank everyone as if the pick were now.
+    const ranked = onClock ? advice
+      : (prep.cats
+        ? adviseCategories(prep.cats.rows.filter((r) => !taken.has(r.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
+          { canTake, neutralUntil: d.locks.length ? 0 : BUILD_FROM, ignore: d.locks })
+        : advisePoints(prep.points!.rows.filter((r) => !taken.has(r.id)), spot, 25, canTake))
+    // Ordered as the cards will be on the clock — those who will not last first, then the playoff
+    // tiebreak — or a near-tie flips between now and then and the queue takes the wrong man.
+    const order = onClock ? takeNow : (() => {
+      const wait = (id: string) => nextAfter != null && (nextAfter === myNext + 1 || survives(prep.adp(id), nextAfter, prep.league.adpSpread) >= 0.6)
+      const first3 = [...ranked.filter((a) => !wait(a.id)), ...ranked.filter((a) => wait(a.id))].slice(0, 3)
+      const margin = prep.cats ? 0.02 : Math.abs(first3[0]?.score ?? 0) * 0.01
+      return first3.length ? playoffTiebreak(first3.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), margin).advice : []
+    })()
+    const top = order[0] ?? ranked[0]
+    const ids = [...new Set([top?.id, top?.then, ...order.map((a) => a.id), ...ranked.map((a) => a.id)].filter(Boolean) as string[])].slice(0, 3)
+    queue = ids.map((id) => ({ id, name: p(id).name }))
+  }
+
   return {
     takeNow,
     canWait,
+    queue,
     pickingBefore,
     history,
     review,
