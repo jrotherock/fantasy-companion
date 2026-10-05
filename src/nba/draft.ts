@@ -219,6 +219,12 @@ export interface CategoryOptions {
   neutralUntil?: number
   /** Categories locked as punts: no longer worth anything to the advice. */
   ignore?: Cat[]
+  /**
+   * A roster's strength counting only the games its players would start (starts.ts):
+   * the sixth point guard adds little on nights the seats are full. Without it,
+   * every drafted player's season counts in full.
+   */
+  strength?: (roster: CatRow[]) => Strength
 }
 
 export function adviseCategories(
@@ -229,18 +235,24 @@ export function adviseCategories(
   opts: CategoryOptions = {},
 ): Advice[] {
   const { shortlist = 20, lookahead = 40, canTake = anyone, neutralUntil = 0, ignore = [] } = opts
+  const sum = (rs: CatRow[]) => rs.reduce((s, r) => add(s, contribution(r)), zero())
+  const total = opts.strength ?? sum
   const next = nextTurn(spot)
   const k = mine.length
   // Before `neutralUntil` picks the roster's shape is not trusted to mean a
   // build: it is read as an average team's, so the advice is the best player
   // rather than the best fit for a direction one or two picks happened to set.
   // A punt the user has locked is honoured regardless — that is a decision, not a guess.
-  const have = k < neutralUntil ? base.after[Math.min(k, base.after.length - 1)] : mine.reduce((s, r) => add(s, contribution(r)), zero())
+  const neutral = k < neutralUntil
+  const have = neutral ? base.after[Math.min(k, base.after.length - 1)] : total(mine)
   const before = expectedCats(have, k, base, ignore)
+  // With a roster read as it is, adding a player is scored on the roster's starts; read as an average team, simply added.
+  const withOne = (c: CatRow) => (neutral || !opts.strength ? add(have, contribution(c)) : total([...mine, c]))
+  const withTwo = (c: CatRow, x: CatRow, sc: Strength) => (neutral || !opts.strength ? add(sc, contribution(x)) : total([...mine, c, x]))
 
   // Score everyone (cheap), then ask whether I would take them only down the
   // list as far as the advice looks — the lineup check is the expensive part.
-  const scored = available.map((c) => ({ c, s: add(have, contribution(c)) }))
+  const scored = available.map((c) => ({ c, s: withOne(c) }))
     .map(({ c, s }) => ({ c, s, e: expectedCats(s, k + 1, base, ignore) }))
     .sort((a, b) => b.e - a.e)
   const single: typeof scored = []
@@ -253,7 +265,7 @@ export function adviseCategories(
     let later = e
     if (next != null) {
       const follow = single.filter((x) => x.c.id !== c.id && canTake(x.c.id, c.id)).slice(0, lookahead)
-        .map((x) => ({ value: expectedCats(add(s, contribution(x.c)), k + 2, base, ignore), adp: x.c.adp }))
+        .map((x) => ({ value: expectedCats(withTwo(c, x.c, s), k + 2, base, ignore), adp: x.c.adp }))
         .sort((a, b) => b.value - a.value)
       later = expectedBest(follow, next, e, spot.spread)
     }

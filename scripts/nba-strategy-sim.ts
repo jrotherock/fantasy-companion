@@ -24,6 +24,9 @@ import { adpFor, adviseCategories, FOOTBALL_SPREAD, type AdpSpread, baseline, co
 import { positionalSlots, stillFeasible } from '../src/nba/lineup.js'
 import { slotFor } from '../src/kernel/snake.js'
 import { PATHS } from '../src/nba/plan.js'
+import { calendar, startShares } from '../src/nba/starts.js'
+import { startingSeats } from '../src/nba/week.js'
+import { seatPositions } from '../src/nba/inseason.js'
 
 const arg = (k: string) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : null }
 const SEEDS = Number(arg('seeds') ?? 20)
@@ -68,6 +71,28 @@ const strengthOf = (ids: string[]): Strength => ids.reduce((s, id) => {
   return Object.fromEntries(CATS.map((k) => [k, s[k] + c[k]])) as Strength
 }, zero())
 
+// ── Lineup-aware scoring (--lineups): a player's season counts only on the nights he starts ──
+const LINEUPS = process.argv.includes('--lineups')
+const cal = calendar(JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games)
+const seatsOf = startingSeats(league.roster)
+const valueOrZero = (id: string) => value.get(id) ?? 0
+function startedStrength(ids: string[]): Strength {
+  const roster = ids.map((id) => ({ id, positions: seatPositions(posOf(id)), team: byId.get(id)!.team, worth: valueOrZero(id) }))
+  const share = startShares(roster, seatsOf, cal)
+  return ids.reduce((s, id) => {
+    const c = contribOf.get(id)!, k = share.get(id) ?? 1
+    return Object.fromEntries(CATS.map((x) => [x, s[x] + c[x] * k])) as Strength
+  }, zero())
+}
+/** Starts lost over a roster: games its players' teams play that no seat holds, as a share of all their games. */
+function idleShare(ids: string[]): number {
+  const roster = ids.map((id) => ({ id, positions: seatPositions(posOf(id)), team: byId.get(id)!.team, worth: valueOrZero(id) }))
+  const share = startShares(roster, seatsOf, cal)
+  const w = ids.map((id) => (rowOf.get(id)?.games.gp ?? 0))
+  const tot = w.reduce((a, b) => a + b, 0)
+  return tot ? ids.reduce((s, id, i) => s + w[i] * (1 - (share.get(id) ?? 1)), 0) / tot : 0
+}
+
 // ── Strategies: each picks from the best WINDOW players by value ──
 
 type Pick = (avail: string[], mine: string[], overall: number, slot: number, taken: Set<string>) => string
@@ -96,10 +121,11 @@ const strategies: Record<string, Pick> = {
 }
 
 /** The app's advice, with near-ties (within 0.02 categories, as on the screen) broken by fit or not at all. */
-function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack', locks: Cat[] = [], spread: AdpSpread = FOOTBALL_SPREAD): string {
+function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack', locks: Cat[] = [], spread: AdpSpread = FOOTBALL_SPREAD, lineup = false): string {
   // As the app does: a lock drops the category and ends the four-pick wait.
   const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
-    { teams: league.teams, rounds, slot, overall, spread }, base, { canTake: canTake(mine), neutralUntil: locks.length ? 0 : BUILD_FROM, ignore: locks })
+    { teams: league.teams, rounds, slot, overall, spread }, base, { canTake: canTake(mine), neutralUntil: locks.length ? 0 : BUILD_FROM, ignore: locks,
+      strength: lineup ? (rs) => startedStrength(rs.map((r) => r.id)) : undefined })
   if (!advice.length) return windowOf(avail, mine)[0]
   if (tie === 'none' || !mine.length) return advice[0].id
   const close = advice.filter((a) => advice[0].score - a.score <= 0.02).slice(0, 3).map((a) => a.id)
@@ -216,6 +242,13 @@ if (MODE === 'first') {
   strategies['best value'] = (avail, mine) => windowOf(avail, mine)[0]
 }
 
+if (MODE === 'lineup') {
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  strategies['best value'] = (avail, mine) => windowOf(avail, mine)[0]
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], { a: 2, b: 0.12 })
+  strategies['app, counting starts'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], { a: 2, b: 0.12 }, true)
+}
+
 if (MODE === 'spread') {
   // The app assuming football's spread, against the app assuming the spread measured in Hoops' drafts.
   for (const k of Object.keys(strategies)) delete strategies[k]
@@ -235,15 +268,17 @@ if (MODE === 'locks') {
   strategies['lock on anchor'] = lockOnAnchor
 }
 
-const results: Record<string, { allPlay: number[]; cats: number[]; bySlot: number[][] }> = {}
+const results: Record<string, { allPlay: number[]; cats: number[]; bySlot: number[][]; idle: number[] }> = {}
 const t0 = Date.now()
 for (const [name, pick] of Object.entries(strategies)) {
-  const res = { allPlay: [] as number[], cats: [] as number[], bySlot: Array.from({ length: league.teams }, () => [] as number[]) }
+  const res = { allPlay: [] as number[], cats: [] as number[], bySlot: Array.from({ length: league.teams }, () => [] as number[]), idle: [] as number[] }
   for (let slot = SLOT_FROM || 1; slot <= (SLOT_TO || league.teams); slot++) {
     for (let seed = 1; seed <= SEEDS; seed++) {
       const { mine, teams } = draft(slot, seed, pick)
-      const me = strengthOf(mine)
-      const others = teams.filter((_, i) => i !== slot - 1).map(strengthOf)
+      const score = LINEUPS ? startedStrength : strengthOf
+      const me = score(mine)
+      const others = teams.filter((_, i) => i !== slot - 1).map(score)
+      res.idle.push(idleShare(mine))
       const ap = others.reduce((s, o) => s + weekWin(me, o), 0) / others.length
       res.allPlay.push(ap)
       res.cats.push(expectedCats(me, mine.length, base))
@@ -258,10 +293,11 @@ const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 const se = (xs: number[]) => { const m = mean(xs); return Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1) / xs.length) }
 const ref = results['best value'].allPlay
 console.log(`Hoops, slots ${SLOT_FROM || 1}–${SLOT_TO || league.teams} × ${SEEDS} rooms each, window ${WINDOW}, room spread ${ROOM.a}+${ROOM.b}·ADP${FIRST ? `, first pick ${FIRST}` : ''}. All-play = chance of winning a week, averaged over the nine rosters in the room.`)
-console.log('strategy                 all-play   ±2se    vs best value (paired) ±2se    cats/wk')
+console.log(`${LINEUPS ? 'Scored on starts only (daily lineups, Hoops seats, real schedule). ' : ''}idle = share of my players' games with no seat.`)
+console.log('strategy                 all-play   ±2se    vs best value (paired) ±2se    cats/wk   idle')
 for (const [name, r] of Object.entries(results)) {
   const diff = r.allPlay.map((x, i) => x - ref[i])
-  console.log(`${name.padEnd(24)} ${(mean(r.allPlay) * 100).toFixed(1).padStart(6)}%  ${(2 * se(r.allPlay) * 100).toFixed(1).padStart(4)}   ${(mean(diff) * 100 >= 0 ? '+' : '') + (mean(diff) * 100).toFixed(1).padStart(5)} pts  ${(2 * se(diff) * 100).toFixed(1).padStart(4)}       ${mean(r.cats).toFixed(2)}`)
+  console.log(`${name.padEnd(24)} ${(mean(r.allPlay) * 100).toFixed(1).padStart(6)}%  ${(2 * se(r.allPlay) * 100).toFixed(1).padStart(4)}   ${(mean(diff) * 100 >= 0 ? '+' : '') + (mean(diff) * 100).toFixed(1).padStart(5)} pts  ${(2 * se(diff) * 100).toFixed(1).padStart(4)}       ${mean(r.cats).toFixed(2)}   ${(mean(r.idle) * 100).toFixed(1)}%`)
 }
 const app = results['the app (recommender)'].allPlay
 for (const name of Object.keys(results).filter((n) => n !== 'the app (recommender)' && n !== 'best value' && (MODE !== 'fit' || n.startsWith('app +')))) {
