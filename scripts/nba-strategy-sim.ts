@@ -20,7 +20,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import type { NbaPlayer } from '../src/nba/types.js'
 import { categoryZ, rankBuild, rosterSpots, CATS, type Cat } from '../src/nba/value.js'
-import { adpFor, adviseCategories, baseline, contribution, expectedCats, winChances, zero, BUILD_FROM, type Strength } from '../src/nba/draft.js'
+import { adpFor, adviseCategories, FOOTBALL_SPREAD, type AdpSpread, baseline, contribution, expectedCats, winChances, zero, BUILD_FROM, type Strength } from '../src/nba/draft.js'
 import { positionalSlots, stillFeasible } from '../src/nba/lineup.js'
 import { slotFor } from '../src/kernel/snake.js'
 import { PATHS } from '../src/nba/plan.js'
@@ -33,6 +33,8 @@ const MODE = arg('mode') ?? 'fit'
 /** `--first "Name"` takes that player with my first pick, from the slots where he is realistically there (`--slots 1-6`). */
 const FIRST = arg('first')
 const [SLOT_FROM, SLOT_TO] = (arg('slots') ?? '').split('-').map(Number)
+/** `--room-spread 2,0.12`: how far the room strays from ADP (sd = a + b * ADP). Football's measure by default. */
+const ROOM: AdpSpread = (() => { const [a, b] = (arg('room-spread') ?? '2,0.18').split(',').map(Number); return { a, b } })()
 
 const players: NbaPlayer[] = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
 const league = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues.find((l: any) => l.id === 'nba-hoops')
@@ -94,10 +96,10 @@ const strategies: Record<string, Pick> = {
 }
 
 /** The app's advice, with near-ties (within 0.02 categories, as on the screen) broken by fit or not at all. */
-function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack', locks: Cat[] = []): string {
+function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack', locks: Cat[] = [], spread: AdpSpread = FOOTBALL_SPREAD): string {
   // As the app does: a lock drops the category and ends the four-pick wait.
   const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
-    { teams: league.teams, rounds, slot, overall }, base, { canTake: canTake(mine), neutralUntil: locks.length ? 0 : BUILD_FROM, ignore: locks })
+    { teams: league.teams, rounds, slot, overall, spread }, base, { canTake: canTake(mine), neutralUntil: locks.length ? 0 : BUILD_FROM, ignore: locks })
   if (!advice.length) return windowOf(avail, mine)[0]
   if (tie === 'none' || !mine.length) return advice[0].id
   const close = advice.filter((a) => advice[0].score - a.score <= 0.02).slice(0, 3).map((a) => a.id)
@@ -119,7 +121,7 @@ const pool = rows.filter((r) => r.adp < 400).map((r) => r.id)
 function draft(slot: number, seed: number, pick: Pick): { mine: string[]; teams: string[][] } {
   const r = rng(seed * 7919 + slot)
   // Each team's view of every player, drawn once per room: same room for every strategy.
-  const scatter = new Map(pool.map((id) => [id, adp(id) + gauss(r) * (2 + 0.18 * adp(id))]))
+  const scatter = new Map(pool.map((id) => [id, adp(id) + gauss(r) * (ROOM.a + ROOM.b * adp(id))]))
   const taken = new Set<string>()
   const teams: string[][] = Array.from({ length: league.teams }, () => [])
   for (let overall = 1; overall <= league.teams * rounds; overall++) {
@@ -214,6 +216,15 @@ if (MODE === 'first') {
   strategies['best value'] = (avail, mine) => windowOf(avail, mine)[0]
 }
 
+if (MODE === 'spread') {
+  // The app assuming football's spread, against the app assuming the spread measured in Hoops' drafts.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  strategies['best value'] = (avail, mine) => windowOf(avail, mine)[0]
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none')
+  strategies['app, Hoops spread 2+0.12'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], { a: 2, b: 0.12 })
+  strategies['app, tight spread 2+0.08'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], { a: 2, b: 0.08 })
+}
+
 if (MODE === 'locks') {
   for (const k of Object.keys(strategies)) delete strategies[k]
   strategies['best value'] = (avail, mine) => windowOf(avail, mine)[0]
@@ -246,7 +257,7 @@ for (const [name, pick] of Object.entries(strategies)) {
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 const se = (xs: number[]) => { const m = mean(xs); return Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1) / xs.length) }
 const ref = results['best value'].allPlay
-console.log(`Hoops, slots ${SLOT_FROM || 1}–${SLOT_TO || league.teams} × ${SEEDS} rooms each, window ${WINDOW}${FIRST ? `, first pick ${FIRST}` : ''}. All-play = chance of winning a week, averaged over the nine rosters in the room.`)
+console.log(`Hoops, slots ${SLOT_FROM || 1}–${SLOT_TO || league.teams} × ${SEEDS} rooms each, window ${WINDOW}, room spread ${ROOM.a}+${ROOM.b}·ADP${FIRST ? `, first pick ${FIRST}` : ''}. All-play = chance of winning a week, averaged over the nine rosters in the room.`)
 console.log('strategy                 all-play   ±2se    vs best value (paired) ±2se    cats/wk')
 for (const [name, r] of Object.entries(results)) {
   const diff = r.allPlay.map((x, i) => x - ref[i])

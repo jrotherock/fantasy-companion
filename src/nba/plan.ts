@@ -14,11 +14,10 @@
  * The room never deviates from ADP and real rooms do, so the targets are the
  * likely shape of a path, not a promise.
  */
-import { survival } from '../kernel/value.js'
 import { nextPickFor, overallFor, roundFor, slotFor } from '../kernel/snake.js'
 import {
-  adviseCategories, advisePoints, baseline, contribution, expectedCats, readBuild, winChances, zero,
-  BUILD_FIRM, BUILD_FROM, type Advice, type Baseline, type CanTake, type Strength,
+  adviseCategories, advisePoints, baseline, contribution, expectedCats, readBuild, survives, winChances, zero,
+  BUILD_FIRM, BUILD_FROM, type AdpSpread, type Advice, type Baseline, type CanTake, type Strength,
 } from './draft.js'
 import { CATS, categoryZ, effectiveGames, pointsValues, rankBuild, rosterSpots, type Cat, type CatRow, type PointsRow } from './value.js'
 import { openSeats, positionalSlots, stillFeasible } from './lineup.js'
@@ -39,6 +38,8 @@ export interface NbaLeague {
   roster: Record<string, number>
   /** Older seasons Yahoo's renewal chain does not reach, by league id. */
   history?: { season: string; leagueId: string }[]
+  /** How far this league's picks land from ADP, measured on its own drafts. */
+  adpSpread?: AdpSpread
   /** Set on a Yahoo mock draft, which borrows a real league's settings for its own temporary league. */
   mock?: { yahooLeagueId: string; baseId: string; apiOk: boolean | null; createdAt: number }
 }
@@ -423,7 +424,7 @@ function forward(prep: Prepared, taken: Set<string>, mine: string[], slot: numbe
   for (let overall = from; overall <= last && roster.length < prep.rounds; overall++) {
     let id: string | undefined
     if (slotFor(overall, teams) === slot) {
-      const spot = { teams, rounds: prep.rounds, slot, overall }
+      const spot = { teams, rounds: prep.rounds, slot, overall, spread: prep.league.adpSpread }
       const canTake = canTakeFor(prep, roster, tags)
       const advice = prep.cats
         ? adviseCategories(prep.cats.rows.filter((r) => !gone.has(r.id)), roster.map((x) => prep.cats!.byId.get(x)!).filter(Boolean), spot, prep.cats.base,
@@ -457,7 +458,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   const p = (id: string) => prep.players.get(id)!
 
   const canTake = canTakeFor(prep, mine, tags)
-  const spot = myNext == null ? null : { teams, rounds, slot: slot!, overall: myNext }
+  const spot = myNext == null ? null : { teams, rounds, slot: slot!, overall: myNext, spread: prep.league.adpSpread }
 
   // ── Build ──
   let build: DraftView['build'] = null
@@ -500,7 +501,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   let playoffNote: string | null = null
   if (spot) {
     // Off the clock the question is who will be there at my pick, so anyone more likely gone than not is left out.
-    const there = (id: string) => onClock || survival(prep.adp(id), myNext!) >= 0.5
+    const there = (id: string) => onClock || survives(prep.adp(id), myNext!, prep.league.adpSpread) >= 0.5
     const raw = prep.cats
       ? adviseCategories(prep.cats.rows.filter((r) => !taken.has(r.id) && there(r.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
         // A lock is a build you have declared: from then on the roster is read as it is.
@@ -510,9 +511,9 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     advice = raw.slice(0, 15).map((a) => ({
       ...a, team: p(a.id).team, positions: prep.positions(a.id), tag: tags.get(a.id) ?? null,
       // "There next time" is the turn after this one; a player who will very likely still be there can wait.
-      survives: nextAfter == null ? 0 : survival(prep.adp(a.id), nextAfter),
-      there: onClock ? null : survival(prep.adp(a.id), myNext!),
-      canWait: nextAfter != null && survival(prep.adp(a.id), nextAfter) >= 0.6,
+      survives: nextAfter == null ? 0 : survives(prep.adp(a.id), nextAfter, prep.league.adpSpread),
+      there: onClock ? null : survives(prep.adp(a.id), myNext!, prep.league.adpSpread),
+      canWait: nextAfter != null && survives(prep.adp(a.id), nextAfter, prep.league.adpSpread) >= 0.6,
       contrib: prep.cats ? contribution(prep.cats.byId.get(a.id)!) : undefined,
       fpg: prep.points?.byId.get(a.id)?.fpg,
       gp: (prep.cats?.byId.get(a.id)?.games.gp ?? prep.points?.byId.get(a.id)?.games.gp) ?? 0,
@@ -556,12 +557,12 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     for (const x of active.plan.slice(1, 6)) {
       const pool = (prep.cats ? prep.cats.rows : prep.points!.rows)
         .filter((r) => !taken.has(r.id) && !used.has(r.id) && tags.get(r.id) !== 'never')
-        .map((r) => ({ id: r.id, s: survival(prep.adp(r.id), x.overall) }))
+        .map((r) => ({ id: r.id, s: survives(prep.adp(r.id), x.overall, prep.league.adpSpread) }))
         .filter((r) => r.s >= 0.35 && r.s < 0.97)
         .sort((a, b) => valueOf(b.id) - valueOf(a.id))
         .slice(0, 4)
       const plannedId = planned.get(x.overall)!
-      const list = [{ id: plannedId, s: survival(prep.adp(plannedId), x.overall) }, ...pool.filter((r) => r.id !== plannedId).slice(0, 3)]
+      const list = [{ id: plannedId, s: survives(prep.adp(plannedId), x.overall, prep.league.adpSpread) }, ...pool.filter((r) => r.id !== plannedId).slice(0, 3)]
       list.forEach((r) => used.add(r.id))
       ahead.push({
         overall: x.overall, round: x.round,
@@ -587,7 +588,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       fpMin: prep.points ? ((pl.projection?.perGame.min ?? 0) > 0 ? (r as PointsRow).fpg / pl.projection!.perGame.min : null) : undefined,
       fpSeason: prep.points ? (r as PointsRow).season : undefined,
       // Chance he lasts to the next decision: the pick after this one when I am on the clock.
-      survives: (onClock ? nextAfter : myNext) == null ? null : survival(prep.adp(r.id), (onClock ? nextAfter : myNext)!),
+      survives: (onClock ? nextAfter : myNext) == null ? null : survives(prep.adp(r.id), (onClock ? nextAfter : myNext)!, prep.league.adpSpread),
       tag: tags.get(r.id) ?? null,
       injury: pl.injury?.status ?? null,
       playoff: prep.playoff(r.id),

@@ -33,6 +33,23 @@ export interface DraftSpot {
   slot: number
   /** The overall pick about to be made, which is mine. */
   overall: number
+  /** How far this league's picks land from ADP; football's measure when the league has none. */
+  spread?: AdpSpread
+}
+
+/**
+ * How far picks land from ADP: a standard deviation of a + b * ADP picks.
+ * Football's measure (2 + 0.18 * ADP) was used for basketball until it was
+ * checked against Hoops' own drafts — 1,559 picks over 12 seasons fit
+ * 2 + 0.12 * ADP, and Harker's 735 picks 1.5 + 0.10 * ADP. Too wide a spread
+ * makes every "gone by your next turn" too timid and every "can wait" too bold.
+ */
+export interface AdpSpread { a: number; b: number }
+export const FOOTBALL_SPREAD: AdpSpread = { a: 2, b: 0.18 }
+
+/** The chance a player is still there at pick `n`, with this league's spread. */
+export function survives(adp: number, n: number, spread: AdpSpread = FOOTBALL_SPREAD): number {
+  return survival(adp, n, Math.max(2, spread.a + spread.b * adp))
 }
 
 export interface Candidate {
@@ -51,10 +68,10 @@ export function adpFor(p: { yahoo: { adp: number | null; rank: number } | null }
  * already sorted best first. Each one counts only if he survives and everyone
  * better does not. If nobody listed survives, `floor` is what is left.
  */
-export function expectedBest(sorted: { value: number; adp: number }[], next: number, floor = 0): number {
+export function expectedBest(sorted: { value: number; adp: number }[], next: number, floor = 0, spread?: AdpSpread): number {
   let none = 1, e = 0
   for (const c of sorted) {
-    const s = survival(c.adp, next)
+    const s = survives(c.adp, next, spread)
     e += c.value * s * none
     none *= 1 - s
     if (none < 1e-4) break
@@ -102,8 +119,8 @@ export function advisePoints(
   }
   return takeable.slice(0, shortlist).map((c) => {
     const rest = takeable.filter((x) => x.id !== c.id && canTake(x.id, c.id))
-    const later = next == null ? 0 : expectedBest(rest, next)
-    return { id: c.id, name: c.name, now: c.value, score: c.value + later, survives: next == null ? 0 : survival(c.adp, next) }
+    const later = next == null ? 0 : expectedBest(rest, next, 0, spot.spread)
+    return { id: c.id, name: c.name, now: c.value, score: c.value + later, survives: next == null ? 0 : survives(c.adp, next, spot.spread) }
   }).sort((a, b) => b.score - a.score)
 }
 
@@ -238,8 +255,8 @@ export function adviseCategories(
       const follow = single.filter((x) => x.c.id !== c.id && canTake(x.c.id, c.id)).slice(0, lookahead)
         .map((x) => ({ value: expectedCats(add(s, contribution(x.c)), k + 2, base, ignore), adp: x.c.adp }))
         .sort((a, b) => b.value - a.value)
-      later = expectedBest(follow, next, e)
+      later = expectedBest(follow, next, e, spot.spread)
     }
-    return { id: c.id, name: c.name, now: e - before, score: later, survives: next == null ? 0 : survival(c.adp, next) }
+    return { id: c.id, name: c.name, now: e - before, score: later, survives: next == null ? 0 : survives(c.adp, next, spot.spread) }
   }).sort((a, b) => b.score - a.score)
 }
