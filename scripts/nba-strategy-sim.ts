@@ -67,6 +67,8 @@ const rounds = rosterSpots(league.roster)
 const byId = new Map(players.map((p) => [p.id, p]))
 const adp = (id: string) => adpFor(byId.get(id)!)
 const rows = categoryZ(players, league).map((r) => ({ ...r, adp: adp(r.id) }))
+// --no-fill: the model as it was before missed games were filled at the waiver line, for comparison.
+if (process.argv.includes('--no-fill')) for (const r of rows) delete r.replacement
 const rowOf = new Map(rows.map((r) => [r.id, r]))
 const base = baseline(rows, league.teams, rounds, noiseR)
 const value = new Map(rankBuild(rows, league, []).map((r) => [r.id, r.value]))
@@ -407,7 +409,7 @@ for (const [name, pick] of Object.entries(strategies)) {
       res.idle.push(idleShare(mine))
       const ap = RAW ? rawAllPlay(teams, seed * 7919 + slot)[slot - 1] : others.reduce((s, o) => s + weekWin(me, o), 0) / others.length
       if (RAW) (catRates[name] ??= []).push(catRatesOf(lastRaw, slot - 1))
-      if (process.argv.includes('--dump') && name.startsWith('the app')) for (const id of mine) { const sp = seasonPlayer(id); console.error('DUMP', byId.get(id)!.name, sp.team, sp.play.toFixed(2), sp.from ?? '', sp.box.pts.toFixed(1), (rowOf.get(id)?.games.gp ?? 0).toFixed(0), contribOf.get(id)!.pts.toFixed(2)) }
+      if (process.argv.includes('--dump') && name.startsWith('the app')) for (const id of mine) { const sp = seasonPlayer(id); console.error('DUMP', mine.indexOf(id) + 1, byId.get(id)!.name, sp.team, sp.play.toFixed(2), sp.from ?? '', sp.box.pts.toFixed(1), (rowOf.get(id)?.games.gp ?? 0).toFixed(0), contribOf.get(id)!.pts.toFixed(2)) }
       if (RAW) (modelRates[name] ??= []).push(winChances(strengthOf(mine), mine.length, base))
       res.allPlay.push(ap)
       res.cats.push(expectedCats(me, mine.length, base))
