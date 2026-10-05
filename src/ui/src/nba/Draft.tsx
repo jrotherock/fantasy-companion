@@ -314,11 +314,21 @@ function Compare({ id, view, act, pins, pin, clear }: { id: string; view: DraftV
     shownFor.current = pinned
     box.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [cv, pinned])
+  // A failed comparison is retried, not left on "Comparing…": the server can be mid-restart (a deploy)
+  // or the network blink, and on the clock there is no time to find out why.
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let live = true
-    fetch(`/api/nba/draft/${id}/compare?ids=${pins.join(',')}`).then((r) => r.json()).then((x) => { if (live) setCv(x) }).catch(() => {})
-    return () => { live = false }
-  }, [id, key])
+    const ctl = new AbortController()
+    const giveUp = setTimeout(() => ctl.abort(), 4000)
+    fetch(`/api/nba/draft/${id}/compare?ids=${pins.join(',')}`, { signal: ctl.signal })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((x) => { if (live) { setCv(x); setFailed(false) } })
+      .catch(() => { if (live) { setFailed(true); setTimeout(() => live && setAttempt((a) => a + 1), 1500) } })
+      .finally(() => clearTimeout(giveUp))
+    return () => { live = false; ctl.abort(); clearTimeout(giveUp) }
+  }, [id, key, attempt])
   const locks = view.build?.locks ?? []
   const cats = view.league.scoring === 'categories'
   return (
@@ -328,7 +338,8 @@ function Compare({ id, view, act, pins, pin, clear }: { id: string; view: DraftV
         <span className="spacer" />
         <button className="nb-link" onClick={clear}>Close</button>
       </div>
-      {!cv ? <div className="nb-dim">Comparing…</div> : <>
+      {failed && <div className="nb-dim">Can't reach the companion — trying again. The cards above are still current.</div>}
+      {!cv ? (!failed && <div className="nb-dim">Comparing…</div>) : <>
         <div className="nb-verdict">{cv.verdict}</div>
         <div className="nb-cmp-sides">
           {cv.sides.map((s) => (
