@@ -64,6 +64,9 @@ div.nb-cat { cursor: default; }
 .nb-cat .l { font-family: var(--mono); font-size: var(--t-xs); color: var(--muted); letter-spacing: .05em; }
 .nb-cat .v { font-family: var(--mono); font-size: var(--t-md); }
 .nb-cat-g { border-color: rgba(69,217,160,.6); } .nb-cat-g .v { color: var(--green); }
+.nb-cat-l { border-color: rgba(69,217,160,.28); } .nb-cat-l .v { color: color-mix(in srgb, var(--green) 55%, var(--ink)); }
+.nb-dot-lean { background: rgba(69,217,160,.45); }
+.nb-lean { color: color-mix(in srgb, var(--green) 55%, var(--ink)); }
 .nb-cat-a { border-color: rgba(255,176,0,.55); } .nb-cat-a .v { color: var(--amber); }
 .nb-cat-r { border-color: rgba(255,92,99,.5); } .nb-cat-r .v { color: var(--red); }
 .nb-cat-lock { border-color: var(--blue); background: rgba(90,169,255,.1); } .nb-cat-lock .v { color: var(--blue); font-size: var(--t-xs); }

@@ -93,7 +93,8 @@ function lean(plan: PathView['plan']): 'guard' | 'big' | 'mixed' {
   return g >= b + 2 ? 'guard' : b >= g + 1 ? 'big' : 'mixed'
 }
 const LEAN_TEXT = { guard: 'leans guard', big: 'leans big', mixed: 'mixed guards and bigs' }
-const tone = (w: number) => (w >= 0.6 ? 'g' : w >= 0.5 ? '' : w >= 0.35 ? 'a' : 'r')
+/** Green yours, pale green leaning yours, amber leaning theirs, red mostly lost. */
+const tone = (w: number) => (w >= 0.6 ? 'g' : w >= 0.5 ? 'l' : w >= 0.35 ? 'a' : 'r')
 
 function Screen({ id }: { id: string }) {
   const { view, error, act } = useDraft(id)
@@ -303,6 +304,7 @@ function Build({ view, act }: { view: DraftView; act: Act }) {
         {win ? (
           <div className="nb-meter">
             <span><i className="nb-dot" style={{ background: 'var(--green)' }} />{count('g')} winning</span>
+            <span><i className="nb-dot nb-dot-lean" />{count('l')} leaning</span>
             <span><i className="nb-dot" style={{ background: 'var(--amber)' }} />{count('a')} coin flips</span>
             <span><i className="nb-dot" style={{ background: 'var(--red)' }} />{count('r') + b.locks.length} given up</span>
             <span className="mono">{live.reduce((s, c) => s + win[c], 0).toFixed(1)} of 9 a week</span>
@@ -341,7 +343,7 @@ function Build({ view, act }: { view: DraftView; act: Act }) {
           <h4>Your build</h4>Each tile is your chance of winning that category in a typical week against an average team. You win a week with 5 of 9.
           <ul>
             <li><span className="nb-up">Green 60%+</span> — usually yours. Five or six is a contender.</li>
-            <li><b>No colour, 50–59%</b> — a slight edge: more often yours than not, not one to count on.</li>
+            <li><span className="nb-lean">Pale green 50–59%</span> — leaning yours: more often yours than not, not one to count on.</li>
             <li><span className="nb-amber">Amber 35–49%</span> — the expensive middle: paid for, still lost half the time. Push it up or give it up.</li>
             <li><span className="nb-down">Red under 35%</span> — mostly lost. The advice already stops spending on it.</li>
             <li>All green is not the goal. A clear shape is.</li>
