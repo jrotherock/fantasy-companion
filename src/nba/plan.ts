@@ -654,7 +654,9 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     playoffNote = tb.note
   }
 
-  const canWait = advice.filter((a) => a.canWait && !takeNow.includes(a)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
+  // Never the same player twice on the cards, whatever reordered them: the screen keys cards by player.
+  takeNow = takeNow.filter((a, i) => takeNow.findIndex((x) => x.id === a.id) === i)
+  const canWait = advice.filter((a) => a.canWait && !takeNow.some((t) => t.id === a.id)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
 
   return {
     takeNow,
