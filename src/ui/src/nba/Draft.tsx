@@ -129,6 +129,7 @@ function Screen({ id }: { id: string }) {
           {/* Once the draft is done nothing is on the clock, so the review scrolls with the board rather than pinning it out of sight. */}
           {view.review && <Review view={view} act={act} />}
           <NextPicks view={view} />
+          <Room view={view} />
           <Board view={view} act={act} id={id} />
         </div>
       )}
@@ -373,6 +374,64 @@ function Review({ view }: { view: DraftView; act: Act }) {
         ))}</ol>
       </>}
       {view.mock && <button className="btn" onClick={async () => { if (confirm('Discard this mock? It drops out of the comparison.')) { await post(`/api/nba/draft/${view.league.id}/discard`); location.href = leaguePage(view) } }}>Discard this mock</button>}
+    </div>
+  )
+}
+
+/**
+ * Every team in the room, from its picks so far, as the draft goes: where mine
+ * stands in one line, the whole table on a tap. Points leagues lead with points
+ * a week from starts — the number that decides weeks — with value, season
+ * points, a full night's points a game and points a minute beside it.
+ */
+function Room({ view }: { view: DraftView }) {
+  const [open, setOpen] = useState(false)
+  const rows = view.liveRoom
+  if (!rows?.length) return null
+  const pts = view.league.scoring === 'points'
+  const me = rows.find((r) => r.mine)
+  // Mid-round some teams have a pick more; the rank is on the rounds everyone has finished.
+  const full = Math.min(...rows.map((r) => r.picks))
+  const who = (r: NonNullable<DraftView['liveRoom']>[number]) => (r.mine ? 'You' : r.manager ?? `Pick ${r.seat}`)
+  const n = (x: number | null, d = 0) => (x == null ? '—' : x.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d }))
+  return (
+    <div className="nb-box nb-strip">
+      <button className="nb-striphead" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span className="nb-ph">THE ROOM {open ? '▾' : '▸'}</span>
+        <span className="nb-stripline">
+          {me ? <span>You: <b>{ordinal(me.rank)}</b> of {rows.length} · {pts ? `${n(me.pointsWeek)} pts a week` : `${n(me.catsWeek, 2)} categories a week`}</span> : <span className="nb-dim">your slot is not set</span>}
+          {full > 0 && full < Math.max(...rows.map((r) => r.picks)) && <span className="nb-dim">ranked on the first {full} round{full === 1 ? '' : 's'}</span>}
+          {rows[0] && !rows[0].mine && <span className="nb-dim">leader {who(rows[0])} {pts ? n(rows[0].pointsWeek) : n(rows[0].catsWeek, 2)}</span>}
+        </span>
+      </button>
+      {open && <>
+        <table className="nb-table nb-roomtable">
+          <thead><tr>
+            <th>#</th><th className="nb-l">Team</th><th title="Picks made so far">Picks</th>
+            {pts ? <>
+              <th title="Fantasy points a week from the games the roster would start: daily lineups, this league's seats, the real schedule">Pts/wk</th>
+              <th title="Points a game above the replacement line, times games, summed">Value</th>
+              <th title="Every player's projected points a game times his games, summed">FP season</th>
+              <th title="Average points a game of the roster's best lineup's worth of players">FP/g</th>
+              <th title="Points a game per minute played, across the roster">FP/min</th>
+            </> : <th title="Categories a week against an average team with as many picks">Cats/wk</th>}
+          </tr></thead>
+          <tbody>{rows.map((r) => (
+            <tr key={r.seat} className={r.mine ? 'nb-mine' : ''}>
+              <td className="nb-dim">{r.rank}</td>
+              <td className="nb-l">{who(r)} <span className="nb-dim">pick {r.seat}</span></td>
+              <td>{r.picks}</td>
+              {pts ? <>
+                <td className="mono">{n(r.pointsWeek)}</td><td className="mono">{n(r.value)}</td><td className="mono">{n(r.fpSeason)}</td>
+                <td className="mono">{n(r.fpNight, 1)}</td><td className="mono">{n(r.fpMin, 2)}</td>
+              </> : <td className="mono">{n(r.catsWeek, 2)}</td>}
+            </tr>
+          ))}</tbody>
+        </table>
+        <p className="nb-small nb-dim">{pts
+          ? 'Ranked by points a week: what each roster scores from the games it would start, with this league\u2019s seats and the real schedule — over the rounds every team has finished, so a pick in hand is not a lead. The table shows each team\u2019s full totals. Other teams are measured on the same projections as yours.'
+          : 'Ranked by categories won a week against an average team with as many picks.'}</p>
+      </>}
     </div>
   )
 }

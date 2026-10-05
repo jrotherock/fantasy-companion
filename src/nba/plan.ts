@@ -21,6 +21,8 @@ import {
 } from './draft.js'
 import { CATS, categoryZ, effectiveGames, pointsValues, rankBuild, rosterSpots, type Cat, type CatRow, type PointsRow } from './value.js'
 import { openSeats, positionalSlots, stillFeasible } from './lineup.js'
+import { startShares, type Calendar } from './starts.js'
+import { startingSeats } from './week.js'
 import { myPicks, teamsIn, type FeedItem, type StoredDraft } from './session.js'
 import type { NbaPlayer } from './types.js'
 import type { PrefTag } from './preferences.js'
@@ -84,6 +86,8 @@ export interface Prepared {
   playoffNorm: number | null
   /** For a player starting the season hurt: when he is back and what that leaves. */
   returnNote: (id: string) => string | null
+  /** The season's game days (sampled), for counting starts; null without a schedule. */
+  calendar: Calendar | null
 }
 
 /** Where a player's expected return comes from: a date you set, or CBS's injury report. */
@@ -187,6 +191,7 @@ export function prepare(
     league, rounds, players: byId, adp, positions, slots: positionalSlots(league.roster), adpOrder: [],
     playoff, playoffNorm: games.length ? games[Math.floor(games.length / 2)] : null,
     returnNote: (id: string) => notes.get(id) ?? null,
+    calendar: injuries ? calendarOf(injuries.teamDates) : null,
   }
   if (league.scoring === 'categories') {
     const rows = categoryZ(players, league).map((r) => ({ ...r, adp: adp(r.id) }))
@@ -199,6 +204,97 @@ export function prepare(
     prepared.adpOrder = [...rows].sort((a, b) => a.adp - b.adp).map((r) => r.id)
   }
   return prepared
+}
+
+/** Every fourth game day of the season, from each team's dates: enough to count starts. */
+function calendarOf(teamDates: Record<string, string[]>): Calendar {
+  const byDate = new Map<string, Set<string>>()
+  for (const [team, dates] of Object.entries(teamDates)) for (const d of dates) (byDate.get(d) ?? byDate.set(d, new Set()).get(d)!).add(team)
+  const dates = [...byDate.keys()].sort()
+  return { days: dates.filter((_, i) => i % 4 === 0).map((d) => byDate.get(d)!) }
+}
+
+/** A fantasy season is about 23.4 weeks of games: 82 over three and a half a week. */
+const SEASON_WEEKS = 23.4
+
+export interface RoomRow {
+  seat: number
+  manager: string | null
+  mine: boolean
+  picks: number
+  /** Points leagues: fantasy points a week from the games the roster would start. */
+  pointsWeek: number | null
+  value: number | null
+  fpSeason: number | null
+  /** The average points a game of the roster's best lineup's worth of players: a full night. */
+  fpNight: number | null
+  fpMin: number | null
+  /** Categories leagues: categories a week against an average team with as many picks. */
+  catsWeek: number | null
+  /** What the rank is on: the same measure over the rounds every team has finished, so a pick in hand is not a lead. */
+  rankedOn: number | null
+  rank: number
+}
+
+/**
+ * Every team in the room, measured from its own picks so far, as the draft
+ * goes. Points: what a week of starts scores, with value, season points, a
+ * full night's points a game and points a minute beside it. Categories: the
+ * categories a week the roster wins against an average team.
+ */
+export function liveRoom(prep: Prepared, d: StoredDraft, teams: number, mySlot: number | null): RoomRow[] {
+  const bySeat = new Map<number, string[]>()
+  for (const x of d.picks) {
+    const seat = slotFor(x.overall, teams)
+    ;(bySeat.get(seat) ?? bySeat.set(seat, []).get(seat)!).push(x.playerId)
+  }
+  const seats = startingSeats(prep.league.roster)
+  // Every team has at least this many picks: the rounds the whole room has finished.
+  const full = Math.min(...[...bySeat.values()].map((ids) => ids.length), ...(bySeat.size < teams ? [0] : []))
+  const headline = (ids: string[]): number => {
+    if (prep.points) {
+      const rs = ids.map((id) => prep.points!.byId.get(id)).filter((r): r is NonNullable<typeof r> => !!r)
+      const share = prep.calendar
+        ? startShares(rs.map((r) => ({ id: r.id, positions: seatPositionsOf(prep.positions(r.id)), team: prep.players.get(r.id)?.team ?? null, worth: r.fpg })), seats, prep.calendar)
+        : new Map<string, number>()
+      return rs.reduce((n, r) => n + r.fpg * r.games.gp * (share.get(r.id) ?? 1), 0) / SEASON_WEEKS
+    }
+    return ids.length ? expectedCats(strengthOf(prep, ids), ids.length, prep.cats!.base) : 0
+  }
+  const rows: RoomRow[] = [...bySeat.entries()].map(([seat, ids]) => {
+    const base = { seat, manager: d.managers?.[seat - 1] ?? null, mine: seat === mySlot, picks: ids.length, rank: 0, rankedOn: full > 0 ? headline(ids.slice(0, full)) : null }
+    if (prep.points) {
+      const rs = ids.map((id) => prep.points!.byId.get(id)).filter((r): r is NonNullable<typeof r> => !!r)
+      const share = prep.calendar
+        ? startShares(rs.map((r) => ({ id: r.id, positions: seatPositionsOf(prep.positions(r.id)), team: prep.players.get(r.id)?.team ?? null, worth: r.fpg })), seats, prep.calendar)
+        : new Map<string, number>()
+      const mins = rs.reduce((n, r) => n + (prep.players.get(r.id)?.projection?.perGame.min ?? 0), 0)
+      const top = [...rs].sort((a, b) => b.fpg - a.fpg).slice(0, seats.length)
+      return {
+        ...base,
+        pointsWeek: rs.reduce((n, r) => n + r.fpg * r.games.gp * (share.get(r.id) ?? 1), 0) / SEASON_WEEKS,
+        value: rs.reduce((n, r) => n + r.value, 0),
+        fpSeason: rs.reduce((n, r) => n + r.season, 0),
+        fpNight: top.length ? top.reduce((n, r) => n + r.fpg, 0) / top.length : null,
+        fpMin: mins > 0 ? rs.reduce((n, r) => n + r.fpg, 0) / mins : null,
+        catsWeek: null,
+      }
+    }
+    return { ...base, pointsWeek: null, value: null, fpSeason: null, fpNight: null, fpMin: null, catsWeek: expectedCats(strengthOf(prep, ids), ids.length, prep.cats!.base) }
+  }).sort((a, b) => (b.rankedOn ?? b.pointsWeek ?? b.catsWeek ?? 0) - (a.rankedOn ?? a.pointsWeek ?? a.catsWeek ?? 0))
+  rows.forEach((r, i) => (r.rank = i + 1))
+  return rows
+}
+
+const SEAT_POS = new Set(['PG', 'SG', 'SF', 'PF', 'C'])
+function seatPositionsOf(eligible: string[]): string[] {
+  const out = new Set<string>()
+  for (const e of eligible) {
+    if (SEAT_POS.has(e)) out.add(e)
+    if (e === 'G') { out.add('PG'); out.add('SG') }
+    if (e === 'F') { out.add('SF'); out.add('PF') }
+  }
+  return [...out]
 }
 
 /** Season value and rank of every player under one build, cached per build. */
@@ -308,6 +404,8 @@ export interface DraftView {
   canWait: { name: string; survives: number }[]
   /** When the first choices are too close to call and the playoff schedule separates them. */
   playoffNote: string | null
+  /** Every team in the room, measured from its picks so far; null before any pick. */
+  liveRoom: RoomRow[] | null
   /** My roster's weakest categories as it stands, and whose they are ("Shai's" after one pick). */
   weakSpots: { cats: Cat[]; whose: string } | null
   /** Its strongest: what a pick could stack instead, for a build that leans into them. */
@@ -670,6 +768,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     playoffNote,
     weakSpots,
     strongSpots,
+    liveRoom: d.picks.length ? liveRoom(prep, d, teams, slot) : null,
     playoffNorm: prep.playoffNorm,
     neverCount: [...tags.values()].filter((t) => t === 'never').length,
     league: { id: L.id, label: L.label, scoring: L.scoring, teams, rounds, slot, slotSource: d.slotSource, myTeamName: L.myTeamName },

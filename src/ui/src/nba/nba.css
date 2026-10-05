@@ -185,3 +185,7 @@ div.nb-cat { cursor: default; }
 
 /* Win chances before the build is read: shown, but quieter */
 .nb-cat-early { opacity: 0.6; }
+
+/* The room, live */
+.nb-roomtable { margin-top: 0.4rem; }
+.nb-roomtable tr.nb-mine td { background: color-mix(in srgb, var(--amber) 12%, transparent); }
