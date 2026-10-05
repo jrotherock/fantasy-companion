@@ -175,7 +175,13 @@ function RosterLine({ view }: { view: DraftView }) {
     <div className="nb-roster">
       {view.roster.map((r) => <span key={r.id}><span className="mono nb-dim">R{r.round}</span> {r.name} <span className="nb-dim">{r.positions.join(',')}</span></span>)}
       {!view.roster.length && <span className="nb-dim">No picks yet.</span>}
-      {view.roster.length > 0 && view.openSeats.length > 0 && <span className="nb-amber">Still need: {view.openSeats.join(', ')}</span>}
+      {view.roster.length > 0 && view.stillToFill.count > 0 && (
+        <span className="nb-amber" title="Seats your roster cannot fill yet; any of these can be the open one">
+          Still need: {view.stillToFill.count === view.stillToFill.options.length
+            ? view.stillToFill.options.join(', ')
+            : `${view.stillToFill.count} of ${view.stillToFill.options.join(', ')}`}
+        </span>
+      )}
     </div>
   )
 }

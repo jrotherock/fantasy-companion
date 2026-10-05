@@ -40,3 +40,16 @@ test('never outranks avoid and like, league lists add to the shared ones, and ty
   assert.equal(prefs.tags.has('3'), false, "another league's list does not apply here")
   assert.deepEqual(prefs.unresolved, ['Antony Davis'])
 })
+
+test('what is still to fill names every seat that could be the open one', async () => {
+  const { stillToFill } = await import('./lineup.js')
+  const slots = ['PG', 'SG', 'SF', 'PF', 'C']
+  // Tatum SF/PF, Maxey PG, Kawhi SG/SF/PF, Mobley PF/C: one seat open, and it could be SG, SF, PF or C — only PG is spoken for.
+  const r = stillToFill([['SF', 'PF'], ['PG'], ['SG', 'SF', 'PF'], ['PF', 'C']], slots)
+  assert.equal(r.count, 1)
+  assert.deepEqual(r.options.sort(), ['C', 'PF', 'SF', 'SG'])
+  // Without a big, the C is the only seat that can be open.
+  const g = stillToFill([['PG'], ['PG', 'SG'], ['SF'], ['PF']], slots)
+  assert.deepEqual(g, { count: 1, options: ['C'] })
+  assert.deepEqual(stillToFill([['PG'], ['SG'], ['SF'], ['PF'], ['C']], slots), { count: 0, options: [] })
+})

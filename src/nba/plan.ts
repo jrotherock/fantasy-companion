@@ -20,7 +20,7 @@ import {
   BUILD_FIRM, BUILD_FROM, type AdpSpread, type Advice, type Baseline, type CanTake, type Strength,
 } from './draft.js'
 import { CATS, categoryZ, effectiveGames, pointsValues, rankBuild, rosterSpots, type Cat, type CatRow, type PointsRow } from './value.js'
-import { openSeats, positionalSlots, stillFeasible } from './lineup.js'
+import { positionalSlots, stillFeasible, stillToFill } from './lineup.js'
 import { startShares, type Calendar } from './starts.js'
 import { startingSeats } from './week.js'
 import { myPicks, teamsIn, type FeedItem, type StoredDraft } from './session.js'
@@ -376,7 +376,8 @@ export interface DraftView {
   clock: { overall: number; round: number; onClock: boolean; myNext: number | null; picksUntil: number | null; done: boolean }
   sensor: StoredDraft['sensor']
   roster: { id: string; name: string; team: string | null; positions: string[]; overall: number; round: number }[]
-  openSeats: string[]
+  /** Positional seats still to fill, and which seats could be the open ones. */
+  stillToFill: { count: number; options: string[] }
   build: null | {
     stage: 'open' | 'leaning' | 'firm'
     buildFrom: number
@@ -775,7 +776,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     clock: { overall: done ? teams * rounds : overall, round: roundFor(Math.min(overall, teams * rounds), teams), onClock, myNext, picksUntil: myNext == null ? null : myNext - overall, done },
     sensor: d.sensor,
     roster: mineP.map((x) => ({ id: x.playerId, name: p(x.playerId).name, team: p(x.playerId).team, positions: prep.positions(x.playerId), overall: x.overall, round: roundFor(x.overall, teams) })),
-    openSeats: openSeats(mine.map(prep.positions), prep.slots),
+    stillToFill: stillToFill(mine.map(prep.positions), prep.slots),
     build,
     advice,
     paths: paths.slice(0, prep.cats ? 12 : 1),

@@ -57,3 +57,22 @@ export function openSeats(players: string[][], slots: string[]): string[] {
 export function stillFeasible(roster: string[][], candidate: string[], slots: string[], picksAfter: number): boolean {
   return unfilled([...roster, candidate], slots) <= picksAfter
 }
+
+/**
+ * What is still to fill, honestly: how many positional seats no arrangement
+ * can fill, and which seats could be the open ones. Four players for five
+ * seats always leave one open, but with Mobley at PF/C and Tatum at SF/PF the
+ * open one is a choice — "1 of SF, PF or C" — not "C". openSeats reports
+ * whichever seat one arrangement happened to leave empty.
+ */
+export function stillToFill(players: string[][], slots: string[]): { count: number; options: string[] } {
+  const count = unfilled(players, slots)
+  if (!count) return { count, options: [] }
+  const options = [...new Set(slots)].filter((seat) => {
+    // This seat can be among the open ones if, with one of it taken away, the rest still fill as well as before.
+    const i = slots.indexOf(seat)
+    const without = [...slots.slice(0, i), ...slots.slice(i + 1)]
+    return unfilled(players, without) === count - 1
+  })
+  return { count, options }
+}
