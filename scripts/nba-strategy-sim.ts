@@ -371,6 +371,21 @@ if (MODE === 'turns') {
   strategies['app, turns as before'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H, false, true)
 }
 
+if (MODE === 'teammates') {
+  // Does it pay to avoid teammates? They share a schedule (same nights, same 2- and 4-game weeks), which the raw season plays out.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  const teamOf = (id: string) => byId.get(id)!.team
+  const capped = (n: number): Pick => (avail, mine, overall, slot) => {
+    const count = (t: string | null) => mine.filter((m) => teamOf(m) === t).length
+    const ok = avail.filter((id) => count(teamOf(id)) < n)
+    return appPick(ok.length ? ok : avail, mine, overall, slot, 'none', [], H)
+  }
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  strategies['app, one per NBA team'] = capped(1)
+  strategies['app, two per NBA team'] = capped(2)
+}
+
 if (MODE === 'locks') {
   for (const k of Object.keys(strategies)) delete strategies[k]
   strategies['best value'] = (avail, mine) => windowOf(avail, mine)[0]

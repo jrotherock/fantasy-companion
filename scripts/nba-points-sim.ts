@@ -112,7 +112,16 @@ const skipUnder = (games: number): Pick => (avail, mine, overall, slot) => {
   return app()(ok.length ? ok : avail, mine, overall, slot)
 }
 const MODE = arg('mode') ?? 'center'
-const strategies: Record<string, Pick> = MODE === 'turns' ? {
+const cappedTeam = (n: number): Pick => (avail, mine, overall, slot) => {
+  const teamOf = (id: string) => byId.get(id)!.team
+  const ok = avail.filter((id) => mine.filter((m) => teamOf(m) === teamOf(id)).length < n)
+  return app()(ok.length ? ok : avail, mine, overall, slot)
+}
+const strategies: Record<string, Pick> = MODE === 'teammates' ? {
+  'the app (recommender)': app(),
+  'app, one per NBA team': cappedTeam(1),
+  'app, two per NBA team': cappedTeam(2),
+} : MODE === 'turns' ? {
   'the app (recommender)': app(),
   'app, turns as before': app(undefined, true),
 } : MODE === 'injured' ? {
