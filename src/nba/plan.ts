@@ -798,7 +798,10 @@ export function playoffTiebreak<T extends { name: string; score: number; playoff
   if (known.length < 2 || most === least) return { advice, note: null }
   const reordered = [...close].sort((a, b) => (b.playoff ?? -1) - (a.playoff ?? -1) || b.score - a.score)
   const moved = reordered[0] !== advice[0]
-  const out = [...reordered.map((a, i) => (i === 0 && moved ? { ...a, tiebreak: true } : a)), ...advice.slice(close.length)]
+  // The rest in their own order. Not advice.slice(close.length): the cards are not sorted by score
+  // (players who will be gone come first), so the close ones need not be the first few — slicing
+  // repeated one card and dropped another.
+  const out = [...reordered.map((a, i) => (i === 0 && moved ? { ...a, tiebreak: true } : a)), ...advice.filter((a) => !close.includes(a))]
   const lead = reordered[0], other = reordered.find((a) => a.playoff === least)!
   return {
     advice: out,

@@ -254,3 +254,14 @@ test('after Shai the cards say what each covers and what it stacks', () => {
   const leaning = buildView(hoops, { ...d, locks: ['reb', 'blk'] }, new Map())
   assert.ok(!leaning.weakSpots?.cats.some((c) => c === 'reb' || c === 'blk'))
 })
+
+test('the playoff tiebreak never repeats or drops a card when the cards are not in score order', () => {
+  const a = (name: string, score: number, playoff: number) => ({ name, score, playoff })
+  // As the cards come: Kyrie and Bane too close to call, with Wagner between them (he will be gone sooner).
+  const cards = [a('Kyrie', 5.0, 9), a('Wagner', 4.8, 10), a('Bane', 4.99, 12)]
+  const tb = playoffTiebreak(cards, 0.02)
+  const names = tb.advice.map((x) => x.name)
+  assert.equal(new Set(names).size, 3, `repeated: ${names}`)
+  assert.deepEqual([...names].sort(), ['Bane', 'Kyrie', 'Wagner'])
+  assert.equal(names[0], 'Bane', 'more playoff games breaks the tie')
+})
