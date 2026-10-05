@@ -249,6 +249,26 @@ if (MODE === 'lineup') {
   strategies['app, counting starts'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], { a: 2, b: 0.12 }, true)
 }
 
+if (MODE === 'center') {
+  // A center by my Nth pick: if I have none, take the best center among the top few by value (the window).
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  const isC = (id: string) => seatPositions(posOf(id)).includes('C')
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  for (const n of [2, 3, 4, 6]) {
+    strategies[`a C by my pick ${n}`] = (avail, mine, overall, slot) => {
+      if (mine.length + 1 >= n && !mine.some(isC)) {
+        const cs = avail.filter((id) => isC(id) && canTake(mine)(id)).sort((a, b) => value.get(b)! - value.get(a)!)
+        // The best center no further down than the advice's own reach: among the top dozen by value overall.
+        const top = new Set(avail.filter((id) => canTake(mine)(id)).sort((a, b) => value.get(b)! - value.get(a)!).slice(0, 12))
+        const pickC = cs.find((id) => top.has(id))
+        if (pickC) return pickC
+      }
+      return appPick(avail, mine, overall, slot, 'none', [], H)
+    }
+  }
+}
+
 if (MODE === 'spread') {
   // The app assuming football's spread, against the app assuming the spread measured in Hoops' drafts.
   for (const k of Object.keys(strategies)) delete strategies[k]
@@ -291,7 +311,7 @@ for (const [name, pick] of Object.entries(strategies)) {
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 const se = (xs: number[]) => { const m = mean(xs); return Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1) / xs.length) }
-const ref = results['best value'].allPlay
+const ref = (results['best value'] ?? Object.values(results)[0]).allPlay
 console.log(`Hoops, slots ${SLOT_FROM || 1}–${SLOT_TO || league.teams} × ${SEEDS} rooms each, window ${WINDOW}, room spread ${ROOM.a}+${ROOM.b}·ADP${FIRST ? `, first pick ${FIRST}` : ''}. All-play = chance of winning a week, averaged over the nine rosters in the room.`)
 console.log(`${LINEUPS ? 'Scored on starts only (daily lineups, Hoops seats, real schedule). ' : ''}idle = share of my players' games with no seat.`)
 console.log('strategy                 all-play   ±2se    vs best value (paired) ±2se    cats/wk   idle')
