@@ -201,3 +201,21 @@ div.nb-cat { cursor: default; }
 .nb-delta.down { color: var(--red); }
 .vc.nb-previewing { outline: 1px dashed var(--blue); outline-offset: 2px; }
 .vc { cursor: default; }
+
+/* Compare: two players side by side, verdict first */
+.nb-cardbtns { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+.nb-app .vc .nb-cardbtns { margin-top: 0.2rem; }
+.nb-app .vc .nb-cardbtns .btn { margin-top: 0; }
+.nb-cmp.on { border-color: var(--blue); color: var(--blue); }
+.nb-compare { border: 1px solid var(--blue); border-radius: 4px; padding: 0.6rem 0.75rem; margin: 0.6rem 0; background: rgba(90,169,255,.05); }
+.nb-verdict { font-weight: 600; margin: 0.2rem 0 0.5rem; line-height: 1.4; }
+.nb-cmp-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+@media (max-width: 620px) { .nb-cmp-sides { grid-template-columns: 1fr; } }
+.nb-cmp-side { display: flex; flex-direction: column; gap: 0.25rem; }
+.nb-cmp-side .nm { font-weight: 600; }
+.nb-cmp-cats { width: 100%; border-collapse: collapse; margin-top: 0.6rem; font-variant-numeric: tabular-nums; font-size: var(--t-xs, 0.78rem); font-family: var(--mono); }
+.nb-cmp-cats th, .nb-cmp-cats td { padding: 3px 3px; text-align: center; }
+.nb-cmp-cats th { color: var(--ink-3, var(--ink)); font-weight: 500; }
+.nb-cmp-cats .nb-l { text-align: left; white-space: nowrap; }
+.nb-t-g { color: var(--green); } .nb-t-l { color: color-mix(in srgb, var(--green) 55%, var(--ink)); } .nb-t-a { color: var(--amber); } .nb-t-r { color: var(--red); }
+.nb-cmp-win { font-weight: 700; outline: 1px solid currentColor; outline-offset: -2px; border-radius: 2px; }

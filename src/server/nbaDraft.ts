@@ -24,7 +24,7 @@ import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { NameIndex } from '../nba/join.js'
 import { adpFor } from '../nba/draft.js'
-import { buildView, changes, prepare, recordOf, type Availability, type DraftView, type InjuryInputs, type NbaLeague, type Prepared } from '../nba/plan.js'
+import { buildView, changes, compareView, prepare, recordOf, type Availability, type DraftView, type InjuryInputs, type NbaLeague, type Prepared } from '../nba/plan.js'
 import { parseCbsInjuries, type InjuryNote } from '../nba/sources.js'
 import { analyseMocks, type MockRecord } from '../nba/tendencies.js'
 import { adpSpread, backtest, fetchHistory, historyStatus, opponentReport } from './nbaHistory.js'
@@ -555,6 +555,15 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
 
   if (!action && req.method === 'GET') {
     json(res, 200, viewOf(s))
+    return true
+  }
+  // Two players side by side: ?ids=a,b — or one, set against the top card.
+  if (action === 'compare' && req.method === 'GET') {
+    const view = viewOf(s)
+    const cards = view.takeNow.map((a) => a.id)
+    let ids = (new URL(req.url ?? '', 'http://x').searchParams.get('ids') ?? '').split(',').filter(Boolean).slice(0, 2)
+    if (ids.length === 1 && cards[0] && ids[0] !== cards[0]) ids = [cards[0], ids[0]]
+    json(res, 200, compareView(s.prep, s.draft, tagsFor(s.league.id), ids, cards))
     return true
   }
   if (req.method !== 'POST') {

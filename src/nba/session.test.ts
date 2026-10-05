@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { addManual, emptyDraft, ingestYahoo, undoManual } from './session.js'
 import { NameIndex } from './join.js'
 import { draftOrder, parseDraftResults, parseTeams } from './yahooDraft.js'
-import { buildView, checkScoring, playoffTiebreak, prepare } from './plan.js'
+import { buildView, checkScoring, compareView, playoffTiebreak, prepare } from './plan.js'
 import { adpFor } from './draft.js'
 
 const index = new NameIndex([
@@ -265,4 +265,30 @@ test('the playoff tiebreak never repeats or drops a card when the cards are not 
   assert.equal(new Set(names).size, 3, `repeated: ${names}`)
   assert.deepEqual([...names].sort(), ['Bane', 'Kyrie', 'Wagner'])
   assert.equal(names[0], 'Bane', 'more playoff games breaks the tie')
+})
+
+test('compare: a player off the cards is scored on the cards\' own scale, with a verdict in words', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  for (const id of ['nba-hoops', 'nba-harker']) {
+    const prep = prepare(leagues.find((l: any) => l.id === id), players, noise, adpFor)
+    const d = emptyDraft('t')
+    d.slot = 3
+    d.picks = prep.adpOrder.slice(0, 2).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
+    const v = buildView(prep, d, new Map())
+    const top = v.takeNow[0]
+    // Someone well down the list: not on the cards, but scored all the same.
+    const far = prep.adpOrder[40]
+    const c = compareView(prep, d, new Map(), [top.id, far], v.takeNow.map((a) => a.id))!
+    assert.equal(c.sides.length, 2)
+    assert.equal(c.sides[0].card, 1)
+    assert.equal(c.sides[1].card, null)
+    assert.ok(Number.isFinite(c.sides[1].score), id)
+    assert.ok(Math.abs(c.sides[0].score - top.score) < 1e-9, 'the card keeps its own score')
+    assert.ok(c.sides[0].score > c.sides[1].score)
+    assert.ok(c.verdict.startsWith(top.name), c.verdict)
+    if (id === 'nba-hoops') assert.match(c.verdict, /categor(y|ies) won over the season/)
+    else assert.match(c.verdict, /fantasy points over the season/)
+  }
 })

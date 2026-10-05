@@ -129,6 +129,8 @@ export function advisePoints(
   spot: DraftSpot,
   shortlist = 25,
   canTake: CanTake = anyone,
+  /** Players to score whether or not they make the shortlist (to compare with the cards). */
+  include: string[] = [],
 ): Advice[] {
   const next = nextTurn(spot)
   const sorted = [...available].sort((a, b) => b.value - a.value)
@@ -139,7 +141,8 @@ export function advisePoints(
   }
   const pair = backToBack(spot)
   const beyond = pair ? nextPickFor(spot.slot, spot.teams, spot.rounds, spot.overall + 1) : null
-  return takeable.slice(0, shortlist).map((c) => {
+  const scoreThese = [...takeable.slice(0, shortlist), ...sorted.filter((c) => include.includes(c.id) && !takeable.slice(0, shortlist).includes(c))]
+  return scoreThese.map((c) => {
     const rest = takeable.filter((x) => x.id !== c.id && canTake(x.id, c.id))
     if (pair) {
       // Both picks are mine; the question is which pair leaves the most for the turn after it.
@@ -259,6 +262,8 @@ export interface CategoryOptions {
   neutralUntil?: number
   /** Categories locked as punts: no longer worth anything to the advice. */
   ignore?: Cat[]
+  /** Players to score whether or not they make the shortlist (to compare with the cards). */
+  include?: string[]
   /**
    * A roster's strength counting only the games its players would start (starts.ts):
    * the sixth point guard adds little on nights the seats are full. Without it,
@@ -303,7 +308,9 @@ export function adviseCategories(
 
   const pair = backToBack(spot)
   const beyond = pair ? nextPickFor(spot.slot, spot.teams, spot.rounds, spot.overall + 1) : null
-  return single.slice(0, shortlist).map(({ c, s, e }) => {
+  const listed = single.slice(0, shortlist)
+  const extra = scored.filter((x) => opts.include?.includes(x.c.id) && !listed.includes(x))
+  return [...listed, ...extra].map(({ c, s, e }) => {
     let later = e
     let then: string | undefined
     if (next != null) {

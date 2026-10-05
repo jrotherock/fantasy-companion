@@ -808,6 +808,122 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
  * things that change a decision: the build being read for the first time or
  * turning, a lock that has stopped paying, a target taken just before me.
  */
+export interface CompareSide {
+  id: string
+  name: string
+  team: string | null
+  positions: string[]
+  /** On the advice's own scale, as the cards are: categories a week (or value) with my next turn counted in. */
+  score: number
+  /** Chance he is back at my next turn if I pass. */
+  survives: number
+  /** Win chance per category with him added (categories leagues). */
+  preview: Strength | null
+  /** Categories he leaves stronger than the other does, by two points or more. */
+  better: Cat[]
+  fpg: number | null
+  gp: number
+  /** His place on the cards (1-3), or null. */
+  card: number | null
+  /** Whether I could take him now: not on the never list, the roster can still fill. */
+  takeable: boolean
+}
+
+export interface CompareView {
+  unit: 'categories' | 'value'
+  /** My win chances now, for the tiles' starting point. */
+  now: Strength | null
+  sides: CompareSide[]
+  /** The answer in a sentence. */
+  verdict: string
+  nextPick: number | null
+}
+
+/**
+ * Two players side by side on the advice's own scale — a card against a card,
+ * or a player I am tempted by against the top card. The score is the same one
+ * the cards are ranked by, so it counts who would still be there next turn;
+ * the categories say where each one would take the build.
+ */
+export function compareView(prep: Prepared, d: StoredDraft, tags: Map<string, PrefTag>, ids: string[], cards: string[]): CompareView | null {
+  const L = prep.league
+  const teams = teamsIn(d, L.teams)
+  const rounds = prep.rounds
+  const taken = new Set(d.picks.map((p) => p.playerId))
+  const overall = (d.picks.at(-1)?.overall ?? 0) + 1
+  const slot = d.slot
+  if (slot == null || overall > teams * rounds) return null
+  const mine = myPicks(d, teams, slotFor).map((p) => p.playerId)
+  const myNext = nextPickFor(slot, teams, rounds, overall - 1)
+  if (myNext == null) return null
+  const nextAfter = nextPickFor(slot, teams, rounds, myNext)
+  const spot = { teams, rounds, slot, overall: myNext, spread: L.adpSpread }
+  const canTake = canTakeFor(prep, mine, tags)
+  const want = ids.filter((id) => !taken.has(id) && prep.players.has(id)).slice(0, 2)
+  if (!want.length) return null
+  const scored = prep.cats
+    ? adviseCategories(prep.cats.rows.filter((r) => !taken.has(r.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
+      { canTake, neutralUntil: d.locks.length ? 0 : BUILD_FROM, ignore: d.locks, include: want })
+    : advisePoints(prep.points!.rows.filter((r) => !taken.has(r.id)), spot, 25, canTake, want)
+  const back = (id: string) => nextAfter == null ? 0 : nextAfter === myNext + 1 ? 1 : survives(prep.adp(id), nextAfter, L.adpSpread)
+  const sides: CompareSide[] = want.map((id) => {
+    const a = scored.find((x) => x.id === id)
+    const p = prep.players.get(id)!
+    return {
+      id, name: p.name, team: p.team, positions: prep.positions(id),
+      score: a?.score ?? -Infinity, survives: back(id),
+      preview: prep.cats ? winChances(strengthOf(prep, [...mine, id]), mine.length + 1, prep.cats.base) : null,
+      better: [], fpg: prep.points?.byId.get(id)?.fpg ?? null, gp: gamesOf(prep, id),
+      card: cards.includes(id) ? cards.indexOf(id) + 1 : null, takeable: canTake(id),
+    }
+  })
+  if (sides.length === 2 && sides[0].preview && sides[1].preview) {
+    const [x, y] = sides
+    x.better = CATS.filter((c) => !d.locks.includes(c) && x.preview![c] - y.preview![c] >= 0.02)
+    y.better = CATS.filter((c) => !d.locks.includes(c) && y.preview![c] - x.preview![c] >= 0.02)
+  }
+  const words = (cs: Cat[]) => {
+    const l = cs.map((c) => (c === 'to' ? 'fewer turnovers' : CAT_LABEL[c]))
+    return l.length > 1 ? `${l.slice(0, -1).join(', ')} and ${l.at(-1)}` : l[0] ?? ''
+  }
+  const last = (n: string) => n.split(' ').at(-1)
+  const weeks = ((L as NbaLeague & { playoffWeeks?: number[] }).playoffWeeks?.[0] ?? 20) - 1
+  let verdict = ''
+  if (sides.length === 2) {
+    const [a, b] = [...sides].sort((p, q) => q.score - p.score)
+    const gap = a.score - b.score
+    const cats = !!prep.cats
+    const close = cats ? gap < 0.02 : gap < Math.abs(a.score) * 0.01
+    // In words: a gap in categories a week, over the regular season, is categories won; a points gap is points above replacement.
+    const amount = cats
+      ? `${gap.toFixed(2)} categories a week — about ${Math.max(1, Math.round(gap * weeks))} more categor${Math.round(gap * weeks) > 1 ? 'ies' : 'y'} won over the season`
+      : `about ${Math.round(gap)} fantasy points over the season`
+    const leans = cats
+      ? (a.better.length || b.better.length ? ` ${last(a.name)} gives you more ${a.better.length ? words(a.better) : 'of nothing in particular'}; ${last(b.name)} more ${b.better.length ? words(b.better) : 'of nothing in particular'}.` : '')
+      // Points: what a game is worth against how many games, which is all the value is.
+      : a.fpg != null && b.fpg != null
+        ? a.fpg < b.fpg && a.gp - b.gp >= 3 ? ` ${last(b.name)} scores more a game (${b.fpg.toFixed(1)} to ${a.fpg.toFixed(1)}), but ${last(a.name)} is projected for ${Math.round(a.gp - b.gp)} more games.`
+          : a.fpg > b.fpg ? ` ${last(a.name)} scores more a game (${a.fpg.toFixed(1)} to ${b.fpg.toFixed(1)}).` : ''
+        : ''
+    if (!b.takeable) verdict = `${b.name} cannot fill a seat your roster still needs — ${a.name}.`
+    else if (!Number.isFinite(b.score)) verdict = `${a.name}: ${b.name} is too far down the list to score against him.`
+    else if (close) verdict = cats
+      ? `A coin flip: ${a.name} by only ${gap.toFixed(2)} categories a week, inside the noise. Take the one whose categories you want.${leans}`
+      : `A coin flip: ${a.name} by ${amount}, inside the noise. Take whom you prefer.`
+    else {
+      const wait = nextAfter == null ? ''
+        : b.survives >= 0.6 ? ` And ${b.name} is ${Math.round(b.survives * 100)}% likely back at pick ${nextAfter}, so you may get both.`
+        : b.survives >= 0.3 ? ` ${b.name} has a ${Math.round(b.survives * 100)}% chance of lasting to pick ${nextAfter}.` : ''
+      verdict = `${a.name} by ${amount}.${leans}${wait}`
+    }
+  } else verdict = `${sides[0].name}: pin a second player to compare.`
+  return {
+    unit: prep.cats ? 'categories' : 'value',
+    now: prep.cats && mine.length ? winChances(strengthOf(prep, mine), mine.length, prep.cats.base) : null,
+    sides, verdict, nextPick: nextAfter,
+  }
+}
+
 export function changes(prev: DraftView | null, next: DraftView, now = Date.now()): FeedItem[] {
   if (!prev) return []
   const out: FeedItem[] = []

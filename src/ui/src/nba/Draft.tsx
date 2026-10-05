@@ -9,7 +9,7 @@
  * once per change, and this draws it; the screen polls every two seconds.
  */
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { DraftView, BoardRow, PathView } from '../../../nba/plan'
+import type { DraftView, BoardRow, PathView, CompareView } from '../../../nba/plan'
 import type { Cat } from '../../../nba/value'
 
 const CATS: Cat[] = ['fg', 'ft', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to']
@@ -102,6 +102,11 @@ function Screen({ id }: { id: string }) {
   const [rosterOpen, setRosterOpen] = useState(false)
   // A card being looked at: the build tiles preview my categories with him added.
   const [previewId, setPreviewId] = useState<string | null>(null)
+  // Up to two players pinned side by side: two cards, or a player I am tempted by against the top card.
+  const [pins, setPins] = useState<string[]>([])
+  const pin = useCallback((pid: string) => setPins((ps) => (ps.includes(pid) ? ps.filter((x) => x !== pid) : [...ps, pid].slice(-2))), [])
+  const takenIds = view ? view.board.filter((r) => r.takenAt != null).map((r) => r.id).join(',') : ''
+  useEffect(() => { const t = new Set(takenIds.split(',')); setPins((ps) => (ps.some((x) => t.has(x)) ? ps.filter((x) => !t.has(x)) : ps)) }, [takenIds])
   // The review arrives at the top of the scrolling panel; bring it into view, since the eyes were on the board.
   const reviewed = !!view?.review
   useEffect(() => {
@@ -125,7 +130,8 @@ function Screen({ id }: { id: string }) {
           : view.review ? null
           : <>
               <Notice view={view} />
-              <Take view={view} act={act} previewId={previewId} setPreviewId={setPreviewId} />
+              <Take view={view} act={act} previewId={previewId} setPreviewId={setPreviewId} pins={pins} pin={pin} />
+              {pins.length > 0 && <Compare id={id} view={view} act={act} pins={pins} pin={pin} clear={() => setPins([])} />}
               {cats && <Build view={view} act={act} preview={view.takeNow.find((a) => a.id === previewId) ?? null} />}
             </>}
       </div>
@@ -135,7 +141,7 @@ function Screen({ id }: { id: string }) {
           {view.review && <Review view={view} act={act} />}
           <NextPicks view={view} />
           <Room view={view} />
-          <Board view={view} act={act} id={id} />
+          <Board view={view} act={act} id={id} pins={pins} pin={pin} />
         </div>
       )}
       {drawer && <Before view={view} id={id} close={() => setDrawer(false)} />}
@@ -225,7 +231,7 @@ function reasons(contrib: Record<Cat, number> | undefined, locks: Cat[]) {
   return <>{up.map((c) => <span key={c} className="nb-up">+{LABEL[c]}</span>)}{down.map((c) => <span key={c} className="nb-down">−{LABEL[c]}</span>)}</>
 }
 
-function Take({ view, act, previewId, setPreviewId }: { view: DraftView; act: Act; previewId: string | null; setPreviewId: (id: string | null) => void }) {
+function Take({ view, act, previewId, setPreviewId, pins, pin }: { view: DraftView; act: Act; previewId: string | null; setPreviewId: (id: string | null) => void; pins: string[]; pin: (id: string) => void }) {
   const cards = view.takeNow
   if (!cards.length) return null
   const onClock = view.clock.onClock
@@ -271,7 +277,10 @@ function Take({ view, act, previewId, setPreviewId }: { view: DraftView; act: Ac
               {a.there != null ? `${pct(a.there)} there at pick ${view.clock.myNext}` : a.thenName ? null : a.canWait ? `${pct(a.survives)} back next turn — can wait` : `${pct(1 - a.survives)} gone by your next turn`}
               {a.thenName && <span className="nb-pair">{a.there != null ? ' · ' : ''}then {a.thenName} at pick {second}</span>}
             </div>
-            <button className={`btn ${i === 0 && onClock ? 'primary' : ''}`} onClick={(e) => { e.stopPropagation(); act('pick', { playerId: a.id }) }}>Mark drafted</button>
+            <div className="nb-cardbtns">
+              <button className={`btn ${i === 0 && onClock ? 'primary' : ''}`} onClick={(e) => { e.stopPropagation(); act('pick', { playerId: a.id }) }}>Mark drafted</button>
+              <button className={`btn nb-cmp ${pins.includes(a.id) ? 'on' : ''}`} title="Compare side by side" onClick={(e) => { e.stopPropagation(); pin(a.id) }}>{pins.includes(a.id) ? 'Comparing' : 'Compare'}</button>
+            </div>
           </div>
         ))}
       </div>
@@ -283,6 +292,63 @@ function Take({ view, act, previewId, setPreviewId }: { view: DraftView; act: Ac
         </div>
       )}
       {view.playoffNote && <div className="nb-ponote">{view.playoffNote}</div>}
+    </div>
+  )
+}
+
+/**
+ * Two players side by side on the cards' own scale: the verdict first, then where
+ * each would take the build. One pinned player is set against the top card.
+ */
+function Compare({ id, view, act, pins, pin, clear }: { id: string; view: DraftView; act: Act; pins: string[]; pin: (id: string) => void; clear: () => void }) {
+  const [cv, setCv] = useState<CompareView | null>(null)
+  const key = `${pins.join(',')}|${view.clock.overall}|${(view.build?.locks ?? []).join(',')}`
+  useEffect(() => {
+    let live = true
+    fetch(`/api/nba/draft/${id}/compare?ids=${pins.join(',')}`).then((r) => r.json()).then((x) => { if (live) setCv(x) }).catch(() => {})
+    return () => { live = false }
+  }, [id, key])
+  const locks = view.build?.locks ?? []
+  const cats = view.league.scoring === 'categories'
+  return (
+    <div className="nb-compare">
+      <div className="vhead">
+        <span className="vlabel">COMPARE</span>
+        <span className="spacer" />
+        <button className="nb-link" onClick={clear}>Close</button>
+      </div>
+      {!cv ? <div className="nb-dim">Comparing…</div> : <>
+        <div className="nb-verdict">{cv.verdict}</div>
+        <div className="nb-cmp-sides">
+          {cv.sides.map((s) => (
+            <div key={s.id} className="nb-cmp-side">
+              <div className="nm">{s.name} <span className="nb-dim nb-small">{s.team} · {s.positions.join(', ')}</span></div>
+              <div className="nb-dim nb-small">
+                {s.card ? `card ${s.card}` : 'not on the cards'} · {Math.round(s.gp)} g{s.fpg != null ? ` · ${s.fpg.toFixed(1)} fp/g` : ''}
+                {cv.nextPick != null && ` · ${pct(s.survives)} back at pick ${cv.nextPick}`}
+              </div>
+              <div className="nb-cardbtns">
+                <button className="btn" onClick={() => act('pick', { playerId: s.id })}>Mark drafted</button>
+                {pins.includes(s.id) && <button className="btn nb-cmp" onClick={() => pin(s.id)}>Unpin</button>}
+              </div>
+            </div>
+          ))}
+        </div>
+        {cats && cv.sides.length === 2 && cv.sides[0].preview && (
+          <table className="nb-cmp-cats">
+            <thead><tr><th />{CATS.map((c) => <th key={c} className={locks.includes(c) ? 'nb-off' : ''}>{LABEL[c]}</th>)}</tr></thead>
+            <tbody>
+              {cv.now && <tr className="nb-dim"><td className="nb-l">Now</td>{CATS.map((c) => <td key={c}>{pct(cv.now![c])}</td>)}</tr>}
+              {cv.sides.map((s) => (
+                <tr key={s.id}>
+                  <td className="nb-l">{s.name.split(' ').at(-1)}</td>
+                  {CATS.map((c) => <td key={c} className={`nb-t-${tone(s.preview![c])} ${s.better.includes(c) ? 'nb-cmp-win' : ''} ${locks.includes(c) ? 'nb-off' : ''}`}>{pct(s.preview![c])}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </>}
     </div>
   )
 }
@@ -513,7 +579,7 @@ function sortValue(r: BoardRow, key: SortKey): number {
   }
 }
 
-function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
+function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: string; pins: string[]; pin: (id: string) => void }) {
   const [pos, setPos] = useState('All')
   const [q, setQ] = useState('')
   const [showTaken, setShowTaken] = useState(false)
@@ -552,6 +618,7 @@ function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
             <li><b>Next</b>: chance he lasts to your next pick. Above about 60%, he can wait. <b>PO</b>: games in your playoff weeks, the tiebreaker.</li>
             <li><b>Back to back</b> (the end of a round, when your next pick follows at once): each card names the partner to take with it. Queue him in Yahoo before you pick, so a timeout takes him rather than Yahoo's choice.</li>
             <li>Grey rows are your never list. A red note means he starts the season hurt; set your own return date beside it.</li>
+            <li><b>⇄</b> (or <b>Compare</b> on a card): pin a player to set him against the top card, or pin two to set them against each other. You get a verdict in words on the cards' own scale, and where each would take your categories.</li>
             <li>Check a name here; let the cards above make the call.</li>
           </ul>
         </div>
@@ -600,6 +667,7 @@ function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
                 {cats ? CATS.map((c) => <td key={c} className={`mono ${locks.includes(c) ? 'nb-off' : ''}`} style={locks.includes(c) ? undefined : heat(r.contrib![c])}>{r.contrib![c].toFixed(1)}</td>)
                   : <><td className="mono">{r.fpg?.toFixed(1)}</td><td className="mono">{r.fpMin != null ? r.fpMin.toFixed(2) : '—'}</td><td className="mono">{r.fpSeason != null ? Math.round(r.fpSeason).toLocaleString() : ''}</td><td className="mono">{Math.round(r.value)}</td></>}
                 <td className="nb-tags">
+                  {r.takenAt == null && r.tag !== 'never' && !view.review && <button className={pins.includes(r.id) ? 'nb-on' : ''} title="Compare with the top card (or a pinned player)" onClick={() => pin(r.id)}>⇄</button>}
                   <button className={r.tag === 'never' ? 'nb-on' : ''} title="Never draft" onClick={() => tag(r, 'never')}>✕</button>
                   <button className={r.tag === 'avoid' ? 'nb-on' : ''} title="Avoid" onClick={() => tag(r, 'avoid')}>↓</button>
                   <button className={r.tag === 'like' ? 'nb-on' : ''} title="Like" onClick={() => tag(r, 'like')}>★</button>
