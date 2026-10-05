@@ -389,7 +389,7 @@ export interface DraftView {
     locks: Cat[]
     expected: number | null
   }
-  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; bestBuild: BestBuild | null
+  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; bestBuild: BestBuild | null
     /** Which of my roster's weak categories he would help, from my first pick on. */
     fits: Cat[]
     /** Which of its strong ones he would add to: leaning in rather than covering. */
@@ -596,6 +596,12 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     const first = p(mine[0]).name.split(' ')
     weakSpots = cats.length ? { cats, whose: mine.length === 1 ? `${first[first.length - 1]}'s` : 'your' } : null
   }
+  // Players I already have from his NBA team: they share his nights. Information, not a rule: in simulated
+  // seasons neither avoiding teammates nor breaking coin flips away from them changed weeks won (2026-10-05).
+  const matesOf = (id: string): string[] => {
+    const t = p(id).team
+    return t ? mine.filter((m) => p(m).team === t).map((m) => p(m).name) : []
+  }
   const fitsOf = (contrib: Record<Cat, number> | undefined): Cat[] =>
     weakSpots && contrib ? weakSpots.cats.filter((c) => contrib[c] >= FIT_MIN) : []
   const stacksOf = (contrib: Record<Cat, number> | undefined): Cat[] =>
@@ -623,6 +629,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       there: onClock ? null : survives(prep.adp(a.id), myNext!, prep.league.adpSpread),
       canWait: nextAfter != null && (nextAfter === myNext! + 1 || survives(prep.adp(a.id), nextAfter, prep.league.adpSpread) >= 0.6),
       thenName: a.then ? p(a.then).name : null,
+      mates: matesOf(a.id),
       contrib: prep.cats ? contribution(prep.cats.byId.get(a.id)!) : undefined,
       fpg: prep.points?.byId.get(a.id)?.fpg,
       gp: (prep.cats?.byId.get(a.id)?.games.gp ?? prep.points?.byId.get(a.id)?.games.gp) ?? 0,
@@ -827,6 +834,8 @@ export interface CompareSide {
   card: number | null
   /** Whether I could take him now: not on the never list, the roster can still fill. */
   takeable: boolean
+  /** Players I already have from his NBA team. */
+  mates: string[]
 }
 
 export interface CompareView {
@@ -875,6 +884,7 @@ export function compareView(prep: Prepared, d: StoredDraft, tags: Map<string, Pr
       preview: prep.cats ? winChances(strengthOf(prep, [...mine, id]), mine.length + 1, prep.cats.base) : null,
       better: [], fpg: prep.points?.byId.get(id)?.fpg ?? null, gp: gamesOf(prep, id),
       card: cards.includes(id) ? cards.indexOf(id) + 1 : null, takeable: canTake(id),
+      mates: p.team ? mine.filter((m) => prep.players.get(m)!.team === p.team).map((m) => prep.players.get(m)!.name) : [],
     }
   })
   if (sides.length === 2 && sides[0].preview && sides[1].preview) {

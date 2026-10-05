@@ -292,3 +292,17 @@ test('compare: a player off the cards is scored on the cards\' own scale, with a
     else assert.match(c.verdict, /fantasy points over the season/)
   }
 })
+
+test('a card names the players I already have from his NBA team', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
+  const d = emptyDraft('t')
+  d.slot = 1
+  // My first pick, then the room down ADP to my second: whoever shares his team says so.
+  d.picks = hoops.adpOrder.slice(0, 19).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
+  const v = buildView(hoops, d, new Map())
+  const first = hoops.players.get(hoops.adpOrder[0])!
+  for (const a of v.advice) assert.deepEqual(a.mates, a.team === first.team ? [first.name] : [], a.name)
+})

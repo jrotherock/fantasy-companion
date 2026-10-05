@@ -117,10 +117,19 @@ const cappedTeam = (n: number): Pick => (avail, mine, overall, slot) => {
   const ok = avail.filter((id) => mine.filter((m) => teamOf(m) === teamOf(id)).length < n)
   return app()(ok.length ? ok : avail, mine, overall, slot)
 }
+// A coin flip (within 1% of the top score, as the cards call it) goes to whoever shares no NBA team with my roster.
+const mateBreak: Pick = (avail, mine, overall, slot) => {
+  const pool = avail.map((id) => rowOf.get(id)!).filter(Boolean)
+  const advice = advisePoints(pool, { teams: league.teams, rounds, slot, overall, spread: SPREAD }, 25, canTake(mine))
+  if (!advice.length) return app()(avail, mine, overall, slot)
+  const close = advice.filter((a) => advice[0].score - a.score <= Math.abs(advice[0].score) * 0.01).slice(0, 3)
+  const teamOf = (id: string) => byId.get(id)!.team
+  return (close.find((a) => !mine.some((m) => teamOf(m) === teamOf(a.id))) ?? close[0]).id
+}
 const strategies: Record<string, Pick> = MODE === 'teammates' ? {
   'the app (recommender)': app(),
   'app, one per NBA team': cappedTeam(1),
-  'app, two per NBA team': cappedTeam(2),
+  'app + teammate tiebreak': mateBreak,
 } : MODE === 'turns' ? {
   'the app (recommender)': app(),
   'app, turns as before': app(undefined, true),

@@ -219,3 +219,4 @@ div.nb-cat { cursor: default; }
 .nb-cmp-cats .nb-l { text-align: left; white-space: nowrap; }
 .nb-t-g { color: var(--green); } .nb-t-l { color: color-mix(in srgb, var(--green) 55%, var(--ink)); } .nb-t-a { color: var(--amber); } .nb-t-r { color: var(--red); }
 .nb-cmp-win { font-weight: 700; outline: 1px solid currentColor; outline-offset: -2px; border-radius: 2px; }
+.nb-mates { color: var(--ink-3, var(--ink)); opacity: 0.8; }

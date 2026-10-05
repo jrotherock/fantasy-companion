@@ -262,6 +262,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin }: { view: DraftVi
               <span className="nb-dim">{Math.round(a.gp)} g</span>
               {a.playoff != null && <span className={po(a.playoff, view.playoffNorm)}>{a.playoff} PO g</span>}
               {a.returnNote && <span className="nb-down">{a.returnNote}</span>}
+              {a.mates.length > 0 && <span className="nb-mates" title="Same NBA team, same nights. Information only: in simulated seasons, avoiding teammates made no difference">shares {a.team}'s nights with {a.mates.map((n) => n.split(' ').at(-1)).join(', ')}</span>}
               {a.bestBuild && a.bestBuild.name !== view.aheadBuild && <span className="nb-bb">{ordinal(a.bestBuild.rank)} if {a.bestBuild.name.replace(/^Punt /, 'you punt ')}</span>}
             </div>
             {(a.fits.length > 0 || a.stacks.length > 0 || a.hurts.length > 0) && (
@@ -325,6 +326,7 @@ function Compare({ id, view, act, pins, pin, clear }: { id: string; view: DraftV
               <div className="nm">{s.name} <span className="nb-dim nb-small">{s.team} · {s.positions.join(', ')}</span></div>
               <div className="nb-dim nb-small">
                 {s.card ? `card ${s.card}` : 'not on the cards'} · {Math.round(s.gp)} g{s.fpg != null ? ` · ${s.fpg.toFixed(1)} fp/g` : ''}
+                {s.mates.length > 0 && <span className="nb-mates"> · shares {s.team}'s nights with {s.mates.map((n) => n.split(' ').at(-1)).join(', ')}</span>}
                 {cv.nextPick != null && ` · ${pct(s.survives)} back at pick ${cv.nextPick}`}
               </div>
               <div className="nb-cardbtns">

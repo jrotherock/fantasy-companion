@@ -195,7 +195,7 @@ const strategies: Record<string, Pick> = {
 }
 
 /** The app's advice, with near-ties (within 0.02 categories, as on the screen) broken by fit or not at all. */
-function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack', locks: Cat[] = [], spread: AdpSpread = FOOTBALL_SPREAD, lineup = false, naiveTurns = false): string {
+function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack' | 'mates', locks: Cat[] = [], spread: AdpSpread = FOOTBALL_SPREAD, lineup = false, naiveTurns = false): string {
   // As the app does: a lock drops the category and ends the four-pick wait.
   const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
     { teams: league.teams, rounds, slot, overall, spread, naiveTurns }, base, { canTake: canTake(mine), neutralUntil: locks.length ? 0 : BUILD_FROM, ignore: locks,
@@ -203,6 +203,11 @@ function appPick(avail: string[], mine: string[], overall: number, slot: number,
   if (!advice.length) return windowOf(avail, mine)[0]
   if (tie === 'none' || !mine.length) return advice[0].id
   const close = advice.filter((a) => advice[0].score - a.score <= 0.02).slice(0, 3).map((a) => a.id)
+  if (tie === 'mates') {
+    // A coin flip goes to whoever shares no NBA team with my roster.
+    const mates = (id: string) => mine.some((m) => byId.get(m)!.team === byId.get(id)!.team)
+    return close.find((id) => !mates(id)) ?? close[0]
+  }
   const r = ranked(mine)
   const cats = tie === 'cover' ? r.slice(0, 3) : r.slice(-3)
   return byScore(close, (id) => gain(id, cats))
@@ -383,7 +388,8 @@ if (MODE === 'teammates') {
   }
   strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
   strategies['app, one per NBA team'] = capped(1)
-  strategies['app, two per NBA team'] = capped(2)
+  if (!process.argv.includes('--tiebreak-only')) strategies['app, two per NBA team'] = capped(2)
+  strategies['app + teammate tiebreak'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'mates', [], H)
 }
 
 if (MODE === 'locks') {
