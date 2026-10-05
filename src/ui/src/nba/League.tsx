@@ -108,6 +108,52 @@ async function post(path: string, data: unknown = {}) {
   return res.json()
 }
 
+type TakeByView = {
+  slot: number; teams: number; knownSlot: number | null
+  gone: { id: string; name: string; rank: number; adp: number; chance: number }[]
+  picks: { overall: number; round: number; players: { id: string; name: string; team: string | null; positions: string[]; rank: number; adp: number; chance: number }[] }[]
+}
+
+/**
+ * Where your picks land: for each of your first turns, the best players (by value) likely still
+ * there then but gone by your next — what you will be choosing from. Prep only: in the draft the
+ * cards already weigh who comes back.
+ */
+function TakeBySection({ leagueId }: { leagueId: string }) {
+  const key = `takeby-slot-${leagueId}`
+  const [slot, setSlot] = useState<number | null>(() => { try { const v = localStorage.getItem(key); return v ? Number(v) : null } catch { return null } })
+  const [tb, setTb] = useState<TakeByView | null>(null)
+  useEffect(() => {
+    fetch(`/api/nba/takeby/${leagueId}${slot ? `?slot=${slot}` : ''}`).then((r) => r.json()).then((x) => { if (x?.picks) setTb(x) }).catch(() => {})
+  }, [leagueId, slot])
+  const choose = (n: number) => { setSlot(n); try { localStorage.setItem(key, String(n)) } catch { /* private window */ } }
+  if (!tb) return null
+  const pc = (x: number) => `${Math.round(x * 100)}%`
+  return (
+    <Section title="Where your picks land" hint="by value, among those likely still there">
+      <div className="nl-slots">
+        <span className="nl-dim">Your slot</span>
+        {Array.from({ length: tb.teams }, (_, i) => i + 1).map((n) => (
+          <button key={n} className={`nl-slot ${n === tb.slot ? 'on' : ''}`} onClick={() => choose(n)}>{n}</button>
+        ))}
+        {tb.knownSlot != null && tb.knownSlot !== tb.slot && <button className="nl-link" onClick={() => choose(tb.knownSlot!)}>yours is {tb.knownSlot}</button>}
+      </div>
+      {tb.gone.length > 0 && <p className="nl-note">Likely gone before your first pick: {tb.gone.map((g) => g.name).join(', ')}.</p>}
+      {tb.picks.map((g, i) => (
+        <div key={g.overall} className="nl-takeby">
+          <div className="nl-takebyh">Your pick {i + 1} <span className="nl-dim">· round {g.round}, #{g.overall}</span></div>
+          {g.players.length === 0 ? <div className="nl-dim">—</div> : (
+            <div className="nl-takebylist">{g.players.map((p) => (
+              <span key={p.id}><b>{p.name}</b> <span className="nl-dim">#{p.rank} · ADP {Math.round(p.adp)} · {pc(p.chance)}</span></span>
+            ))}</div>
+          )}
+        </div>
+      ))}
+      <p className="nl-note">Each player sits at the last of your picks where he is more likely there than not; # is value rank, the % his chance at that pick. Grouped by when players go, not tiers of value; in the draft itself the cards already weigh who will be back.</p>
+    </Section>
+  )
+}
+
 /**
  * Everything for getting ready: the draft room, this league's mocks, and what
  * they say. Mocks copy this league's settings; their lessons are kept apart
@@ -146,6 +192,7 @@ function Prep({ leagueId }: { leagueId: string }) {
         <span>{me?.picks ? `${me.picks} picks in — resume` : 'Open it when the draft starts; Yahoo\u2019s picks arrive by themselves'}</span>
         <span className="ckchev">›</span>
       </a>
+      <TakeBySection leagueId={leagueId} />
       <Section title="Mock drafts" hint="each copies this league">
         <p className="nl-note" style={{ marginTop: 0 }}>Start an Instant Mock Draft on Yahoo with the extension loaded and it appears here by itself. If it does not, paste the room's address.</p>
         {mocks.map((m) => (

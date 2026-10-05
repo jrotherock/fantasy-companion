@@ -321,9 +321,10 @@ if (MODE === 'first') {
   // After a forced first pick: the advice as it is, against locking that player's punt now or at the fourth pick.
   for (const k of Object.keys(strategies)) delete strategies[k]
   const punt = (arg('punt') ?? 'ft').split('+') as Cat[]
-  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none')
-  strategies[`lock ${punt.join('+')} at once`] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', mine.length >= 1 ? punt : [])
-  strategies[`lock ${punt.join('+')} at pick 4`] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', mine.length >= 3 ? punt : [])
+  const H = { a: 2, b: 0.12 }
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  strategies[`lock ${punt.join('+')} at once`] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', mine.length >= 1 ? punt : [], H)
+  strategies[`lock ${punt.join('+')} at pick 4`] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', mine.length >= 3 ? punt : [], H)
   strategies['best value'] = (avail, mine) => windowOf(avail, mine)[0]
 }
 

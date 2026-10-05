@@ -112,3 +112,10 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-chip.nl-mine { border-color: var(--amber); }
 .nl-chip.nl-free { border-color: var(--blue); }
 .nl-lg { font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); }
+/* Where your picks land */
+.nl-slots { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin-bottom: 0.5rem; }
+.nl-slot { min-width: 2rem; padding: 0.2rem 0.4rem; border: 1px solid var(--line); background: none; color: inherit; border-radius: 3px; cursor: pointer; }
+.nl-slot.on { border-color: var(--blue); color: var(--blue); font-weight: 600; }
+.nl-takeby { padding: 0.45rem 0; border-top: 1px solid var(--line); }
+.nl-takebyh { font-weight: 600; margin-bottom: 0.2rem; }
+.nl-takebylist { display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; line-height: 1.45; }

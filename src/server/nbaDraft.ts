@@ -24,7 +24,7 @@ import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { NameIndex } from '../nba/join.js'
 import { adpFor } from '../nba/draft.js'
-import { buildView, changes, compareView, prepare, recordOf, type Availability, type DraftView, type InjuryInputs, type NbaLeague, type Prepared } from '../nba/plan.js'
+import { buildView, changes, compareView, prepare, recordOf, takeBy, type Availability, type DraftView, type InjuryInputs, type NbaLeague, type Prepared } from '../nba/plan.js'
 import { parseCbsInjuries, type InjuryNote } from '../nba/sources.js'
 import { analyseMocks, type MockRecord } from '../nba/tendencies.js'
 import { adpSpread, backtest, fetchHistory, historyStatus, opponentReport } from './nbaHistory.js'
@@ -475,6 +475,15 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
 
   if (what === 'leagues' && req.method === 'GET') {
     json(res, 200, leaguesForExtension())
+    return true
+  }
+
+  // Draft prep: for each of my first turns, who is likely still there (and gone by my next).
+  if (what === 'takeby' && id && req.method === 'GET') {
+    const s = session(id)
+    if (!s) { json(res, 404, { error: `no basketball league ${id}` }); return true }
+    const slot = Number(url.searchParams.get('slot')) || s.draft.slot || 1
+    json(res, 200, { ...takeBy(s.prep, Math.min(Math.max(1, slot), s.league.teams), tagsFor(s.league.id)), knownSlot: s.draft.slot ?? null })
     return true
   }
 

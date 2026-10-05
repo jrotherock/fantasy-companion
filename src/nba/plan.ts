@@ -991,6 +991,51 @@ export function compareView(prep: Prepared, d: StoredDraft, tags: Map<string, Pr
   }
 }
 
+export interface TakeByPlayer { id: string; name: string; team: string | null; positions: string[]; rank: number; adp: number; chance: number }
+export interface TakeBy {
+  slot: number
+  teams: number
+  /** Best by value likely gone before my first pick. */
+  gone: TakeByPlayer[]
+  /** For each of my first picks, the best by value whose last likely pick is that one. */
+  picks: { overall: number; round: number; players: TakeByPlayer[] }[]
+}
+
+/**
+ * Where players go, by my picks: for each of my first turns, the best players (by
+ * value) still likely there at that turn but not at my next — what I would be
+ * choosing from. Tiers by timing rather than by value: prep only, since the
+ * cards already weigh who will be there next turn.
+ */
+export function takeBy(prep: Prepared, slot: number, tags: Map<string, PrefTag>, turns = 6, perPick = 8): TakeBy {
+  const L = prep.league
+  const teams = L.teams
+  const rank = prep.cats
+    ? new Map(rankBuild(prep.cats.rows, L, []).map((r) => [r.id, r.rank]))
+    : new Map([...prep.points!.rows].sort((a, b) => b.value - a.value).map((r, i) => [r.id, i + 1]))
+  const mine: number[] = []
+  for (let o = 1; o <= teams * prep.rounds && mine.length < turns + 1; o++) if (slotFor(o, teams) === slot) mine.push(o)
+  const pool = [...rank.entries()].filter(([id]) => tags.get(id) !== 'never').sort((a, b) => a[1] - b[1]).slice(0, teams * (turns + 2))
+  const row = (id: string, r: number, at: number): TakeByPlayer => {
+    const p = prep.players.get(id)!
+    return { id, name: p.name, team: p.team, positions: prep.positions(id), rank: r, adp: prep.adp(id), chance: survives(prep.adp(id), at, L.adpSpread) }
+  }
+  // Each player's last turn of mine at which he is more likely there than not.
+  const lastTurn = (id: string) => {
+    let k = -1
+    for (let i = 0; i < mine.length; i++) if (survives(prep.adp(id), mine[i], L.adpSpread) >= 0.5) k = i
+    return k
+  }
+  const groups = mine.slice(0, turns).map((o) => ({ overall: o, round: roundFor(o, teams), players: [] as TakeByPlayer[] }))
+  const gone: TakeByPlayer[] = []
+  for (const [id, r] of pool) {
+    const k = lastTurn(id)
+    if (k < 0) { if (gone.length < 5) gone.push(row(id, r, mine[0])); continue }
+    if (k < groups.length && groups[k].players.length < perPick) groups[k].players.push(row(id, r, mine[k]))
+  }
+  return { slot, teams, gone, picks: groups }
+}
+
 export function changes(prev: DraftView | null, next: DraftView, now = Date.now()): FeedItem[] {
   if (!prev) return []
   const out: FeedItem[] = []
