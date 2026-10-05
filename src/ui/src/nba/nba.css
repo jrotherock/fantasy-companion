@@ -177,3 +177,8 @@ div.nb-cat { cursor: default; }
 /* Which of my weak categories a card covers */
 .nb-fits { font-size: var(--t-xs); color: var(--green); font-family: var(--mono); letter-spacing: 0.02em; }
 .nb-stacks { color: var(--blue); }
+
+/* Sortable board headers */
+.nb-table th.nb-sort { cursor: pointer; user-select: none; }
+.nb-table th.nb-sort:hover { color: var(--ink); }
+.nb-table th.nb-sorted { color: var(--amber); }

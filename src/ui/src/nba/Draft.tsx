@@ -8,7 +8,7 @@
  * Nothing here works anything out. The server sends the whole view, worked out
  * once per change, and this draws it; the screen polls every two seconds.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DraftView, BoardRow, PathView } from '../../../nba/plan'
 import type { Cat } from '../../../nba/value'
 
@@ -401,6 +401,25 @@ function NextPicks({ view }: { view: DraftView }) {
   )
 }
 
+type SortKey = 'rank' | 'gp' | 'po' | 'adp' | 'next' | Cat | 'fpg' | 'fpMin' | 'fpSeason' | 'value'
+
+/** A column's value for sorting, oriented so bigger is better: earlier ADP sorts first, turnovers are already flipped. */
+function sortValue(r: BoardRow, key: SortKey): number {
+  const missing = -1e9
+  switch (key) {
+    case 'rank': return -r.rank
+    case 'gp': return r.gp
+    case 'po': return r.playoff ?? missing
+    case 'adp': return r.adp == null ? missing : -r.adp
+    case 'next': return r.survives ?? missing
+    case 'fpg': return r.fpg ?? missing
+    case 'fpMin': return r.fpMin ?? missing
+    case 'fpSeason': return r.fpSeason ?? missing
+    case 'value': return r.value
+    default: return r.contrib?.[key] ?? missing
+  }
+}
+
 function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
   const [pos, setPos] = useState('All')
   const [q, setQ] = useState('')
@@ -410,8 +429,16 @@ function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
   const locks = view.build?.locks ?? []
   const win = view.build?.win ?? null
   const need = win ? CATS.filter((c) => !locks.includes(c) && win[c] >= 0.35 && win[c] < 0.5) : []
-  const rows = view.board.filter((r) =>
-    (showTaken || r.takenAt == null) && (pos === 'All' || r.positions.includes(pos)) && (!q || r.name.toLowerCase().includes(q.toLowerCase()))).slice(0, 150)
+  // Sorting by any column header: best first on the first click, reversed on the second; # is the build's own order.
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null)
+  const by = (key: SortKey) => setSort((cur) => (key === 'rank' ? null : cur?.key === key ? { key, dir: cur.dir === 1 ? -1 : 1 } : { key, dir: 1 }))
+  const arrow = (key: SortKey) => (sort?.key === key ? (sort.dir === 1 ? ' ▼' : ' ▲') : key === 'rank' && !sort ? ' ▼' : '')
+  const th = (key: SortKey, label: string, extra: { className?: string; title?: string } = {}) => (
+    <th className={`nb-sort ${extra.className ?? ''} ${sort?.key === key || (key === 'rank' && !sort) ? 'nb-sorted' : ''}`} title={extra.title} onClick={() => by(key)}>{label}{arrow(key)}</th>
+  )
+  const filtered = view.board.filter((r) =>
+    (showTaken || r.takenAt == null) && (pos === 'All' || r.positions.includes(pos)) && (!q || r.name.toLowerCase().includes(q.toLowerCase())))
+  const rows = (sort ? [...filtered].sort((a, b) => sort.dir * (sortValue(b, sort.key) - sortValue(a, sort.key))) : filtered).slice(0, 150)
   const tag = (r: BoardRow, t: Tag) => act('tag', { playerId: r.id, tag: r.tag === t ? null : t })
   const heat = (v: number) => { const a = Math.min(1, Math.abs(v) / 1.2) * 0.55; return { background: v >= 0 ? `rgba(69,217,160,${a})` : `rgba(255,92,99,${a})` } }
   return (
@@ -425,7 +452,7 @@ function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
       {help && (
         <div className="nb-help">
           <ul>
-            <li><b>#</b> is value for your build; it re-ranks when you lock, and locked columns fade.</li>
+            <li><b>#</b> is value for your build; it re-ranks when you lock, and locked columns fade. Click any column header to sort by it — best first, again to reverse — and # to go back.</li>
             <li><b>Coloured cells</b>: what a player adds per category over a season. Read down the <span className="nb-amber">amber headers</span> — your coin flips — to find who tips one to green.</li>
             {!cats && <li><b>FP/g</b> fantasy points a game; <b>FP/min</b> per minute he is projected to play — high means he scores in what he gets, so more minutes would show; <b>FP season</b> a game times his games. <b>Value</b> is not the season total: it is points a game above the replacement line times games, so a replacement-level player is worth nought however much he scores.</li>}
             {cats && <li><b>Blue note</b> beside a name: where he ranks in the build he is drafted for, when that is 20+ places higher than balanced — Giannis is a first-rounder only if your roster ends up punting FT%. Information: the cards already weigh it once your roster leans that way, without a lock.</li>}
@@ -444,8 +471,10 @@ function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
         <table className="nb-table">
           <thead>
             <tr>
-              <th>#</th><th className="nb-l">Player</th><th>Pos</th><th>G</th><th title="Games in your playoff weeks">PO</th><th>ADP</th><th title="Chance he lasts to your next decision">Next</th>
-              {cats ? CATS.map((c) => <th key={c} className={locks.includes(c) ? 'nb-off' : need.includes(c) ? 'nb-need' : ''}>{LABEL[c]}</th>) : <><th title="Fantasy points a game">FP/g</th><th title="Fantasy points a minute">FP/min</th><th title="Fantasy points over the season: a game times games">FP season</th><th title="Points a game above the replacement line, times games">Value</th></>}
+              {th('rank', '#')}<th className="nb-l">Player</th><th>Pos</th>{th('gp', 'G')}{th('po', 'PO', { title: 'Games in your playoff weeks' })}{th('adp', 'ADP')}{th('next', 'Next', { title: 'Chance he lasts to your next decision' })}
+              {cats
+                ? CATS.map((c) => <Fragment key={c}>{th(c, LABEL[c], { className: locks.includes(c) ? 'nb-off' : need.includes(c) ? 'nb-need' : '' })}</Fragment>)
+                : <>{th('fpg', 'FP/g', { title: 'Fantasy points a game' })}{th('fpMin', 'FP/min', { title: 'Fantasy points a minute' })}{th('fpSeason', 'FP season', { title: 'Fantasy points over the season: a game times games' })}{th('value', 'Value', { title: 'Points a game above the replacement line, times games' })}</>}
               <th title="never · avoid · like">Tag</th>
             </tr>
           </thead>
