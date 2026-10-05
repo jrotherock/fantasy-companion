@@ -720,6 +720,8 @@ function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: st
   const [q, setQ] = useState('')
   const [showTaken, setShowTaken] = useState(false)
   const [help, setHelp] = useState(false)
+  // A tapped name opens a row of actions under it: everything a phone could not reach at the row's far end.
+  const [openId, setOpenId] = useState<string | null>(null)
   const cats = view.league.scoring === 'categories'
   const locks = view.build?.locks ?? []
   const win = view.build?.win ?? null
@@ -754,7 +756,8 @@ function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: st
             <li><b>Next</b>: chance he lasts to your next pick. Above about 60%, he can wait. <b>PO</b>: games in your playoff weeks, the tiebreaker.</li>
             <li><b>Back to back</b> (the end of a round, when your next pick follows at once): each card names the partner to take with it. Queue him in Yahoo before you pick, so a timeout takes him rather than Yahoo's choice.</li>
             <li>Grey rows are your never list. A red note means he starts the season hurt; set your own return date beside it.</li>
-            <li><b>Tap a name</b> (or <b>Compare</b> on a card) to pin him: one pinned is set against the top card, two against each other. You get a verdict in words on the cards' own scale, and where each would take your categories. Tap again to unpin.</li>
+            <li><b>Tap a name</b> for his actions: <b>Compare</b> (one pinned is set against the top card, two against each other — a verdict in words, and where each takes your categories), <b>★ Like</b>, <b>↓ Avoid</b>, <b>✕ Never</b>. <b>Compare</b> on a card does the same.</li>
+            <li><b>Rd</b>: the round he usually goes (ADP over the teams). Value 6 in round 3 is a player to plan around.</li>
             <li>Check a name here; let the cards above make the call.</li>
           </ul>
         </div>
@@ -768,22 +771,20 @@ function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: st
         <table className="nb-table">
           <thead>
             <tr>
-              {th('rank', '#')}<th className="nb-l">Player</th><th>Pos</th>{th('gp', 'G')}{th('po', 'PO', { title: 'Games in your playoff weeks' })}{th('adp', 'ADP')}{th('next', 'Next', { title: 'Chance he lasts to your next decision' })}
+              {th('rank', '#')}<th className="nb-l">Player</th><th>Pos</th>{th('gp', 'G')}{th('po', 'PO', { title: 'Games in your playoff weeks' })}{th('adp', 'ADP')}{th('adp', 'Rd', { title: 'The round he usually goes: ADP over the teams in the league' })}{th('next', 'Next', { title: 'Chance he lasts to your next decision' })}
               {cats
                 ? CATS.map((c) => <Fragment key={c}>{th(c, LABEL[c], { className: locks.includes(c) ? 'nb-off' : need.includes(c) ? 'nb-need' : '' })}</Fragment>)
                 : <>{th('fpg', 'FP/g', { title: 'Fantasy points a game' })}{th('fpMin', 'FP/min', { title: 'Fantasy points a minute' })}{th('fpSeason', 'FP season', { title: 'Fantasy points over the season: a game times games' })}{th('value', 'Value', { title: 'Points a game above the replacement line, times games' })}</>}
-              <th title="never · avoid · like">Tag</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className={`${r.tag === 'never' ? 'nb-never' : ''} ${r.takenAt != null ? 'nb-taken' : ''} ${r.mine ? 'nb-mine' : ''} ${pins.includes(r.id) ? 'nb-pinned' : ''}`}>
+              <Fragment key={r.id}>
+              <tr className={`${r.tag === 'never' ? 'nb-never' : ''} ${r.takenAt != null ? 'nb-taken' : ''} ${r.mine ? 'nb-mine' : ''} ${pins.includes(r.id) ? 'nb-pinned' : ''}`}>
                 <td className="nb-dim">{r.rank}</td>
                 <td className="nb-l">
-                  {/* The name is the way in to Compare: on a phone the row's buttons are off to the right. */}
-                  {r.takenAt == null && r.tag !== 'never' && !view.review
-                    ? <button className="nb-name" title={pins.includes(r.id) ? 'Unpin from Compare' : 'Compare with the top card (or a pinned player)'} onClick={() => pin(r.id)}>{pins.includes(r.id) && <span className="nb-pin">⇄ </span>}{r.name}</button>
-                    : r.name}
+                  {/* The name opens the row's actions: on a phone anything at the row's far end is off screen. */}
+                  <button className="nb-name" aria-expanded={openId === r.id} title="Compare, like, avoid or never" onClick={() => setOpenId(openId === r.id ? null : r.id)}>{pins.includes(r.id) && <span className="nb-pin">⇄ </span>}{r.name}</button>
                   {r.tag && <span className={`nb-tag nb-${r.tag}`}>{r.tag}</span>}
                   {r.bestBuild && r.bestBuild.name !== view.aheadBuild && !locks.length && (
                     <span className="nb-bb" title={`${r.bestBuild.balanced}th balanced; ${ordinal(r.bestBuild.rank)} in a ${r.bestBuild.name} build`}>{ordinal(r.bestBuild.rank)} {r.bestBuild.name.replace(/^Punt /, 'punting ')}</span>
@@ -802,15 +803,27 @@ function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: st
                 <td>{Math.round(r.gp)}</td>
                 <td className={r.playoff != null ? po(r.playoff, view.playoffNorm) : 'nb-dim'}>{r.playoff ?? '—'}</td>
                 <td className="nb-dim">{r.adp != null ? r.adp.toFixed(0) : '—'}</td>
+                <td className="nb-dim">{r.adp != null ? Math.ceil(r.adp / view.league.teams) : '—'}</td>
                 <td>{r.takenAt == null && r.survives != null ? pct(r.survives) : ''}</td>
                 {cats ? CATS.map((c) => <td key={c} className={`mono ${locks.includes(c) ? 'nb-off' : ''}`} style={locks.includes(c) ? undefined : heat(r.contrib![c])}>{r.contrib![c].toFixed(1)}</td>)
                   : <><td className="mono">{r.fpg?.toFixed(1)}</td><td className="mono">{r.fpMin != null ? r.fpMin.toFixed(2) : '—'}</td><td className="mono">{r.fpSeason != null ? Math.round(r.fpSeason).toLocaleString() : ''}</td><td className="mono">{Math.round(r.value)}</td></>}
-                <td className="nb-tags">
-                  <button className={r.tag === 'never' ? 'nb-on' : ''} title="Never draft" onClick={() => tag(r, 'never')}>✕</button>
-                  <button className={r.tag === 'avoid' ? 'nb-on' : ''} title="Avoid" onClick={() => tag(r, 'avoid')}>↓</button>
-                  <button className={r.tag === 'like' ? 'nb-on' : ''} title="Like" onClick={() => tag(r, 'like')}>★</button>
-                </td>
               </tr>
+              {openId === r.id && (
+                <tr className="nb-actrow">
+                  <td colSpan={8 + (cats ? CATS.length : 4)}>
+                    <div className="nb-acts">
+                      {r.takenAt == null && r.tag !== 'never' && !view.review && (
+                        <button className={`btn ${pins.includes(r.id) ? 'nb-on' : ''}`} onClick={() => { pin(r.id); setOpenId(null) }}>{pins.includes(r.id) ? 'Unpin' : 'Compare'}</button>
+                      )}
+                      <button className={`btn ${r.tag === 'like' ? 'nb-on' : ''}`} onClick={() => tag(r, 'like')}>★ Like</button>
+                      <button className={`btn ${r.tag === 'avoid' ? 'nb-on' : ''}`} onClick={() => tag(r, 'avoid')}>↓ Avoid</button>
+                      <button className={`btn ${r.tag === 'never' ? 'nb-on' : ''}`} onClick={() => tag(r, 'never')}>✕ Never</button>
+                      <button className="nb-link" onClick={() => setOpenId(null)}>Close</button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>

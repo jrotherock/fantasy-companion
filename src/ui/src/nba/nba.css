@@ -244,3 +244,7 @@ div.nb-cat { cursor: default; }
 .nb-teamlist { list-style: none; margin: 0.4rem 0 0; padding: 0; }
 .nb-teamlist li { padding: 0.35rem 0; border-top: 1px solid var(--line); line-height: 1.4; }
 .nb-also { margin: 0.35rem 0 0.15rem; line-height: 1.5; }
+/* A board row's actions, opened by tapping the name: kept in view at the table's left edge on a phone */
+.nb-actrow td { padding: 0 !important; background: rgba(90,169,255,.06); }
+.nb-acts { position: sticky; left: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.4rem 0.5rem; max-width: calc(100vw - 2.5rem); }
+.nb-acts .btn.nb-on { border-color: var(--blue); color: var(--blue); }
