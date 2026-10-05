@@ -123,6 +123,11 @@ export interface CatRow {
   /** Per-game z-score in each category; turnovers are already flipped so higher is better. */
   z: Record<Cat, number>
   yahooRank: number | null
+  /**
+   * A waiver pickup's per-game z in each category: who plays the games this
+   * player misses. Shared by every row of one league; absent on hand-built rows.
+   */
+  replacement?: Record<Cat, number>
 }
 
 /** What each category is measured in per game. Percentages become makes above the pool's rate on the player's attempts. */
@@ -180,10 +185,17 @@ export function categoryZ(players: NbaPlayer[], league: CatLeague): CatRow[] {
     .slice(0, spots)
   const z = zScores(rostered, projected)
 
-  return projected.map((p) => ({
+  const rows: CatRow[] = projected.map((p) => ({
     id: p.id, name: p.name, team: p.team, positions: p.positions,
     games: effectiveGames(p), z: z.get(p.id)!, yahooRank: p.yahoo?.rank ?? null,
   }))
+  // The waiver line: the average line of the next round's worth of players
+  // after every roster spot is filled — who a team plays when a starter sits.
+  const left = rankBuild(rows, league).slice(spots, spots + league.teams)
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  const replacement = Object.fromEntries(CATS.map((c) => [c, left.length ? left.reduce((s, r) => s + byId.get(r.id)!.z[c], 0) / left.length : 0])) as Record<Cat, number>
+  for (const r of rows) r.replacement = replacement
+  return rows
 }
 
 export interface Ranked {

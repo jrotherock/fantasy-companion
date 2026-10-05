@@ -109,6 +109,23 @@ export function allPlayOf(weeks: Box[][], team: number): number {
   return n ? got / n : 0
 }
 
+/** One team's share of category meetings won over the season, per category (ties half). */
+export function catRatesOf(weeks: Box[][], team: number, cats: Cat[] = CATS): Record<Cat, number> {
+  const v = (x: Box, c: Cat) => (c === 'fg' ? (x.fga ? x.fgm / x.fga : 0) : c === 'ft' ? (x.fta ? x.ftm / x.fta : 0) : x[c])
+  const out = Object.fromEntries(cats.map((c) => [c, 0])) as Record<Cat, number>
+  let n = 0
+  for (let w = 0; w < weeks[team].length; w++) for (let o = 0; o < weeks.length; o++) {
+    if (o === team) continue
+    n++
+    for (const c of cats) {
+      const d = c === 'to' ? v(weeks[o][w], c) - v(weeks[team][w], c) : v(weeks[team][w], c) - v(weeks[o][w], c)
+      out[c] += d > 1e-9 ? 1 : d < -1e-9 ? 0 : 0.5
+    }
+  }
+  for (const c of cats) out[c] = n ? out[c] / n : 0
+  return out
+}
+
 /** Yahoo's weeks over a schedule: Monday to Sunday, the first from the opener. */
 export function weeksOf(games: { date: string }[], first: string, count: number): SeasonWeek[] {
   const dates = [...new Set(games.map((g) => g.date))].sort()

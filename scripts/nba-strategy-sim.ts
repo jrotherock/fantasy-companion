@@ -26,7 +26,7 @@ import { slotFor } from '../src/kernel/snake.js'
 import { PATHS, gamesAfterReturn } from '../src/nba/plan.js'
 import { NameIndex } from '../src/nba/join.js'
 import { calendar, startShares } from '../src/nba/starts.js'
-import { allPlayOf, playSeason, rng as seasonRng, weeksOf, type SeasonPlayer } from '../src/nba/rawSeason.js'
+import { allPlayOf, catRatesOf, playSeason, rng as seasonRng, weeksOf, type SeasonPlayer } from '../src/nba/rawSeason.js'
 import { perGameBox } from '../src/nba/outlook.js'
 import { startingSeats } from '../src/nba/week.js'
 import { seatPositions } from '../src/nba/inseason.js'
@@ -128,6 +128,7 @@ function seasonPlayer(id: string): SeasonPlayer {
   return { id, team: p.team, positions: seatPositions(posOf(id)), box: perGameBox(p), play: Math.min(0.97, (rowOf.get(id)?.games.gp ?? 0) / Math.max(1, avail)), worth: value.get(id) ?? 0, from: back }
 }
 /** Every team's season in box scores; a player out at the start is covered by the best free agent left until he is back. */
+let lastRaw: ReturnType<typeof playSeason> = []
 function rawAllPlay(teams: string[][], seed: number): number[] {
   const drafted = new Set(teams.flat())
   const free = pool.filter((id) => !drafted.has(id) && !never.has(id) && !backOn.has(id)).sort((a, b) => value.get(b)! - value.get(a)!)
@@ -141,6 +142,7 @@ function rawAllPlay(teams: string[][], seed: number): number[] {
     return ps
   })
   const weeks = playSeason(rosters, rawWeeks, playingOn, seatsOf, seasonRng(seed))
+  lastRaw = weeks
   return teams.map((_, i) => allPlayOf(weeks, i))
 }
 const cal = calendar(JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games)
@@ -370,6 +372,8 @@ if (MODE === 'locks') {
 }
 
 const results: Record<string, { allPlay: number[]; cats: number[]; bySlot: number[][]; idle: number[] }> = {}
+const catRates: Record<string, Record<Cat, number>[]> = {}
+const modelRates: Record<string, Record<Cat, number>[]> = {}
 const t0 = Date.now()
 for (const [name, pick] of Object.entries(strategies)) {
   const res = { allPlay: [] as number[], cats: [] as number[], bySlot: Array.from({ length: league.teams }, () => [] as number[]), idle: [] as number[] }
@@ -402,6 +406,9 @@ for (const [name, pick] of Object.entries(strategies)) {
       const others = teams.map((t, i) => [t, i] as const).filter(([, i]) => i !== slot - 1).map(([t, i]) => score(t, i))
       res.idle.push(idleShare(mine))
       const ap = RAW ? rawAllPlay(teams, seed * 7919 + slot)[slot - 1] : others.reduce((s, o) => s + weekWin(me, o), 0) / others.length
+      if (RAW) (catRates[name] ??= []).push(catRatesOf(lastRaw, slot - 1))
+      if (process.argv.includes('--dump') && name.startsWith('the app')) for (const id of mine) { const sp = seasonPlayer(id); console.error('DUMP', byId.get(id)!.name, sp.team, sp.play.toFixed(2), sp.from ?? '', sp.box.pts.toFixed(1), (rowOf.get(id)?.games.gp ?? 0).toFixed(0), contribOf.get(id)!.pts.toFixed(2)) }
+      if (RAW) (modelRates[name] ??= []).push(winChances(strengthOf(mine), mine.length, base))
       res.allPlay.push(ap)
       res.cats.push(expectedCats(me, mine.length, base))
       res.bySlot[slot - 1].push(ap)
@@ -429,3 +436,10 @@ for (const name of Object.keys(results).filter((n) => n !== 'the app (recommende
 console.log('\nby slot (all-play %):')
 console.log('slot  ' + Object.keys(results).map((n) => n.slice(0, 12).padStart(13)).join(''))
 for (let s = 0; s < league.teams; s++) if (Object.values(results)[0].bySlot[s].length) console.log(String(s + 1).padStart(4) + '  ' + Object.values(results).map((r) => (mean(r.bySlot[s]) * 100).toFixed(1).padStart(13)).join(''))
+if (RAW) {
+  console.log('\nraw category meetings won (my team vs the room, every week):')
+  console.log('strategy                 ' + CATS.map((c) => c.padStart(6)).join(''))
+  for (const [name, rs] of Object.entries(catRates)) console.log(name.padEnd(24) + ' ' + CATS.map((c) => (mean(rs.map((r) => r[c])) * 100).toFixed(0).padStart(6)).join(''))
+  console.log('the advice\'s own model of the same rosters (win chance vs an average team):')
+  for (const [name, rs] of Object.entries(modelRates)) console.log(name.padEnd(24) + ' ' + CATS.map((c) => (mean(rs.map((r) => r[c])) * 100).toFixed(0).padStart(6)).join(''))
+}

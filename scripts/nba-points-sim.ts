@@ -21,12 +21,33 @@ import { calendar, startShares } from '../src/nba/starts.js'
 import { startingSeats } from '../src/nba/week.js'
 import { seatPositions } from '../src/nba/inseason.js'
 import { POINTS_WEEK_CV } from '../src/nba/strength.js'
+import { gamesAfterReturn } from '../src/nba/plan.js'
+import { NameIndex } from '../src/nba/join.js'
+import { playSeason, rng as seasonRng, weeksOf, type SeasonPlayer } from '../src/nba/rawSeason.js'
+import { perGameBox } from '../src/nba/outlook.js'
+import { pointsOf } from '../src/nba/matchup.js'
 
 const arg = (k: string) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : null }
 const SEEDS = Number(arg('seeds') ?? 20)
 const SPREAD = { a: 1.5, b: 0.1 }
 
-const players: NbaPlayer[] = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+const rawPlayers: NbaPlayer[] = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+const scheduleGames = JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games as { date: string; home: string; away: string }[]
+const teamDates: Record<string, string[]> = {}
+for (const g of scheduleGames) for (const t of [g.home, g.away]) (teamDates[t] ??= []).push(g.date)
+const nameIdx = new NameIndex(rawPlayers.map((p) => ({ id: p.id, name: p.name, team: p.team })))
+const injuryNotes = new Map<string, any>()
+for (const n of JSON.parse(readFileSync('data/nba/injuries.json', 'utf8')).injuries) {
+  if (!n.returnDate && !n.outForSeason) continue
+  const id = nameIdx.resolve(n.name, null)
+  if (id) injuryNotes.set(id, { returnDate: n.returnDate, outForSeason: n.outForSeason, source: 'cbs', text: n.text })
+}
+// Players starting the season hurt are valued on the games after their return, as the app values them.
+const players: NbaPlayer[] = rawPlayers.map((p) => {
+  const av = injuryNotes.get(p.id)
+  if (!av || !p.projection) return p
+  return { ...p, projection: { ...p.projection, gp: gamesAfterReturn(p, av, teamDates, '2026-10-05').gp, gpSource: 'injury' as const } }
+})
 const league = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues.find((l: any) => l.id === 'nba-harker')
 const rounds = rosterSpots(league.roster)
 const byId = new Map(players.map((p) => [p.id, p]))
@@ -86,7 +107,17 @@ const cBy = (n: number): Pick => (avail, mine, overall, slot) => {
   }
   return app()(avail, mine, overall, slot)
 }
-const strategies: Record<string, Pick> = {
+const skipUnder = (games: number): Pick => (avail, mine, overall, slot) => {
+  const ok = avail.filter((id) => (rowOf.get(id)?.games.gp ?? 0) >= games)
+  return app()(ok.length ? ok : avail, mine, overall, slot)
+}
+const MODE = arg('mode') ?? 'center'
+const strategies: Record<string, Pick> = MODE === 'injured' ? {
+  'the app (recommender)': app(),
+  'app, no one under 25 games': skipUnder(25),
+  'app, no one under 41 games': skipUnder(41),
+  'app, no one under 55 games': skipUnder(55),
+} : {
   'the app (recommender)': app(),
   'app, positional value': app(posValue),
   'a C by my pick 2': cBy(2),
@@ -133,6 +164,49 @@ function phi(z: number) {
 }
 const edge = (a: number, b: number) => phi((a - b) / (Math.SQRT2 * POINTS_WEEK_CV * ((a + b) / 2)))
 
+// ── Raw totals (--raw): weeks played out in box scores, scored the league's way, IL pickups included ──
+const RAW = process.argv.includes('--raw')
+const rawWeeks = weeksOf(scheduleGames, '2026-10-19', (league.playoffWeeks?.[0] ?? 20) - 1)
+const playingOn = (() => {
+  const m = new Map<string, Set<string>>()
+  for (const g of scheduleGames) { const x = m.get(g.date) ?? new Set<string>(); x.add(g.home); x.add(g.away); m.set(g.date, x) }
+  return (d: string) => m.get(d) ?? new Set<string>()
+})()
+const backOn = new Map<string, string>()
+for (const [id, n] of injuryNotes) {
+  if (n.outForSeason) { backOn.set(id, '2099-01-01'); continue }
+  const t = new Date(n.returnDate + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + 10); backOn.set(id, t.toISOString().slice(0, 10))
+}
+function seasonPlayer(id: string): SeasonPlayer {
+  const p = byId.get(id)!
+  const back = backOn.get(id) ?? null
+  const avail = (teamDates[p.team ?? ''] ?? []).filter((d) => !back || d >= back).length || 80
+  return { id, team: p.team, positions: seatPositions(posOf(id)), box: perGameBox(p), play: Math.min(0.97, (rowOf.get(id)?.games.gp ?? 0) / Math.max(1, avail)), worth: rowOf.get(id)?.fpg ?? 0, from: back }
+}
+function rawAllPlay(teams: string[][], seed: number): number[] {
+  const drafted = new Set(teams.flat())
+  const free = pool.filter((id) => !drafted.has(id) && !never.has(id) && !backOn.has(id)).sort((a, b) => rowOf.get(b)!.value - rowOf.get(a)!.value)
+  const rosters = teams.map((t) => {
+    const ps = t.map(seasonPlayer)
+    // Two IL slots in Harker: each player out at the start is covered by a pickup until he is back.
+    for (const p of ps.filter((x) => x.from && x.from > rawWeeks[0].dates[0]).slice(0, 2)) {
+      const fa = free.shift()
+      if (fa) ps.push({ ...seasonPlayer(fa), until: p.from })
+    }
+    return ps
+  })
+  const weeks = playSeason(rosters, rawWeeks, playingOn, seats, seasonRng(seed))
+  const pts = weeks.map((tw) => tw.map((b) => pointsOf(b, league.points)))
+  return pts.map((mine, i) => {
+    let got = 0, n = 0
+    for (let w = 0; w < mine.length; w++) for (let o = 0; o < pts.length; o++) {
+      if (o === i) continue
+      got += mine[w] > pts[o][w] ? 1 : mine[w] === pts[o][w] ? 0.5 : 0; n++
+    }
+    return got / n
+  })
+}
+
 const res: Record<string, { ap: number[]; pts: number[]; c: number[] }> = {}
 for (const [name, pick] of Object.entries(strategies)) {
   const r = { ap: [] as number[], pts: [] as number[], c: [] as number[] }
@@ -140,7 +214,7 @@ for (const [name, pick] of Object.entries(strategies)) {
     const teams = draft(slot, seed, pick)
     const pts = teams.map(weeklyPoints)
     const me = pts[slot - 1]
-    r.ap.push(pts.filter((_, i) => i !== slot - 1).reduce((s, o) => s + edge(me, o), 0) / (league.teams - 1))
+    r.ap.push(RAW ? rawAllPlay(teams, seed * 7919 + slot)[slot - 1] : pts.filter((_, i) => i !== slot - 1).reduce((s, o) => s + edge(me, o), 0) / (league.teams - 1))
     r.pts.push(me)
     r.c.push(teams[slot - 1].findIndex(isC) + 1 || 99)
   }
@@ -150,7 +224,7 @@ for (const [name, pick] of Object.entries(strategies)) {
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 const se = (xs: number[]) => { const m = mean(xs); return Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1) / xs.length) }
 const ref = res['the app (recommender)']
-console.log(`Harker, 16 slots × ${SEEDS} rooms, room spread 1.5+0.10·ADP, scored on fantasy points from starts (7 seats, real schedule).`)
+console.log(`Harker, 16 slots × ${SEEDS} rooms, room spread 1.5+0.10·ADP, ${RAW ? 'scored on RAW WEEKLY POINTS: box scores, daily lineups, real schedule, IL pickups, all-play' : 'scored on fantasy points from starts (7 seats, real schedule)'}.`)
 console.log('strategy                  all-play   vs the app (paired) ±2se   pts/wk   first C at my pick (median)')
 for (const [name, r] of Object.entries(res)) {
   const d = r.ap.map((x, i) => x - ref.ap[i])

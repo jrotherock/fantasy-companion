@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { adpFor, adviseCategories, advisePoints, baseline, expectedBest, expectedCats, readBuild, winChances, zero, BUILD_FROM, DEFAULT_LATE_ADP } from './draft.js'
+import { adpFor, adviseCategories, contribution, advisePoints, baseline, expectedBest, expectedCats, readBuild, winChances, zero, BUILD_FROM, DEFAULT_LATE_ADP } from './draft.js'
 import { CATS, type Cat, type CatRow } from './value.js'
 
 const flatNoise = Object.fromEntries(CATS.map((c) => [c, 2])) as Record<Cat, number>
@@ -80,4 +80,14 @@ test('no build is read, or steered toward, before the fourth pick', () => {
   const after = (mine: ReturnType<typeof row>[]) =>
     adviseCategories(options, mine, spot, base, { neutralUntil: BUILD_FROM }).map((a) => [a.id, a.score.toFixed(9)])
   assert.deepEqual(after([row('m1', { ast: -12 }, 999), row('m2', { ast: -12 }, 999)]), after([row('m3', { reb: -12 }, 999), row('m4', { reb: -12 }, 999)]))
+})
+
+test('a player who barely plays is worth a waiver pickup, not nothing', () => {
+  // Late in a draft every healthy player left is below the rostered average. Counting a
+  // hurt player's missed games as zero made him look better than all of them.
+  const waiver = Object.fromEntries(CATS.map((c) => [c, -1])) as Record<Cat, number>
+  const healthy = { ...row('healthy', Object.fromEntries(CATS.map((c) => [c, -0.5])), 120), replacement: waiver }
+  const hurt = { ...row('hurt', Object.fromEntries(CATS.map((c) => [c, 0.5])), 120, 1), replacement: waiver }
+  for (const c of CATS) assert.ok(contribution(healthy)[c] > contribution(hurt)[c], c)
+  assert.ok(Math.abs(contribution(hurt).pts - (-1 * 81 / 82 + 0.5 / 82)) < 1e-9)
 })

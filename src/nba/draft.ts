@@ -128,10 +128,18 @@ export function advisePoints(
 
 export type Strength = Record<Cat, number>
 
-/** A player's season contribution in each category: per-game z weighted by the share of games he plays. */
+/**
+ * A player's season contribution in each category: his per-game z for the
+ * games he plays, and a waiver pickup's for the games he misses. Counting the
+ * missed games as zero made a player who barely plays look better, late in a
+ * draft, than every healthy player left — whose z is below the rostered
+ * average, so negative — and the advice took him. In raw box-score seasons
+ * that cost about 14 points of weeks won.
+ */
 export function contribution(r: CatRow): Strength {
-  const share = r.games.gp / TEAM_GAMES
-  return Object.fromEntries(CATS.map((c) => [c, r.z[c] * share])) as Strength
+  const share = Math.min(1, r.games.gp / TEAM_GAMES)
+  const fill = r.replacement
+  return Object.fromEntries(CATS.map((c) => [c, r.z[c] * share + (fill ? fill[c] * (1 - share) : 0)])) as Strength
 }
 
 const add = (a: Strength, b: Strength): Strength => Object.fromEntries(CATS.map((c) => [c, a[c] + b[c]])) as Strength
