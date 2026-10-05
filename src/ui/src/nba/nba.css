@@ -225,3 +225,12 @@ div.nb-cat { cursor: default; }
 .nb-name:hover { color: var(--blue); }
 .nb-pin { color: var(--blue); font-weight: 700; }
 .nb-table tr.nb-pinned td { background: rgba(90,169,255,.1); }
+/* What to have in Yahoo's queue, two picks out: a timeout takes it instead of Yahoo's ranking */
+.nb-queue { border: 1px solid rgba(255,176,0,.55); border-radius: 4px; padding: 0.35rem 0.6rem; margin: 0 0 0.5rem; line-height: 1.5; }
+.nb-queue .vlabel { color: var(--amber); margin-right: 0.35rem; }
+/* Yahoo's pick clock beside the pick pill */
+.nb-yclock { font-variant-numeric: tabular-nums; }
+.nb-yclock.soon { background: var(--amber); color: #111; }
+.nb-yclock.urgent { background: var(--red); color: #fff; animation: nb-pulse 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .nb-yclock.urgent { animation: none; } }
+@keyframes nb-pulse { 50% { opacity: 0.6; } }

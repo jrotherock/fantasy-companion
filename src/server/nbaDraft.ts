@@ -343,6 +343,8 @@ interface Session {
   draft: StoredDraft
   view: DraftView | null
   dirty: boolean
+  /** Yahoo's pick clock as the extension last read it off the draft room: seconds left, when read. */
+  yahooClock?: { seconds: number; at: number }
 }
 
 const sessions = new Map<string, Session>()
@@ -554,7 +556,11 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
   }
 
   if (!action && req.method === 'GET') {
-    json(res, 200, viewOf(s))
+    // The clock moves every second without a pick, so it rides beside the cached view, not inside it.
+    // Sent as seconds left right now, so the phone's own clock never has to agree with the server's.
+    const yc = s.yahooClock && Date.now() - s.yahooClock.at < 15000
+      ? { seconds: Math.max(0, s.yahooClock.seconds - (Date.now() - s.yahooClock.at) / 1000), at: 0 } : null
+    json(res, 200, { ...viewOf(s), yahooClock: yc })
     return true
   }
   // Two players side by side: ?ids=a,b — or one, set against the top card.
@@ -573,6 +579,13 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
 
   const data = await body(req)
   switch (action) {
+    // Yahoo's pick clock, read off the draft room by the extension every couple of seconds.
+    case 'clock': {
+      const sec = Number(data.seconds)
+      if (Number.isFinite(sec) && sec >= 0 && sec < 3600) s.yahooClock = { seconds: sec, at: Date.now() }
+      json(res, 200, { ok: true })
+      return true
+    }
     case 'yahoo': {
       if (data.error) {
         s.draft.sensor = { ...s.draft.sensor, ok: false, error: String(data.error) }

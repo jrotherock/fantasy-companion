@@ -374,6 +374,8 @@ export interface PathView {
 export interface DraftView {
   league: { id: string; label: string; scoring: NbaLeague['scoring']; teams: number; rounds: number; slot: number | null; slotSource: StoredDraft['slotSource']; myTeamName: string }
   clock: { overall: number; round: number; onClock: boolean; myNext: number | null; picksUntil: number | null; done: boolean }
+  /** Yahoo's pick clock read off the draft room by the extension (server adds it; absent without the extension). */
+  yahooClock?: { seconds: number; at: number } | null
   sensor: StoredDraft['sensor']
   roster: { id: string; name: string; team: string | null; positions: string[]; overall: number; round: number }[]
   /** Positional seats still to fill, and which seats could be the open ones. */

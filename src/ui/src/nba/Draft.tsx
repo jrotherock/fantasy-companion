@@ -164,6 +164,7 @@ function Status({ view, error, act, rosterOpen, setRosterOpen, drawer, setDrawer
         : view.league.slot == null ? <span className="clockpill waiting">PICK {c.overall}</span>
         : c.onClock ? <span className="clockpill">PICK {c.overall} — YOU</span>
         : <span className="clockpill waiting">PICK {c.overall}</span>}
+      {!c.done && !view.review && view.yahooClock && <YahooClock seconds={view.yahooClock.seconds} mine={c.onClock} />}
       <span>RD {c.round}{c.myNext != null && !c.onClock ? ` · NEXT ${c.myNext} (${c.picksUntil} away)` : ''}</span>
       <span className={`feed ${feed}`} title={s.unresolved.length ? `couldn't place ${s.unresolved.join(', ')}` : undefined}><i />{said}</span>
       {error && <span className="nb-down">{error}</span>}
@@ -198,6 +199,21 @@ function RosterLine({ view }: { view: DraftView }) {
 }
 
 /** Football's slot gate: the same look and the same reason to exist. */
+/**
+ * Yahoo's pick clock, as the extension read it off the draft room, ticking down
+ * here between reads. Red under ten seconds on my pick: a timeout is Yahoo's
+ * autodraft, which ignores the never list.
+ */
+function YahooClock({ seconds, mine }: { seconds: number; mine: boolean }) {
+  const [base, setBase] = useState({ seconds, at: Date.now() })
+  const [, tick] = useState(0)
+  useEffect(() => setBase({ seconds, at: Date.now() }), [seconds])
+  useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 250); return () => clearInterval(t) }, [])
+  const left = Math.max(0, Math.ceil(base.seconds - (Date.now() - base.at) / 1000))
+  const tone = !mine ? 'waiting' : left <= 10 ? 'urgent' : left <= 20 ? 'soon' : ''
+  return <span className={`clockpill nb-yclock ${tone}`} title="Yahoo's pick clock, read off your draft room">{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}</span>
+}
+
 function Gate({ view, act }: { view: DraftView; act: Act }) {
   return (
     <div className="gate">
@@ -240,6 +256,10 @@ function Take({ view, act, previewId, setPreviewId, pins, pin }: { view: DraftVi
   const next = view.ahead[0]
   // Back to back at the end of a round: the pick after this one is mine too.
   const second = (onClock ? view.clock.overall : view.clock.myNext ?? 0) + 1
+  // Two picks out or on the clock: what to have in Yahoo's queue, so a timeout takes the advice, not Yahoo's
+  // ranking (which knows nothing of the never list). The top card, its back-to-back partner, then the others.
+  const queue = view.clock.done || view.clock.picksUntil == null || view.clock.picksUntil > 2 ? []
+    : [...new Set([cards[0].name, ...(cards[0].thenName ? [cards[0].thenName] : []), ...cards.slice(1).map((a) => a.name)])].slice(0, 4)
   return (
     <div>
       <div className="vhead">
@@ -247,6 +267,12 @@ function Take({ view, act, previewId, setPreviewId, pins, pin }: { view: DraftVi
         {onClock && <span className={`conf ${close ? 'close' : 'clear'}`}>{close ? 'close call' : 'clear pick'}</span>}
         {cards[0].tiebreak && <span className="conf close">playoff tiebreak</span>}
       </div>
+      {queue.length > 0 && (
+        <div className="nb-queue">
+          <span className="vlabel">QUEUE IN YAHOO</span> {queue.map((n, i) => <span key={n}>{i ? ' · ' : ''}<b>{n}</b></span>)}
+          <span className="nb-dim"> — a timeout takes your queue's first, not Yahoo's ranking</span>
+        </div>
+      )}
       <div className="threeup">
         {cards.map((a, i) => (
           <div key={a.id} className={`vc ${i === 0 ? 'sel' : ''}${previewId === a.id ? ' nb-previewing' : ''}`}
