@@ -236,3 +236,10 @@ div.nb-cat { cursor: default; }
 @keyframes nb-pulse { 50% { opacity: 0.6; } }
 .nb-queue-stale { border-color: var(--red); }
 .nb-queue-stale .vlabel { color: var(--red); }
+/* Projection vs last season and the roster moves around a player (the 240 check) */
+.nb-ctx { font-size: var(--t-xs); color: var(--ink-3, var(--ink)); opacity: 0.75; line-height: 1.35; }
+.nb-ctx.strong { opacity: 1; color: var(--amber); }
+.nb-teams { margin: 0.5rem 0; }
+.nb-teams .nb-ph { background: none; border: 0; padding: 0; cursor: pointer; }
+.nb-teamlist { list-style: none; margin: 0.4rem 0 0; padding: 0; }
+.nb-teamlist li { padding: 0.35rem 0; border-top: 1px solid var(--line); line-height: 1.4; }

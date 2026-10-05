@@ -11,6 +11,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DraftView, BoardRow, PathView, CompareView } from '../../../nba/plan'
 import type { Cat } from '../../../nba/value'
+import type { PlayerContext, TeamLoad } from '../../../nba/teamLoad'
 
 const CATS: Cat[] = ['fg', 'ft', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to']
 const LABEL: Record<Cat, string> = { fg: 'FG%', ft: 'FT%', tpm: '3PM', pts: 'PTS', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO' }
@@ -141,6 +142,7 @@ function Screen({ id }: { id: string }) {
           {view.review && <Review view={view} act={act} />}
           <NextPicks view={view} />
           <Room view={view} />
+          <Teams view={view} />
           <Board view={view} act={act} id={id} pins={pins} pin={pin} />
         </div>
       )}
@@ -301,6 +303,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin }: { view: DraftVi
               {a.mates.length > 0 && <span className="nb-mates" title="Same NBA team, same nights. Information only: in simulated seasons, avoiding teammates made no difference">shares {a.team}'s nights with {a.mates.map((n) => n.split(' ').at(-1)).join(', ')}</span>}
               {a.bestBuild && a.bestBuild.name !== view.aheadBuild && <span className="nb-bb">{ordinal(a.bestBuild.rank)} if {a.bestBuild.name.replace(/^Punt /, 'you punt ')}</span>}
             </div>
+            {a.context && <ContextLine c={a.context} />}
             {(a.fits.length > 0 || a.stacks.length > 0 || a.hurts.length > 0) && (
               <div className="nb-fits">
                 {[
@@ -386,6 +389,7 @@ function Compare({ id, view, act, pins, pin, clear }: { id: string; view: DraftV
                 {s.mates.length > 0 && <span className="nb-mates"> · shares {s.team}'s nights with {s.mates.map((n) => n.split(' ').at(-1)).join(', ')}</span>}
                 {cv.nextPick != null && ` · ${pct(s.survives)} back at pick ${cv.nextPick}`}
               </div>
+              {s.context && <ContextLine c={s.context} always />}
               <div className="nb-cardbtns">
                 <button className="btn" onClick={() => act('pick', { playerId: s.id })}>Mark drafted</button>
                 {pins.includes(s.id) && <button className="btn nb-cmp" onClick={() => pin(s.id)}>Unpin</button>}
@@ -408,6 +412,69 @@ function Compare({ id, view, act, pins, pin, clear }: { id: string; view: DraftV
           </table>
         )}
       </>}
+    </div>
+  )
+}
+
+const CAT_WORD: Record<string, string> = { pts: 'pts', reb: 'reb', ast: 'ast', stl: 'stl', blk: 'blk', tpm: '3pm', to: 'TO', fg: 'FG%', ft: 'FT%' }
+const lastName = (n: string) => n.split(' ').at(-1)
+const signed = (x: number, d = 1) => {
+  const r = Number(Math.abs(x).toFixed(d))
+  return r === 0 ? (0).toFixed(d) : `${x > 0 ? '+' : '−'}${r.toFixed(d)}`
+}
+
+/**
+ * A player's projection against last season, and the roster moves around him (teamLoad.ts):
+ * muted unless something stands out — an unusual change, a big swing in his team's shots,
+ * a crowded or emptied team, or a move of his own.
+ */
+function ContextLine({ c, always = false }: { c: PlayerContext; always?: boolean }) {
+  const moves = [...c.arrivals.map((n) => `+${lastName(n)}`), ...c.departures.map((n) => `−${lastName(n)}`)]
+  const crowd = c.playsPct >= 108 || c.playsPct <= 92
+  const strong = c.unusual || Math.abs(c.netPlays) >= 15 || crowd || c.from != null
+  const pctOrCount = (x: { cat: string; delta: number }) => (x.cat === 'fg' || x.cat === 'ft' ? `${signed(x.delta * 100, 0)} ${CAT_WORD[x.cat]}` : `${signed(x.delta)} ${CAT_WORD[x.cat]}`)
+  const change = c.delta == null ? (c.rookie ? 'rookie: no NBA line to compare' : null)
+    : c.unit === 'fp/g'
+      ? `proj ${signed(c.delta)} FP/g vs last season${c.unusual && c.typical != null ? ` (usual ${signed(c.typical)})` : ''}`
+      : `proj ${[`${signed(c.delta)} pts`, ...c.changes.filter((x) => x.cat !== 'pts').map(pctOrCount)].join(', ')} vs last season`
+  const parts = [
+    c.from ? `new to ${c.team} (from ${c.from})` : null,
+    moves.length ? `${c.team}: ${moves.join(', ')} (net ${signed(c.netPlays, 0)} plays/g)` : null,
+    crowd ? `${c.team} shots ${Math.round(c.playsPct)}% of the norm` : null,
+    always || c.unusual || moves.length || c.from ? change : null,
+  ].filter(Boolean)
+  if (!parts.length) return null
+  return <div className={`nb-ctx ${strong ? 'strong' : ''}`} title="Projection against last season, and the team's roster moves (the 240 check). Preseason guesses: roles settle in the first games; once the season starts the Week and Adds tabs weigh the last 12 games.">{parts.join(' · ')}</div>
+}
+
+/**
+ * The 240 check, every team: a rotation has 240 minutes and only so many shots. Each team is
+ * read against the league's norm — projections are per game played, so even a typical
+ * rotation adds to more than 240.
+ */
+function Teams({ view }: { view: DraftView }) {
+  const [open, setOpen] = useState(false)
+  if (!view.teams?.length) return null
+  const t = view.teams
+  return (
+    <div className="nb-teams">
+      <button className="nb-ph nb-link" onClick={() => setOpen(!open)}>TEAMS · THE 240 CHECK {open ? '▾' : '▸'}</button>
+      {!open ? <span className="nb-dim nb-small"> most crowded: {t.slice(0, 3).map((x) => `${x.team} ${Math.round(x.playsPct)}%`).join(', ')} · most room: {t.slice(-3).reverse().map((x) => `${x.team} ${Math.round(x.playsPct)}%`).join(', ')}</span> : (
+        <>
+          <p className="nb-dim nb-small">Preseason guesses. Shots of each team's ten-man rotation as projected, against the league's norm (100%): over it, someone's line has to give; under it, someone may get more than projected. Minutes are per game played, so a typical rotation shows about 262 of 240. Net: plays a game the roster moves added or freed. Roles settle in the first games.</p>
+          <ul className="nb-teamlist">
+            {t.map((x: TeamLoad) => (
+              <li key={x.team}>
+                <div><b>{x.team}</b> <span className={x.playsPct >= 108 ? 'nb-t-r' : x.playsPct <= 92 ? 'nb-t-g' : ''}>shots {Math.round(x.playsPct)}%</span>
+                  <span className="nb-dim"> · net {signed(x.netPlays, 0)} plays/g · {Math.round(x.rotationMin)} min</span>
+                  {x.notes.length > 0 && <span className="nb-dim"> · {x.notes.join('; ')}</span>}</div>
+                {x.arrivals.length > 0 && <div className="nb-small">in: {x.arrivals.slice(0, 5).map((a) => `${a.name}${a.from ? ` (${a.from})` : ' (rookie)'}`).join(', ')}</div>}
+                {x.departures.length > 0 && <div className="nb-small nb-dim">out: {x.departures.slice(0, 5).map((d) => `${d.name} (${d.to})`).join(', ')}</div>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   )
 }

@@ -305,7 +305,7 @@ function reprepare() {
   const { players, noise } = load()
   const inj = injuryInputs()
   for (const s of sessions.values()) {
-    s.prep = prepare(s.league, players, noise, adpFor, schedule(), inj)
+    s.prep = prepare(s.league, players, noise, adpFor, schedule(), inj, notesByTeam())
     s.dirty = true
   }
 }
@@ -327,6 +327,15 @@ function setReturn(playerId: string, date: string | null) {
 
 // ── Sessions ──
 
+let teamNotes: Record<string, string[]> | null = null
+/** Team → judgement notes (a new coach), from the joined team table. */
+function notesByTeam() {
+  teamNotes ??= Object.fromEntries(
+    (JSON.parse(readFileSync(`${DATA}/teams.json`, 'utf8')).teams as { team: string; notes?: { text: string; kind?: string }[] }[])
+      .map((t) => [t.team, (t.notes ?? []).map((n) => (n.kind === 'new-coach' ? `new coach: ${n.text}` : n.text))]),
+  )
+  return teamNotes
+}
 let playoffGames: Record<string, Record<string, number>> | null = null
 /** Team → games in each league's playoff weeks, from the joined team table. */
 function schedule() {
@@ -356,7 +365,7 @@ function session(id: string): Session | null {
   const league = leagues.find((l) => l.id === id)
   if (!league) return null
   const draft: StoredDraft = existsSync(fileOf(id)) ? JSON.parse(readFileSync(fileOf(id), 'utf8')) : emptyDraft(id)
-  const s: Session = { league, prep: prepare(league, players, noise, adpFor, schedule(), injuryInputs()), draft, view: null, dirty: true }
+  const s: Session = { league, prep: prepare(league, players, noise, adpFor, schedule(), injuryInputs(), notesByTeam()), draft, view: null, dirty: true }
   sessions.set(id, s)
   return s
 }

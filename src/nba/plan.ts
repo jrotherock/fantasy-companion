@@ -24,6 +24,7 @@ import { positionalSlots, stillFeasible, stillToFill } from './lineup.js'
 import { startShares, type Calendar } from './starts.js'
 import { startingSeats } from './week.js'
 import { myPicks, teamsIn, type FeedItem, type StoredDraft } from './session.js'
+import { contextNorm, contextWorthShowing, playerContext, teamLoads, type PlayerContext, type TeamLoad } from './teamLoad.js'
 import type { NbaPlayer } from './types.js'
 import type { PrefTag } from './preferences.js'
 import type { MockRecord } from './tendencies.js'
@@ -88,6 +89,10 @@ export interface Prepared {
   returnNote: (id: string) => string | null
   /** The season's game days (sampled), for counting starts; null without a schedule. */
   calendar: Calendar | null
+  /** The 240 check by team (teamLoad.ts). */
+  teams: Map<string, TeamLoad>
+  /** A player's projection against last season's, and who joined his team. */
+  context: (id: string) => PlayerContext | null
 }
 
 /** Where a player's expected return comes from: a date you set, or CBS's injury report. */
@@ -165,7 +170,7 @@ export function checkScoring(league: NbaLeague & { categories?: string[] }) {
 
 export function prepare(
   league: NbaLeague, rawPlayers: NbaPlayer[], noise: Record<Cat, number>, adpFor: (p: NbaPlayer) => number,
-  schedule: PlayoffSchedule = {}, injuries: InjuryInputs | null = null,
+  schedule: PlayoffSchedule = {}, injuries: InjuryInputs | null = null, teamNotes: Record<string, string[]> = {},
 ): Prepared {
   checkScoring(league)
   // A player starting the season hurt is valued on the games he will be back for.
@@ -192,6 +197,19 @@ export function prepare(
     playoff, playoffNorm: games.length ? games[Math.floor(games.length / 2)] : null,
     returnNote: (id: string) => notes.get(id) ?? null,
     calendar: injuries ? calendarOf(injuries.teamDates) : null,
+    teams: new Map(), context: () => null,
+  }
+  // The 240 check, and each player's line against last season's (teamLoad.ts): information beside the advice, never in it.
+  const loads = teamLoads(rawPlayers, teamNotes)
+  const weights = league.scoring === 'points' ? (league as any).points as Record<string, number> : null
+  // What counts as an unusual change: the league's own spread, over the top 200 by ADP.
+  const pool = [...players].filter((p) => p.projection).sort((a, b) => adpFor(a) - adpFor(b)).slice(0, 200)
+  const norm = contextNorm(pool.map((p) => playerContext(p, loads, weights)?.delta).filter((d): d is number => d != null))
+  const contexts = new Map<string, PlayerContext | null>()
+  prepared.teams = loads
+  prepared.context = (id: string) => {
+    if (!contexts.has(id)) { const p = byId.get(id); contexts.set(id, p ? playerContext(p, loads, weights, norm) : null) }
+    return contexts.get(id)!
   }
   if (league.scoring === 'categories') {
     const rows = categoryZ(players, league).map((r) => ({ ...r, adp: adp(r.id) }))
@@ -381,6 +399,8 @@ export interface DraftView {
    * own pick in 99% of simulated turns (Hoops and Harker); the off-clock cards, 42-45%.
    */
   queue: { id: string; name: string }[] | null
+  /** The 240 check for every team, most crowded first: for draft prep, not the advice. */
+  teams: TeamLoad[]
   /** Yahoo's pick clock read off the draft room by the extension (server adds it; absent without the extension). */
   yahooClock?: { seconds: number; at: number } | null
   sensor: StoredDraft['sensor']
@@ -398,7 +418,7 @@ export interface DraftView {
     locks: Cat[]
     expected: number | null
   }
-  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; bestBuild: BestBuild | null
+  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; context: PlayerContext | null; bestBuild: BestBuild | null
     /** Which of my roster's weak categories he would help, from my first pick on. */
     fits: Cat[]
     /** Which of its strong ones he would add to: leaning in rather than covering. */
@@ -639,6 +659,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       canWait: nextAfter != null && (nextAfter === myNext! + 1 || survives(prep.adp(a.id), nextAfter, prep.league.adpSpread, myNext!) >= 0.6),
       thenName: a.then ? p(a.then).name : null,
       mates: matesOf(a.id),
+      context: contextWorthShowing(prep.context(a.id)) ? prep.context(a.id) : null,
       contrib: prep.cats ? contribution(prep.cats.byId.get(a.id)!) : undefined,
       fpg: prep.points?.byId.get(a.id)?.fpg,
       gp: (prep.cats?.byId.get(a.id)?.games.gp ?? prep.points?.byId.get(a.id)?.games.gp) ?? 0,
@@ -813,6 +834,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     takeNow,
     canWait,
     queue,
+    teams: [...prep.teams.values()].sort((a, b) => b.playsPct - a.playsPct),
     pickingBefore,
     history,
     review,
@@ -868,6 +890,8 @@ export interface CompareSide {
   takeable: boolean
   /** Players I already have from his NBA team. */
   mates: string[]
+  /** His projection against last season's, and who joined his team (always, for comparing). */
+  context: PlayerContext | null
 }
 
 export interface CompareView {
@@ -917,6 +941,7 @@ export function compareView(prep: Prepared, d: StoredDraft, tags: Map<string, Pr
       better: [], fpg: prep.points?.byId.get(id)?.fpg ?? null, gp: gamesOf(prep, id),
       card: cards.includes(id) ? cards.indexOf(id) + 1 : null, takeable: canTake(id),
       mates: p.team ? mine.filter((m) => prep.players.get(m)!.team === p.team).map((m) => prep.players.get(m)!.name) : [],
+      context: prep.context(id),
     }
   })
   if (sides.length === 2 && sides[0].preview && sides[1].preview) {
