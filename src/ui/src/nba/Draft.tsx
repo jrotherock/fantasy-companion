@@ -270,6 +270,8 @@ function Build({ view, act }: { view: DraftView; act: Act }) {
   const [confirm, setConfirm] = useState<Cat | null>(null)
   const [help, setHelp] = useState(false)
   const win = b.win
+  // Before the build is read the numbers are real but young: one or two players against an average start.
+  const early = b.stage === 'open'
   const live = CATS.filter((c) => !b.locks.includes(c))
   const count = (t: string) => (win ? live.filter((c) => tone(win[c]) === t).length : 0)
   const tap = (c: Cat) => (b.locks.includes(c) ? act('locks', { locks: b.locks.filter((x) => x !== c) }) : setConfirm(c))
@@ -286,7 +288,7 @@ function Build({ view, act }: { view: DraftView; act: Act }) {
       <div className="nb-cats">
         {CATS.map((c) => b.locks.includes(c)
           ? <button key={c} className="nb-cat nb-cat-lock" onClick={() => tap(c)} title="Locked as a punt — click to unlock"><span className="l">{LABEL[c]}</span><span className="v">punt 🔒</span></button>
-          : <button key={c} className={`nb-cat ${win ? `nb-cat-${tone(win[c]) || 'even'}` : 'nb-cat-open'}`} onClick={() => tap(c)} title="Click to lock as a punt"><span className="l">{LABEL[c]}</span><span className="v">{win ? pct(win[c]) : '—'}</span></button>)}
+          : <button key={c} className={`nb-cat ${win ? `nb-cat-${tone(win[c]) || 'even'}` : 'nb-cat-open'}${early ? ' nb-cat-early' : ''}`} onClick={() => tap(c)} title={early ? 'Early: moves a lot until your 4th pick. Click to lock as a punt' : 'Click to lock as a punt'}><span className="l">{LABEL[c]}</span><span className="v">{win ? pct(win[c]) : '—'}</span></button>)}
       </div>
       <div className="nb-bfoot">
         {win ? (
@@ -295,16 +297,17 @@ function Build({ view, act }: { view: DraftView; act: Act }) {
             <span><i className="nb-dot" style={{ background: 'var(--amber)' }} />{count('a')} coin flips</span>
             <span><i className="nb-dot" style={{ background: 'var(--red)' }} />{count('r') + b.locks.length} given up</span>
             <span className="mono">{live.reduce((s, c) => s + win[c], 0).toFixed(1)} of 9 a week</span>
-            <span className="nb-dim">Goal: 5–6 winning, 2–3 given up on purpose.</span>
+            <span className="nb-dim">{early
+              ? `Early — after ${view.roster.length} pick${view.roster.length === 1 ? '' : 's'}, against an average team's first ${view.roster.length}. These move a lot until your ${b.buildFrom}th pick; until then the cards take the best player.`
+              : 'Goal: 5–6 winning, 2–3 given up on purpose.'}</span>
           </div>
-        ) : <div className="nb-meter nb-dim">Win chances read from your {b.buildFrom}th pick. Until then take the best player; the direction is a lean, not a plan.</div>}
+        ) : <div className="nb-meter nb-dim">Win chances show from your first pick. Until your {b.buildFrom}th the cards take the best player; the direction is a lean, not a plan.</div>}
         {p.length > 1 && (
           <div className="nb-dir">
             <div className="nb-arrow">{gap < 0.15 ? `→ Open · top builds within ${spread.toFixed(2)}` : `→ ${p[0].name} · ${LEAN_TEXT[lead]}`}</div>
             <div className="nb-small">
               {gap < 0.15 ? `No build is clearly better — take the best player. The leader ${LEAN_TEXT[lead]}.`
                 : `Leads by ${gap.toFixed(2)} a week${view.roster.length < b.buildFrom ? '; a lean from your first picks, not a plan yet' : ''}. Next: ${p[0].plan.slice(0, 3).map((x) => x.name).join(', ')}.`}
-              {gap >= 0.15 && p[0].punt.length > 0 && !p[0].locked && <> <button className="nb-link" onClick={() => act('locks', { locks: p[0].punt })}>Lock {p[0].name}</button></>}
             </div>
             <div className="nb-builds">
               {p.slice(0, 3).map((x, i) => (

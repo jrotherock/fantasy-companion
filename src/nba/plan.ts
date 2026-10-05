@@ -471,7 +471,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     const sticky = read.stage === 'open' || !win ? [] : CATS.filter((c) => win[c] < 0.35 || ((d.lastPunting ?? []).includes(c) && win[c] < 0.42))
     build = {
       stage: read.stage, buildFrom: BUILD_FROM, buildFirm: BUILD_FIRM,
-      win: read.stage === 'open' ? null : win,
+      // Shown from the first pick: a plain fact about the roster so far. The punt read still waits (BUILD_FROM).
+      win,
       punting: sticky,
       edge: read.stage === 'open' || !win ? [] : CATS.filter((c) => win[c] >= 0.35 && win[c] < 0.5),
       strong: read.stage === 'open' || !win ? [] : CATS.filter((c) => win[c] >= 0.65),

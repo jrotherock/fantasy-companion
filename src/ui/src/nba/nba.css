@@ -182,3 +182,6 @@ div.nb-cat { cursor: default; }
 .nb-table th.nb-sort { cursor: pointer; user-select: none; }
 .nb-table th.nb-sort:hover { color: var(--ink); }
 .nb-table th.nb-sorted { color: var(--amber); }
+
+/* Win chances before the build is read: shown, but quieter */
+.nb-cat-early { opacity: 0.6; }
