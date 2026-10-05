@@ -389,7 +389,7 @@ export interface DraftView {
     locks: Cat[]
     expected: number | null
   }
-  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; bestBuild: BestBuild | null
+  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; bestBuild: BestBuild | null
     /** Which of my roster's weak categories he would help, from my first pick on. */
     fits: Cat[]
     /** Which of its strong ones he would add to: leaning in rather than covering. */
@@ -618,9 +618,11 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     advice = raw.slice(0, 15).map((a) => ({
       ...a, team: p(a.id).team, positions: prep.positions(a.id), tag: tags.get(a.id) ?? null,
       // "There next time" is the turn after this one; a player who will very likely still be there can wait.
-      survives: nextAfter == null ? 0 : survives(prep.adp(a.id), nextAfter, prep.league.adpSpread),
+      // With that turn straight after this one (a back-to-back at the end of a round), everyone will be.
+      survives: nextAfter == null ? 0 : nextAfter === myNext! + 1 ? 1 : survives(prep.adp(a.id), nextAfter, prep.league.adpSpread),
       there: onClock ? null : survives(prep.adp(a.id), myNext!, prep.league.adpSpread),
-      canWait: nextAfter != null && survives(prep.adp(a.id), nextAfter, prep.league.adpSpread) >= 0.6,
+      canWait: nextAfter != null && (nextAfter === myNext! + 1 || survives(prep.adp(a.id), nextAfter, prep.league.adpSpread) >= 0.6),
+      thenName: a.then ? p(a.then).name : null,
       contrib: prep.cats ? contribution(prep.cats.byId.get(a.id)!) : undefined,
       fpg: prep.points?.byId.get(a.id)?.fpg,
       gp: (prep.cats?.byId.get(a.id)?.games.gp ?? prep.points?.byId.get(a.id)?.games.gp) ?? 0,
@@ -696,7 +698,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       fpMin: prep.points ? ((pl.projection?.perGame.min ?? 0) > 0 ? (r as PointsRow).fpg / pl.projection!.perGame.min : null) : undefined,
       fpSeason: prep.points ? (r as PointsRow).season : undefined,
       // Chance he lasts to the next decision: the pick after this one when I am on the clock.
-      survives: (onClock ? nextAfter : myNext) == null ? null : survives(prep.adp(r.id), (onClock ? nextAfter : myNext)!, prep.league.adpSpread),
+      survives: (onClock ? nextAfter : myNext) == null ? null : onClock && nextAfter === overall + 1 ? 1 : survives(prep.adp(r.id), (onClock ? nextAfter : myNext)!, prep.league.adpSpread),
       tag: tags.get(r.id) ?? null,
       injury: pl.injury?.status ?? null,
       playoff: prep.playoff(r.id),

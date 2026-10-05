@@ -35,6 +35,8 @@ export interface DraftSpot {
   overall: number
   /** How far this league's picks land from ADP; football's measure when the league has none. */
   spread?: AdpSpread
+  /** Simulations only: treat a back-to-back turn like any other, as the advice did before 2026-10-05. */
+  naiveTurns?: boolean
 }
 
 /**
@@ -96,10 +98,28 @@ export interface Advice {
   score: number
   /** Chance he is still there at my next turn if I pass. */
   survives: number
+  /**
+   * With my next pick straight after this one (the turn at the end of a round), who
+   * to take with it if I take this player now — the pair, so the second can be queued.
+   */
+  then?: string
 }
 
 function nextTurn(spot: DraftSpot): number | null {
   return nextPickFor(spot.slot, spot.teams, spot.rounds, spot.overall)
+}
+
+/**
+ * My next pick comes straight after this one: nobody picks in between, so
+ * everyone I pass on now is certain to be there. ADP survival said otherwise —
+ * a player whose ADP is near the turn read as 70% likely to last one pick that
+ * no one else makes.
+ */
+/** Partners tried for each player at a back-to-back turn: the best few by the pair's value. */
+const PAIR_PARTNERS = 12
+
+export function backToBack(spot: DraftSpot): boolean {
+  return !spot.naiveTurns && nextTurn(spot) === spot.overall + 1
 }
 
 // ── Points ──────────────────────────────────────────────────────────────────
@@ -117,8 +137,20 @@ export function advisePoints(
     if (canTake(c.id)) takeable.push(c)
     if (takeable.length > shortlist + 40) break
   }
+  const pair = backToBack(spot)
+  const beyond = pair ? nextPickFor(spot.slot, spot.teams, spot.rounds, spot.overall + 1) : null
   return takeable.slice(0, shortlist).map((c) => {
     const rest = takeable.filter((x) => x.id !== c.id && canTake(x.id, c.id))
+    if (pair) {
+      // Both picks are mine; the question is which pair leaves the most for the turn after it.
+      let best = -Infinity, then: string | undefined
+      for (const x of rest.slice(0, PAIR_PARTNERS)) {
+        const left = rest.filter((z) => z.id !== x.id)
+        const v = x.value + (beyond == null ? 0 : expectedBest(left, beyond, 0, spot.spread))
+        if (v > best) { best = v; then = x.id }
+      }
+      return { id: c.id, name: c.name, now: c.value, score: c.value + (then ? best : 0), survives: 1, then }
+    }
     const later = next == null ? 0 : expectedBest(rest, next, 0, spot.spread)
     return { id: c.id, name: c.name, now: c.value, score: c.value + later, survives: next == null ? 0 : survives(c.adp, next, spot.spread) }
   }).sort((a, b) => b.score - a.score)
@@ -269,14 +301,34 @@ export function adviseCategories(
     if (single.length > Math.max(shortlist, lookahead)) break
   }
 
+  const pair = backToBack(spot)
+  const beyond = pair ? nextPickFor(spot.slot, spot.teams, spot.rounds, spot.overall + 1) : null
   return single.slice(0, shortlist).map(({ c, s, e }) => {
     let later = e
+    let then: string | undefined
     if (next != null) {
       const follow = single.filter((x) => x.c.id !== c.id && canTake(x.c.id, c.id)).slice(0, lookahead)
-        .map((x) => ({ value: expectedCats(withTwo(c, x.c, s), k + 2, base, ignore), adp: x.c.adp }))
+        .map((x) => ({ id: x.c.id, row: x.c, value: expectedCats(withTwo(c, x.c, s), k + 2, base, ignore), adp: x.c.adp }))
         .sort((a, b) => b.value - a.value)
-      later = expectedBest(follow, next, e, spot.spread)
+      if (pair) {
+        // Both picks are mine. Choosing the pair alone would ignore the turn after it, and
+        // in simulated drafts from the last slot that cost more than the pair gained: so
+        // each partner is judged with who will still be there at that turn.
+        later = -Infinity
+        for (const x of follow.slice(0, PAIR_PARTNERS)) {
+          const sx = withTwo(c, x.row, s)
+          let v = x.value
+          if (beyond != null) {
+            const third = follow.filter((z) => z.id !== x.id)
+              .map((z) => ({ value: expectedCats(add(sx, contribution(z.row)), k + 3, base, ignore), adp: z.adp }))
+              .sort((a, b) => b.value - a.value)
+            v = expectedBest(third, beyond, x.value, spot.spread)
+          }
+          if (v > later) { later = v; then = x.id }
+        }
+        if (!then) later = e
+      } else later = expectedBest(follow, next, e, spot.spread)
     }
-    return { id: c.id, name: c.name, now: e - before, score: later, survives: next == null ? 0 : survives(c.adp, next, spot.spread) }
+    return { id: c.id, name: c.name, now: e - before, score: later, survives: next == null ? 0 : pair ? 1 : survives(c.adp, next, spot.spread), ...(then ? { then } : {}) }
   }).sort((a, b) => b.score - a.score)
 }

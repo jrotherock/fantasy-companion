@@ -195,10 +195,10 @@ const strategies: Record<string, Pick> = {
 }
 
 /** The app's advice, with near-ties (within 0.02 categories, as on the screen) broken by fit or not at all. */
-function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack', locks: Cat[] = [], spread: AdpSpread = FOOTBALL_SPREAD, lineup = false): string {
+function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack', locks: Cat[] = [], spread: AdpSpread = FOOTBALL_SPREAD, lineup = false, naiveTurns = false): string {
   // As the app does: a lock drops the category and ends the four-pick wait.
   const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
-    { teams: league.teams, rounds, slot, overall, spread }, base, { canTake: canTake(mine), neutralUntil: locks.length ? 0 : BUILD_FROM, ignore: locks,
+    { teams: league.teams, rounds, slot, overall, spread, naiveTurns }, base, { canTake: canTake(mine), neutralUntil: locks.length ? 0 : BUILD_FROM, ignore: locks,
       strength: lineup ? (rs) => startedStrength(rs.map((r) => r.id)) : undefined })
   if (!advice.length) return windowOf(avail, mine)[0]
   if (tie === 'none' || !mine.length) return advice[0].id
@@ -361,6 +361,14 @@ if (MODE === 'spread') {
   strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none')
   strategies['app, Hoops spread 2+0.12'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], { a: 2, b: 0.12 })
   strategies['app, tight spread 2+0.08'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], { a: 2, b: 0.08 })
+}
+
+if (MODE === 'turns') {
+  // Back-to-back turns at the ends of the order: certain survival and the best pair, against the old ADP survival.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  strategies['app, turns as before'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H, false, true)
 }
 
 if (MODE === 'locks') {

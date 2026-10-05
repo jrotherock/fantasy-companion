@@ -232,6 +232,8 @@ function Take({ view, act, previewId, setPreviewId }: { view: DraftView; act: Ac
   const close = cards.length > 1 && cards[0].score - cards[1].score < (view.league.scoring === 'categories' ? 0.02 : Math.abs(cards[0].score) * 0.01)
   const locks = view.build?.locks ?? []
   const next = view.ahead[0]
+  // Back to back at the end of a round: the pick after this one is mine too.
+  const second = (onClock ? view.clock.overall : view.clock.myNext ?? 0) + 1
   return (
     <div>
       <div className="vhead">
@@ -266,7 +268,8 @@ function Take({ view, act, previewId, setPreviewId }: { view: DraftView; act: Ac
               </div>
             )}
             <div className={`nb-fate ${a.there != null || a.canWait ? 'nb-wait' : 'nb-gone'}`}>
-              {a.there != null ? `${pct(a.there)} there at pick ${view.clock.myNext}` : a.canWait ? `${pct(a.survives)} back next turn — can wait` : `${pct(1 - a.survives)} gone by your next turn`}
+              {a.there != null ? `${pct(a.there)} there at pick ${view.clock.myNext}` : a.thenName ? null : a.canWait ? `${pct(a.survives)} back next turn — can wait` : `${pct(1 - a.survives)} gone by your next turn`}
+              {a.thenName && <span className="nb-pair">{a.there != null ? ' · ' : ''}then {a.thenName} at pick {second}</span>}
             </div>
             <button className={`btn ${i === 0 && onClock ? 'primary' : ''}`} onClick={(e) => { e.stopPropagation(); act('pick', { playerId: a.id }) }}>Mark drafted</button>
           </div>
@@ -275,7 +278,8 @@ function Take({ view, act, previewId, setPreviewId }: { view: DraftView; act: Ac
       {onClock && (
         <div className="nb-plan">
           <span className="vlabel">PLAN</span> {cards[0].name} now
-          {view.canWait.length > 0 && next ? <> → {view.canWait.map((w, i) => <span key={w.name}>{i ? ', ' : ''}{w.name} <span className="nb-dim">{pct(w.survives)}</span></span>)} — likely still there at pick {next.overall}</> : null}
+          {cards[0].thenName ? <> → {cards[0].thenName} at pick {second}, straight after — queue him in Yahoo now so a timeout takes him</>
+            : view.canWait.length > 0 && next ? <> → {view.canWait.map((w, i) => <span key={w.name}>{i ? ', ' : ''}{w.name} <span className="nb-dim">{pct(w.survives)}</span></span>)} — likely still there at pick {next.overall}</> : null}
         </div>
       )}
       {view.playoffNote && <div className="nb-ponote">{view.playoffNote}</div>}
@@ -546,6 +550,7 @@ function Board({ view, act, id }: { view: DraftView; act: Act; id: string }) {
             {!cats && <li><b>FP/g</b> fantasy points a game; <b>FP/min</b> per minute he is projected to play — high means he scores in what he gets, so more minutes would show; <b>FP season</b> a game times his games. <b>Value</b> is not the season total: it is points a game above the replacement line times games, so a replacement-level player is worth nought however much he scores.</li>}
             {cats && <li><b>Blue note</b> beside a name: where he ranks in the build he is drafted for, when that is 20+ places higher than balanced — Giannis is a first-rounder only if your roster ends up punting FT%. Information: the cards already weigh it once your roster leans that way, without a lock.</li>}
             <li><b>Next</b>: chance he lasts to your next pick. Above about 60%, he can wait. <b>PO</b>: games in your playoff weeks, the tiebreaker.</li>
+            <li><b>Back to back</b> (the end of a round, when your next pick follows at once): each card names the partner to take with it. Queue him in Yahoo before you pick, so a timeout takes him rather than Yahoo's choice.</li>
             <li>Grey rows are your never list. A red note means he starts the season hurt; set your own return date beside it.</li>
             <li>Check a name here; let the cards above make the call.</li>
           </ul>

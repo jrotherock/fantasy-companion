@@ -91,3 +91,34 @@ test('a player who barely plays is worth a waiver pickup, not nothing', () => {
   for (const c of CATS) assert.ok(contribution(healthy)[c] > contribution(hurt)[c], c)
   assert.ok(Math.abs(contribution(hurt).pts - (-1 * 81 / 82 + 0.5 / 82)) < 1e-9)
 })
+
+test('back to back at the turn: everyone lasts one pick, and the pair leaves who will last longer', () => {
+  // Picks 10 and 11 are mine, then 30. 'later' is the second-best player but the room
+  // will leave him to pick 30; 'hot2' will not last. Take 'hot' and 'hot2' now.
+  const spot = { teams: 10, rounds: 13, slot: 10, overall: 10 }
+  const pool = [
+    { id: 'hot', name: 'hot', value: 100, adp: 9 },
+    { id: 'later', name: 'later', value: 95, adp: 200 },
+    { id: 'hot2', name: 'hot2', value: 90, adp: 12 },
+    { id: 'filler', name: 'filler', value: 20, adp: 300 },
+  ]
+  const advice = advisePoints(pool, spot)
+  for (const a of advice) assert.equal(a.survives, 1)
+  assert.equal(advice[0].id, 'hot')
+  assert.equal(advice[0].then, 'hot2')
+  // The second pick of the pair is an ordinary turn again: next at pick 30.
+  assert.equal(advisePoints(pool, { ...spot, overall: 11 })[0].then, undefined)
+  // Simulations can still draft the old way, for comparison.
+  assert.ok(advisePoints(pool, { ...spot, naiveTurns: true })[0].survives < 1)
+})
+
+test('back to back in categories: the card names the partner that fits the pick best', () => {
+  const pool = Array.from({ length: 40 }, (_, i) => row(`p${i}`, { pts: (i % 5) - 2, ast: ((i * 3) % 5) - 2, reb: ((i * 7) % 5) - 2 }, i + 1))
+  const base = baseline(pool, 4, 6, flatNoise)
+  const spot = { teams: 4, rounds: 6, slot: 4, overall: 4 }
+  const advice = adviseCategories([row('passer', { ast: 3 }, 2), row('rebounder', { reb: 3 }, 3), row('scorer', { pts: 2 }, 50)], [], spot, base)
+  for (const a of advice) {
+    assert.equal(a.survives, 1)
+    assert.ok(a.then && a.then !== a.id)
+  }
+})

@@ -44,6 +44,7 @@
 .nb-fate { font-size: var(--t-sm); }
 .nb-gone { color: var(--amber); }
 .nb-wait { color: var(--blue); }
+.nb-pair { font-weight: 600; }
 .nb-plan { font-size: var(--t-md); margin-top: 0.4rem; line-height: 1.5; }
 .nb-plan .vlabel { margin-right: 0.3rem; }
 /* Football's narrow card reorders its own parts; basketball's extra lines go after them. */

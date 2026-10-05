@@ -94,9 +94,9 @@ const posValue = positionalValue()
 // ── Strategies ──
 
 type Pick = (avail: string[], mine: string[], overall: number, slot: number) => string
-const app = (vals?: Map<string, number>): Pick => (avail, mine, overall, slot) => {
+const app = (vals?: Map<string, number>, naiveTurns = false): Pick => (avail, mine, overall, slot) => {
   const pool = avail.map((id) => rowOf.get(id)!).filter(Boolean).map((r) => (vals ? { ...r, value: vals.get(r.id) ?? r.value } : r))
-  const advice = advisePoints(pool, { teams: league.teams, rounds, slot, overall, spread: SPREAD }, 25, canTake(mine))
+  const advice = advisePoints(pool, { teams: league.teams, rounds, slot, overall, spread: SPREAD, naiveTurns }, 25, canTake(mine))
   return advice[0]?.id ?? pool.find((r) => canTake(mine)(r.id))!.id
 }
 const cBy = (n: number): Pick => (avail, mine, overall, slot) => {
@@ -112,7 +112,10 @@ const skipUnder = (games: number): Pick => (avail, mine, overall, slot) => {
   return app()(ok.length ? ok : avail, mine, overall, slot)
 }
 const MODE = arg('mode') ?? 'center'
-const strategies: Record<string, Pick> = MODE === 'injured' ? {
+const strategies: Record<string, Pick> = MODE === 'turns' ? {
+  'the app (recommender)': app(),
+  'app, turns as before': app(undefined, true),
+} : MODE === 'injured' ? {
   'the app (recommender)': app(),
   'app, no one under 25 games': skipUnder(25),
   'app, no one under 41 games': skipUnder(41),
@@ -210,7 +213,9 @@ function rawAllPlay(teams: string[][], seed: number): number[] {
 const res: Record<string, { ap: number[]; pts: number[]; c: number[] }> = {}
 for (const [name, pick] of Object.entries(strategies)) {
   const r = { ap: [] as number[], pts: [] as number[], c: [] as number[] }
+  // Turns only differ at the ends of the order: the first and last slots pick back to back.
   for (let slot = 1; slot <= league.teams; slot++) for (let seed = 1; seed <= SEEDS; seed++) {
+    if (MODE === 'turns' && slot !== 1 && slot !== league.teams) continue
     const teams = draft(slot, seed, pick)
     const pts = teams.map(weeklyPoints)
     const me = pts[slot - 1]
