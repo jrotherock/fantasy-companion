@@ -393,7 +393,9 @@ export interface DraftView {
     /** Which of my roster's weak categories he would help, from my first pick on. */
     fits: Cat[]
     /** Which of its strong ones he would add to: leaning in rather than covering. */
-    stacks: Cat[] })[]
+    stacks: Cat[]
+    /** Which of my close categories he would cost me: the costs that matter this draft. */
+    hurts: Cat[] })[]
   /**
    * The three cards: the best players to take with this pick. A player the
    * room will very likely leave until my next turn is not an option for this
@@ -596,6 +598,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     weakSpots && contrib ? weakSpots.cats.filter((c) => contrib[c] >= FIT_MIN) : []
   const stacksOf = (contrib: Record<Cat, number> | undefined): Cat[] =>
     contrib ? strongSpots.filter((c) => contrib[c] >= FIT_MIN) : []
+  const hurtsOf = (contrib: Record<Cat, number> | undefined): Cat[] =>
+    weakSpots && contrib ? weakSpots.cats.filter((c) => contrib[c] <= -FIT_MIN) : []
 
   // ── Advice ──
   let advice: DraftView['advice'] = []
@@ -623,6 +627,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       bestBuild: bestBuildOf(prep, a.id),
       fits: prep.cats ? fitsOf(contribution(prep.cats.byId.get(a.id)!)) : [],
       stacks: prep.cats ? stacksOf(contribution(prep.cats.byId.get(a.id)!)) : [],
+      hurts: prep.cats ? hurtsOf(contribution(prep.cats.byId.get(a.id)!)) : [],
     }))
   }
 

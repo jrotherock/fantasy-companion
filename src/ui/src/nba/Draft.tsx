@@ -251,10 +251,13 @@ function Take({ view, act }: { view: DraftView; act: Act }) {
               {a.returnNote && <span className="nb-down">{a.returnNote}</span>}
               {a.bestBuild && a.bestBuild.name !== view.aheadBuild && <span className="nb-bb">{ordinal(a.bestBuild.rank)} if {a.bestBuild.name.replace(/^Punt /, 'you punt ')}</span>}
             </div>
-            {(a.fits.length > 0 || a.stacks.length > 0) && (
+            {(a.fits.length > 0 || a.stacks.length > 0 || a.hurts.length > 0) && (
               <div className="nb-fits">
-                {a.fits.length > 0 && view.weakSpots && <span>moves {view.weakSpots.whose} close {a.fits.map((c) => LABEL[c]).join(', ')}</span>}
-                {a.stacks.length > 0 && <span className="nb-stacks">{a.fits.length ? ' · ' : ''}stacks {view.weakSpots?.whose ?? 'your'} {a.stacks.map((c) => LABEL[c]).join(', ')}</span>}
+                {[
+                  a.fits.length > 0 && view.weakSpots && <span key="m">moves {view.weakSpots.whose} close {a.fits.map((c) => LABEL[c]).join(', ')}</span>,
+                  a.hurts.length > 0 && view.weakSpots && <span key="h" className="nb-hurts">hurts {view.weakSpots.whose} close {a.hurts.map((c) => LABEL[c]).join(', ')}</span>,
+                  a.stacks.length > 0 && <span key="s" className="nb-stacks">stacks {view.weakSpots?.whose ?? 'your'} {a.stacks.map((c) => LABEL[c]).join(', ')}</span>,
+                ].filter(Boolean).flatMap((el, i) => (i ? [<span key={`d${i}`}> · </span>, el] : [el]))}
               </div>
             )}
             <div className={`nb-fate ${a.there != null || a.canWait ? 'nb-wait' : 'nb-gone'}`}>

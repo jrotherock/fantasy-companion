@@ -90,7 +90,10 @@ async function main() {
     else unmatchedYahoo.push(`${r.rank}. ${r.name} (${r.team})`)
   }
 
-  const ids = new Set([...sleeperLines.keys(), ...fprosById.keys(), ...yahooById.keys()])
+  // Players who will not play again, whatever the feeds still list (data/nba/excluded.json).
+  const excluded = new Set((JSON.parse(await readFile(`${DIR}/excluded.json`, 'utf8')).players as { name: string }[])
+    .map((x) => index.resolve(x.name, null)).filter((id): id is string => !!id))
+  const ids = new Set([...sleeperLines.keys(), ...fprosById.keys(), ...yahooById.keys()].filter((id) => !excluded.has(id)))
   const players: NbaPlayer[] = []
   for (const id of ids) {
     const p = sleeper[id]

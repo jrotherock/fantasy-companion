@@ -73,6 +73,8 @@ const strengthOf = (ids: string[]): Strength => ids.reduce((s, id) => {
 
 // ── Lineup-aware scoring (--lineups): a player's season counts only on the nights he starts ──
 const LINEUPS = process.argv.includes('--lineups')
+/** `--il`: injured players' missing games are filled by an IL pickup from the free agents left. */
+const IL = process.argv.includes('--il')
 const cal = calendar(JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games)
 const seatsOf = startingSeats(league.roster)
 const valueOrZero = (id: string) => value.get(id) ?? 0
@@ -249,6 +251,17 @@ if (MODE === 'lineup') {
   strategies['app, counting starts'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], { a: 2, b: 0.12 }, true)
 }
 
+if (MODE === 'injured') {
+  // The app as it is, against the app passing over anyone projected under half a season.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  strategies['app, no one under 41 games'] = (avail, mine, overall, slot) => {
+    const healthy = avail.filter((id) => (rowOf.get(id)?.games.gp ?? 0) >= 41)
+    return appPick(healthy.length ? healthy : avail, mine, overall, slot, 'none', [], H)
+  }
+}
+
 if (MODE === 'center') {
   // A center by my Nth pick: if I have none, take the best center among the top few by value (the window).
   for (const k of Object.keys(strategies)) delete strategies[k]
@@ -295,9 +308,30 @@ for (const [name, pick] of Object.entries(strategies)) {
   for (let slot = SLOT_FROM || 1; slot <= (SLOT_TO || league.teams); slot++) {
     for (let seed = 1; seed <= SEEDS; seed++) {
       const { mine, teams } = draft(slot, seed, pick)
-      const score = LINEUPS ? startedStrength : strengthOf
-      const me = score(mine)
-      const others = teams.filter((_, i) => i !== slot - 1).map(score)
+      const score0 = LINEUPS ? startedStrength : strengthOf
+      // --il: every team puts a player missing half the season or more on IL and plays the best free agent
+      // left for the games he is out. Taken in draft order of the injured, best free agent first.
+      const ilAdds = new Map<number, { id: string; share: number }[]>()
+      if (IL) {
+        const drafted = new Set(teams.flat())
+        const free = pool.filter((id) => !drafted.has(id) && !never.has(id) && (rowOf.get(id)?.games.gp ?? 0) >= 60)
+          .sort((a, b) => value.get(b)! - value.get(a)!)
+        teams.forEach((t, i) => {
+          const hurt = t.filter((id) => (rowOf.get(id)?.games.gp ?? 82) < 41).slice(0, 3)
+          ilAdds.set(i, hurt.map((id) => ({ id: free.shift()!, share: 1 - (rowOf.get(id)!.games.gp / 82) })).filter((x) => x.id))
+        })
+      }
+      const score = (ids: string[], i: number): Strength => {
+        const base0 = score0(ids)
+        for (const a of ilAdds.get(i) ?? []) {
+          const c = contribOf.get(a.id)!, full = (rowOf.get(a.id)!.games.gp / 82) || 1
+          // The pickup plays the share of the season the injured man misses, at his own rate of play.
+          for (const k of CATS) base0[k] += (c[k] / full) * a.share * full
+        }
+        return base0
+      }
+      const me = score(mine, slot - 1)
+      const others = teams.map((t, i) => [t, i] as const).filter(([, i]) => i !== slot - 1).map(([t, i]) => score(t, i))
       res.idle.push(idleShare(mine))
       const ap = others.reduce((s, o) => s + weekWin(me, o), 0) / others.length
       res.allPlay.push(ap)

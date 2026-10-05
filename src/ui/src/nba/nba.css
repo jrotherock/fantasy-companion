@@ -192,3 +192,4 @@ div.nb-cat { cursor: default; }
 /* The room, live */
 .nb-roomtable { margin-top: 0.4rem; }
 .nb-roomtable tr.nb-mine td { background: color-mix(in srgb, var(--amber) 12%, transparent); }
+.nb-hurts { color: var(--red); }
