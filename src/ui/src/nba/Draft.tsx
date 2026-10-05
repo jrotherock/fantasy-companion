@@ -303,7 +303,17 @@ function Take({ view, act, previewId, setPreviewId, pins, pin }: { view: DraftVi
  */
 function Compare({ id, view, act, pins, pin, clear }: { id: string; view: DraftView; act: Act; pins: string[]; pin: (id: string) => void; clear: () => void }) {
   const [cv, setCv] = useState<CompareView | null>(null)
+  const box = useRef<HTMLDivElement>(null)
   const key = `${pins.join(',')}|${view.clock.overall}|${(view.build?.locks ?? []).join(',')}`
+  // Pinned from the board, the panel opens up by the cards — off screen on a phone. Bring it into view.
+  // Once its answer is in (an empty panel scrolls to the wrong place as it grows), and once per new pin.
+  const pinned = pins.join(',')
+  const shownFor = useRef('')
+  useEffect(() => {
+    if (!cv || shownFor.current === pinned) return
+    shownFor.current = pinned
+    box.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [cv, pinned])
   useEffect(() => {
     let live = true
     fetch(`/api/nba/draft/${id}/compare?ids=${pins.join(',')}`).then((r) => r.json()).then((x) => { if (live) setCv(x) }).catch(() => {})
@@ -312,7 +322,7 @@ function Compare({ id, view, act, pins, pin, clear }: { id: string; view: DraftV
   const locks = view.build?.locks ?? []
   const cats = view.league.scoring === 'categories'
   return (
-    <div className="nb-compare">
+    <div className="nb-compare" ref={box}>
       <div className="vhead">
         <span className="vlabel">COMPARE</span>
         <span className="spacer" />
@@ -620,7 +630,7 @@ function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: st
             <li><b>Next</b>: chance he lasts to your next pick. Above about 60%, he can wait. <b>PO</b>: games in your playoff weeks, the tiebreaker.</li>
             <li><b>Back to back</b> (the end of a round, when your next pick follows at once): each card names the partner to take with it. Queue him in Yahoo before you pick, so a timeout takes him rather than Yahoo's choice.</li>
             <li>Grey rows are your never list. A red note means he starts the season hurt; set your own return date beside it.</li>
-            <li><b>⇄</b> (or <b>Compare</b> on a card): pin a player to set him against the top card, or pin two to set them against each other. You get a verdict in words on the cards' own scale, and where each would take your categories.</li>
+            <li><b>Tap a name</b> (or <b>Compare</b> on a card) to pin him: one pinned is set against the top card, two against each other. You get a verdict in words on the cards' own scale, and where each would take your categories. Tap again to unpin.</li>
             <li>Check a name here; let the cards above make the call.</li>
           </ul>
         </div>
@@ -643,10 +653,13 @@ function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: st
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className={`${r.tag === 'never' ? 'nb-never' : ''} ${r.takenAt != null ? 'nb-taken' : ''} ${r.mine ? 'nb-mine' : ''}`}>
+              <tr key={r.id} className={`${r.tag === 'never' ? 'nb-never' : ''} ${r.takenAt != null ? 'nb-taken' : ''} ${r.mine ? 'nb-mine' : ''} ${pins.includes(r.id) ? 'nb-pinned' : ''}`}>
                 <td className="nb-dim">{r.rank}</td>
                 <td className="nb-l">
-                  {r.name}
+                  {/* The name is the way in to Compare: on a phone the row's buttons are off to the right. */}
+                  {r.takenAt == null && r.tag !== 'never' && !view.review
+                    ? <button className="nb-name" title={pins.includes(r.id) ? 'Unpin from Compare' : 'Compare with the top card (or a pinned player)'} onClick={() => pin(r.id)}>{pins.includes(r.id) && <span className="nb-pin">⇄ </span>}{r.name}</button>
+                    : r.name}
                   {r.tag && <span className={`nb-tag nb-${r.tag}`}>{r.tag}</span>}
                   {r.bestBuild && r.bestBuild.name !== view.aheadBuild && !locks.length && (
                     <span className="nb-bb" title={`${r.bestBuild.balanced}th balanced; ${ordinal(r.bestBuild.rank)} in a ${r.bestBuild.name} build`}>{ordinal(r.bestBuild.rank)} {r.bestBuild.name.replace(/^Punt /, 'punting ')}</span>
@@ -669,7 +682,6 @@ function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: st
                 {cats ? CATS.map((c) => <td key={c} className={`mono ${locks.includes(c) ? 'nb-off' : ''}`} style={locks.includes(c) ? undefined : heat(r.contrib![c])}>{r.contrib![c].toFixed(1)}</td>)
                   : <><td className="mono">{r.fpg?.toFixed(1)}</td><td className="mono">{r.fpMin != null ? r.fpMin.toFixed(2) : '—'}</td><td className="mono">{r.fpSeason != null ? Math.round(r.fpSeason).toLocaleString() : ''}</td><td className="mono">{Math.round(r.value)}</td></>}
                 <td className="nb-tags">
-                  {r.takenAt == null && r.tag !== 'never' && !view.review && <button className={pins.includes(r.id) ? 'nb-on' : ''} title="Compare with the top card (or a pinned player)" onClick={() => pin(r.id)}>⇄</button>}
                   <button className={r.tag === 'never' ? 'nb-on' : ''} title="Never draft" onClick={() => tag(r, 'never')}>✕</button>
                   <button className={r.tag === 'avoid' ? 'nb-on' : ''} title="Avoid" onClick={() => tag(r, 'avoid')}>↓</button>
                   <button className={r.tag === 'like' ? 'nb-on' : ''} title="Like" onClick={() => tag(r, 'like')}>★</button>
