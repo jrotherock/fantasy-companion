@@ -395,7 +395,9 @@ export interface DraftView {
     /** Which of its strong ones he would add to: leaning in rather than covering. */
     stacks: Cat[]
     /** Which of my close categories he would cost me: the costs that matter this draft. */
-    hurts: Cat[] })[]
+    hurts: Cat[]
+    /** On the cards only: my weekly win chance in each category with him added, for previewing on the build tiles. */
+    preview?: Record<Cat, number> })[]
   /**
    * The three cards: the best players to take with this pick. A player the
    * room will very likely leave until my next turn is not an option for this
@@ -763,6 +765,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
 
   // Never the same player twice on the cards, whatever reordered them: the screen keys cards by player.
   takeNow = takeNow.filter((a, i) => takeNow.findIndex((x) => x.id === a.id) === i)
+  // What each card would do to the build tiles: my roster with him added, as the tiles measure it.
+  if (prep.cats) takeNow = takeNow.map((a) => ({ ...a, preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base) }))
   const canWait = advice.filter((a) => a.canWait && !takeNow.some((t) => t.id === a.id)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
 
   return {

@@ -23,8 +23,11 @@ import { categoryZ, rankBuild, rosterSpots, CATS, type Cat } from '../src/nba/va
 import { adpFor, adviseCategories, FOOTBALL_SPREAD, type AdpSpread, baseline, contribution, expectedCats, winChances, zero, BUILD_FROM, type Strength } from '../src/nba/draft.js'
 import { positionalSlots, stillFeasible } from '../src/nba/lineup.js'
 import { slotFor } from '../src/kernel/snake.js'
-import { PATHS } from '../src/nba/plan.js'
+import { PATHS, gamesAfterReturn } from '../src/nba/plan.js'
+import { NameIndex } from '../src/nba/join.js'
 import { calendar, startShares } from '../src/nba/starts.js'
+import { allPlayOf, playSeason, rng as seasonRng, weeksOf, type SeasonPlayer } from '../src/nba/rawSeason.js'
+import { perGameBox } from '../src/nba/outlook.js'
 import { startingSeats } from '../src/nba/week.js'
 import { seatPositions } from '../src/nba/inseason.js'
 
@@ -39,7 +42,25 @@ const [SLOT_FROM, SLOT_TO] = (arg('slots') ?? '').split('-').map(Number)
 /** `--room-spread 2,0.12`: how far the room strays from ADP (sd = a + b * ADP). Football's measure by default. */
 const ROOM: AdpSpread = (() => { const [a, b] = (arg('room-spread') ?? '2,0.18').split(',').map(Number); return { a, b } })()
 
-const players: NbaPlayer[] = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+// Players starting the season hurt are valued on the games after their return, as the app values them (CBS dates).
+const rawPlayers: NbaPlayer[] = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+const players: NbaPlayer[] = (() => {
+  const games = JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games as { date: string; home: string; away: string }[]
+  const teamDates: Record<string, string[]> = {}
+  for (const g of games) for (const t of [g.home, g.away]) (teamDates[t] ??= []).push(g.date)
+  const idx = new NameIndex(rawPlayers.map((p) => ({ id: p.id, name: p.name, team: p.team })))
+  const notes = new Map<string, any>()
+  for (const n of JSON.parse(readFileSync('data/nba/injuries.json', 'utf8')).injuries) {
+    if (!n.returnDate && !n.outForSeason) continue
+    const id = idx.resolve(n.name, null)
+    if (id) notes.set(id, { returnDate: n.returnDate, outForSeason: n.outForSeason, source: 'cbs', text: n.text })
+  }
+  return rawPlayers.map((p) => {
+    const av = notes.get(p.id)
+    if (!av || !p.projection) return p
+    return { ...p, projection: { ...p.projection, gp: gamesAfterReturn(p, av, teamDates, '2026-10-05').gp, gpSource: 'injury' as const } }
+  })
+})()
 const league = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues.find((l: any) => l.id === 'nba-hoops')
 const noiseR = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r as Record<Cat, number>
 const rounds = rosterSpots(league.roster)
@@ -75,6 +96,53 @@ const strengthOf = (ids: string[]): Strength => ids.reduce((s, id) => {
 const LINEUPS = process.argv.includes('--lineups')
 /** `--il`: injured players' missing games are filled by an IL pickup from the free agents left. */
 const IL = process.argv.includes('--il')
+
+// ── Raw totals (--raw): the season played out in box scores, weeks decided as Yahoo decides them ──
+const RAW = process.argv.includes('--raw')
+const scheduleGames = JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games as { date: string; home: string; away: string }[]
+const playingOn = (() => {
+  const m = new Map<string, Set<string>>()
+  for (const g of scheduleGames) { const x = m.get(g.date) ?? new Set<string>(); x.add(g.home); x.add(g.away); m.set(g.date, x) }
+  return (d: string) => m.get(d) ?? new Set<string>()
+})()
+// The regular season: Yahoo's weeks to the playoffs.
+const rawWeeks = weeksOf(scheduleGames, '2026-10-19', (league.playoffWeeks?.[0] ?? 19) - 1)
+const teamGames = (team: string | null) => scheduleGames.filter((g) => g.home === team || g.away === team).length || 80
+// Return dates (CBS + the app's 10-day slip) for players starting the season hurt.
+const backOn = (() => {
+  const idx = new NameIndex(rawPlayers.map((p) => ({ id: p.id, name: p.name, team: p.team })))
+  const m = new Map<string, string>()
+  for (const n of JSON.parse(readFileSync('data/nba/injuries.json', 'utf8')).injuries) {
+    const id = idx.resolve(n.name, null)
+    if (!id) continue
+    if (n.outForSeason) { m.set(id, '2099-01-01'); continue }
+    if (n.returnDate) { const t = new Date(n.returnDate + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + 10); m.set(id, t.toISOString().slice(0, 10)) }
+  }
+  return m
+})()
+function seasonPlayer(id: string): SeasonPlayer {
+  const p = byId.get(id)!
+  const back = backOn.get(id) ?? null
+  // How often he plays once healthy: projected games over the team games he is available for.
+  const avail = back ? scheduleGames.filter((g) => (g.home === p.team || g.away === p.team) && g.date >= back).length : teamGames(p.team)
+  return { id, team: p.team, positions: seatPositions(posOf(id)), box: perGameBox(p), play: Math.min(0.97, (rowOf.get(id)?.games.gp ?? 0) / Math.max(1, avail)), worth: value.get(id) ?? 0, from: back }
+}
+/** Every team's season in box scores; a player out at the start is covered by the best free agent left until he is back. */
+function rawAllPlay(teams: string[][], seed: number): number[] {
+  const drafted = new Set(teams.flat())
+  const free = pool.filter((id) => !drafted.has(id) && !never.has(id) && !backOn.has(id)).sort((a, b) => value.get(b)! - value.get(a)!)
+  const rosters = teams.map((t) => {
+    const ps = t.map(seasonPlayer)
+    // Up to three IL slots: each player out at the start gets a pickup until his return.
+    for (const p of ps.filter((x) => x.from && x.from > rawWeeks[0].dates[0]).slice(0, 3)) {
+      const fa = free.shift()
+      if (fa) ps.push({ ...seasonPlayer(fa), until: p.from })
+    }
+    return ps
+  })
+  const weeks = playSeason(rosters, rawWeeks, playingOn, seatsOf, seasonRng(seed))
+  return teams.map((_, i) => allPlayOf(weeks, i))
+}
 const cal = calendar(JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games)
 const seatsOf = startingSeats(league.roster)
 const valueOrZero = (id: string) => value.get(id) ?? 0
@@ -333,7 +401,7 @@ for (const [name, pick] of Object.entries(strategies)) {
       const me = score(mine, slot - 1)
       const others = teams.map((t, i) => [t, i] as const).filter(([, i]) => i !== slot - 1).map(([t, i]) => score(t, i))
       res.idle.push(idleShare(mine))
-      const ap = others.reduce((s, o) => s + weekWin(me, o), 0) / others.length
+      const ap = RAW ? rawAllPlay(teams, seed * 7919 + slot)[slot - 1] : others.reduce((s, o) => s + weekWin(me, o), 0) / others.length
       res.allPlay.push(ap)
       res.cats.push(expectedCats(me, mine.length, base))
       res.bySlot[slot - 1].push(ap)
@@ -347,7 +415,7 @@ const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 const se = (xs: number[]) => { const m = mean(xs); return Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1) / xs.length) }
 const ref = (results['best value'] ?? Object.values(results)[0]).allPlay
 console.log(`Hoops, slots ${SLOT_FROM || 1}–${SLOT_TO || league.teams} × ${SEEDS} rooms each, window ${WINDOW}, room spread ${ROOM.a}+${ROOM.b}·ADP${FIRST ? `, first pick ${FIRST}` : ''}. All-play = chance of winning a week, averaged over the nine rosters in the room.`)
-console.log(`${LINEUPS ? 'Scored on starts only (daily lineups, Hoops seats, real schedule). ' : ''}idle = share of my players' games with no seat.`)
+console.log(`${RAW ? 'Scored on RAW WEEKLY TOTALS: box scores, daily lineups, real schedule, IL pickups, all-play vs the room. ' : LINEUPS ? 'Scored on starts only (daily lineups, Hoops seats, real schedule). ' : ''}idle = share of my players' games with no seat.`)
 console.log('strategy                 all-play   ±2se    vs best value (paired) ±2se    cats/wk   idle')
 for (const [name, r] of Object.entries(results)) {
   const diff = r.allPlay.map((x, i) => x - ref[i])

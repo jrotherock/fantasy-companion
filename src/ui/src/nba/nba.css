@@ -193,3 +193,10 @@ div.nb-cat { cursor: default; }
 .nb-roomtable { margin-top: 0.4rem; }
 .nb-roomtable tr.nb-mine td { background: color-mix(in srgb, var(--amber) 12%, transparent); }
 .nb-hurts { color: var(--red); }
+
+/* Previewing a card on the build tiles */
+.nb-delta { font-size: 0.85em; font-weight: 600; }
+.nb-delta.up { color: var(--green); }
+.nb-delta.down { color: var(--red); }
+.vc.nb-previewing { outline: 1px dashed var(--blue); outline-offset: 2px; }
+.vc { cursor: default; }

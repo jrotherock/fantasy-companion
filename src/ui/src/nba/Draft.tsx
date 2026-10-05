@@ -100,6 +100,8 @@ function Screen({ id }: { id: string }) {
   const { view, error, act } = useDraft(id)
   const [drawer, setDrawer] = useState(false)
   const [rosterOpen, setRosterOpen] = useState(false)
+  // A card being looked at: the build tiles preview my categories with him added.
+  const [previewId, setPreviewId] = useState<string | null>(null)
   // The review arrives at the top of the scrolling panel; bring it into view, since the eyes were on the board.
   const reviewed = !!view?.review
   useEffect(() => {
@@ -123,8 +125,8 @@ function Screen({ id }: { id: string }) {
           : view.review ? null
           : <>
               <Notice view={view} />
-              <Take view={view} act={act} />
-              {cats && <Build view={view} act={act} />}
+              <Take view={view} act={act} previewId={previewId} setPreviewId={setPreviewId} />
+              {cats && <Build view={view} act={act} preview={view.takeNow.find((a) => a.id === previewId) ?? null} />}
             </>}
       </div>
       {view.league.slot != null && (
@@ -223,7 +225,7 @@ function reasons(contrib: Record<Cat, number> | undefined, locks: Cat[]) {
   return <>{up.map((c) => <span key={c} className="nb-up">+{LABEL[c]}</span>)}{down.map((c) => <span key={c} className="nb-down">−{LABEL[c]}</span>)}</>
 }
 
-function Take({ view, act }: { view: DraftView; act: Act }) {
+function Take({ view, act, previewId, setPreviewId }: { view: DraftView; act: Act; previewId: string | null; setPreviewId: (id: string | null) => void }) {
   const cards = view.takeNow
   if (!cards.length) return null
   const onClock = view.clock.onClock
@@ -239,7 +241,10 @@ function Take({ view, act }: { view: DraftView; act: Act }) {
       </div>
       <div className="threeup">
         {cards.map((a, i) => (
-          <div key={a.id} className={`vc ${i === 0 ? 'sel' : ''}`}>
+          <div key={a.id} className={`vc ${i === 0 ? 'sel' : ''}${previewId === a.id ? ' nb-previewing' : ''}`}
+            onMouseEnter={() => a.preview && setPreviewId(a.id)} onMouseLeave={() => setPreviewId(null)}
+            // A tap on a phone toggles the preview; the Mark drafted button stops its own click.
+            onClick={() => a.preview && setPreviewId(previewId === a.id ? null : a.id)}>
             <span className="rk">{i + 1}{i === 0 && onClock ? ' · TAKE' : ''}</span>
             <span className="nm">{a.name}{a.tag === 'like' && <span className="nb-tag nb-like">like</span>}{a.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
             <span className="sub">{a.team} · {a.positions.join(', ')}</span>
@@ -263,7 +268,7 @@ function Take({ view, act }: { view: DraftView; act: Act }) {
             <div className={`nb-fate ${a.there != null || a.canWait ? 'nb-wait' : 'nb-gone'}`}>
               {a.there != null ? `${pct(a.there)} there at pick ${view.clock.myNext}` : a.canWait ? `${pct(a.survives)} back next turn — can wait` : `${pct(1 - a.survives)} gone by your next turn`}
             </div>
-            <button className={`btn ${i === 0 && onClock ? 'primary' : ''}`} onClick={() => act('pick', { playerId: a.id })}>Mark drafted</button>
+            <button className={`btn ${i === 0 && onClock ? 'primary' : ''}`} onClick={(e) => { e.stopPropagation(); act('pick', { playerId: a.id }) }}>Mark drafted</button>
           </div>
         ))}
       </div>
@@ -278,8 +283,16 @@ function Take({ view, act }: { view: DraftView; act: Act }) {
   )
 }
 
-function Build({ view, act }: { view: DraftView; act: Act }) {
+/** A tile's change with the previewed player: the new figure, green up or red down, hidden when it barely moves. */
+function PreviewDelta({ from, to }: { from: number; to: number }) {
+  const d = Math.round(to * 100) - Math.round(from * 100)
+  if (Math.abs(d) < 1) return null
+  return <span className={`nb-delta ${d > 0 ? 'up' : 'down'}`}> → {pct(to)}</span>
+}
+
+function Build({ view, act, preview }: { view: DraftView; act: Act; preview: DraftView['takeNow'][number] | null }) {
   const b = view.build!
+  const after = preview?.preview ?? null
   const [confirm, setConfirm] = useState<Cat | null>(null)
   const [help, setHelp] = useState(false)
   const win = b.win
@@ -295,13 +308,13 @@ function Build({ view, act }: { view: DraftView; act: Act }) {
   return (
     <div className="nb-build">
       <div className="nb-bhead">
-        <span className="vlabel">YOUR BUILD</span><span className="nb-dim nb-small">weekly win chance per category</span>
+        <span className="vlabel">YOUR BUILD</span><span className="nb-dim nb-small">{after ? <>with <b>{preview!.name}</b> added</> : 'weekly win chance per category'}</span>
         <span className="spacer" /><button className="nb-link" onClick={() => setHelp(!help)}>{help ? 'Hide help' : 'How to read this'}</button>
       </div>
       <div className="nb-cats">
         {CATS.map((c) => b.locks.includes(c)
           ? <button key={c} className="nb-cat nb-cat-lock" onClick={() => tap(c)} title="Locked as a punt — click to unlock"><span className="l">{LABEL[c]}</span><span className="v">punt 🔒</span></button>
-          : <button key={c} className={`nb-cat ${win ? `nb-cat-${tone(win[c]) || 'even'}` : 'nb-cat-open'}${early ? ' nb-cat-early' : ''}`} onClick={() => tap(c)} title={early ? 'Early: moves a lot until your 4th pick. Click to lock as a punt' : 'Click to lock as a punt'}><span className="l">{LABEL[c]}</span><span className="v">{win ? pct(win[c]) : '—'}</span></button>)}
+          : <button key={c} className={`nb-cat ${win ? `nb-cat-${tone(win[c]) || 'even'}` : 'nb-cat-open'}${early ? ' nb-cat-early' : ''}`} onClick={() => tap(c)} title={early ? 'Early: moves a lot until your 4th pick. Click to lock as a punt' : 'Click to lock as a punt'}><span className="l">{LABEL[c]}</span><span className="v">{win ? pct(win[c]) : '—'}{after && win && <PreviewDelta from={win[c]} to={after[c]} />}</span></button>)}
       </div>
       <div className="nb-bfoot">
         {win ? (
