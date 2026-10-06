@@ -230,14 +230,25 @@ export class YahooError extends Error {
  * at two thousand nine hundred and ninety-nine, and then nothing at all for
  * fourteen hours, with the screens still showing a freshness number.
  *
- * One bucket replaces both. It refills at a rate that is polite by the hour
- * and still bounds the day — two a minute is a shade under three thousand —
- * and it carries a burst so a league page can read everything it needs at
- * once without waiting. Nothing falls off a cliff: as the bucket empties the
+ * One bucket replaces both: a burst to spend at once, and a refill that paces
+ * what follows. Nothing falls off a cliff — as the bucket empties the
  * background work stops first and the screen in front of you keeps reading.
+ *
+ * The sizes are measured rather than picked. Steady demand is one request a
+ * minute with games on and a fifth of that without; what is bursty is the
+ * shape of the work — a full round is fourteen requests in one go, and
+ * opening the app wants several leagues at once. So the burst covers a round
+ * with room over, and the refill is set by how long that burst takes to come
+ * back: six a minute restores it in under seven, where the two a minute this
+ * started at took a quarter of an hour and left the app refusing its own
+ * refreshes for most of it.
+ *
+ * Six a minute is one request every ten seconds. It remains twenty-eight
+ * times gentler than the 350ms gap it replaced, and the hourly ceiling is
+ * below the rate that earned the original trouble.
  */
-export const RATE_PER_MIN = () => Number(process.env.YAHOO_RATE_PER_MIN ?? 2)
-export const BURST = () => Number(process.env.YAHOO_BURST ?? 30)
+export const RATE_PER_MIN = () => Number(process.env.YAHOO_RATE_PER_MIN ?? 6)
+export const BURST = () => Number(process.env.YAHOO_BURST ?? 40)
 /**
  * What the background may not touch.
  *
@@ -247,7 +258,7 @@ export const BURST = () => Number(process.env.YAHOO_BURST ?? 30)
  * left. The scheduled work now stops while this much is in the bucket, which
  * keeps a league page answerable at any hour.
  */
-export const RESERVE = () => Number(process.env.YAHOO_RESERVE ?? 8)
+export const RESERVE = () => Number(process.env.YAHOO_RESERVE ?? 10)
 /** How long an interactive request will wait for a token before giving up. */
 const MAX_WAIT = 3_000
 
