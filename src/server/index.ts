@@ -2024,8 +2024,14 @@ const server = createServer(async (req, res) => {
        * man moved to the bench stayed in the flex on this screen, and opening
        * the league — the one gesture that should have fixed it — decided
        * nothing needed reading.
+       *
+       * The capture's own `at` is no better: the scoreboard writes a scoreline
+       * through it every few minutes, so that clock looks fresh while the
+       * lineup under it is an hour old. `lineupAt` moves only when a lineup
+       * was actually read.
        */
-      const read = yahooRoster.rosterFor(yid)?.at ?? 0
+      const cap = yahooRoster.rosterFor(yid)
+      const read = cap?.lineupAt ?? cap?.at ?? 0
       if (Date.now() - read > ON_DEMAND_AFTER &&
           Date.now() - (lastOnDemand.get(yid) ?? 0) > ON_DEMAND_EVERY) {
         lastOnDemand.set(yid, Date.now())

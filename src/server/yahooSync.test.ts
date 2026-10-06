@@ -342,6 +342,25 @@ test('a new week makes the lineups we hold due again', async () => {
     'the week moved, so the lineups are asked for again')
 })
 
+test('a scoreline does not count as having read the lineup', async () => {
+  /*
+   * `at` moves whenever anything about the team is written, and the scoreboard
+   * writes a scoreline through it every few minutes — so that clock looked
+   * fresh while the lineup under it was an hour old, and the refresh that
+   * would have corrected a benched man kept deciding nothing needed reading.
+   */
+  const before = rosterStore.rosterFor('1604981')!
+  assert.ok(before.lineupAt, 'a lineup read stamps its own clock')
+  await new Promise((r) => setTimeout(r, 2))
+  rosterStore.recordFromApi({
+    yahooLeagueId: '1604981', teamId: before.teamId,
+    totals: { teamName: 'x', opponentName: 'y', mine: 1, theirs: 2, projectedMine: 3, projectedTheirs: 4 },
+  })
+  const after = rosterStore.rosterFor('1604981')!
+  assert.ok(after.at > before.at, 'the scoreline is a fresh reading of something')
+  assert.equal(after.lineupAt, before.lineupAt, 'but the lineup was not read again')
+})
+
 test('a configured league is not discovered twice', async () => {
   process.env.YAHOO_REPLAY = recording()
   const r = await S.round({

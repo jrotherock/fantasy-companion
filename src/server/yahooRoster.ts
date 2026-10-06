@@ -21,6 +21,13 @@ export interface CapturedRoster {
   yahooLeagueId: string
   teamId: string
   at: number
+  /**
+   * When the lineup itself was last read, as against `at`, which moves
+   * whenever anything about the team is written — a scoreline, a standing.
+   * Who is in which slot only changes when the roster is read, and anything
+   * deciding whether that is stale has to ask this and not `at`.
+   */
+  lineupAt?: number | null
   /** Resolved to canonical ids; names Yahoo gave that we could not match. */
   players: PlayerId[]
   starters: PlayerId[]
@@ -379,6 +386,8 @@ export function recordFromApi(msg: {
     yahooLeagueId: msg.yahooLeagueId,
     teamId: msg.teamId,
     at: readWeek || !prev ? now : prev.at,
+    // Only a reading that carried a lineup counts as having read the lineup.
+    lineupAt: msg.players != null || msg.starters != null ? now : prev?.lineupAt ?? null,
     players,
     starters: (wiped ? prev?.starters : msg.starters) ?? prev?.starters ?? [],
     unmatched: (wiped ? prev?.unmatched : msg.unmatched) ?? prev?.unmatched ?? [],
