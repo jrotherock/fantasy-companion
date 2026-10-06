@@ -1473,6 +1473,34 @@ const server = createServer(async (req, res) => {
         first: list.find((a) => a.consequence === worst)?.headline ?? '',
       }
     }
+    /*
+     * The home screen refreshes what the home screen shows.
+     *
+     * Only the league page ever asked Yahoo for anything, so a record on a
+     * tile could sit a day behind and the only way to correct it was to open
+     * the league — which is backwards, because the tile is what you look at
+     * first and the number on it is the one you act on.
+     *
+     * It costs two requests for every league at once, not two per league:
+     * standings and scoreboard are both `league_keys=a,b,c` collections, and
+     * standings is what writes the record and the place a tile reads. `teams`
+     * is deliberately not here — that one is two requests per league and it
+     * only sharpens a live scoreline the poller is already following.
+     *
+     * Fire and forget, like the league page's own refresh: this answer comes
+     * from what is already known and the screen's next poll shows the new
+     * reading, rather than every visitor waiting on Yahoo.
+     */
+    if (yahooApi.connected()) {
+      const parts = yahooSync.state().parts
+      const oldest = Math.min(...(['standings', 'scoreboard'] as const).map((p) => parts[p]?.at ?? 0))
+      if (Date.now() - oldest > ON_DEMAND_AFTER &&
+          Date.now() - (lastOnDemand.get('home') ?? 0) > ON_DEMAND_EVERY) {
+        lastOnDemand.set('home', Date.now())
+        void runYahooSync(['standings', 'scoreboard'], undefined, 'interactive')
+          .catch((e) => console.warn('home refresh failed:', String((e as Error)?.message ?? e)))
+      }
+    }
     const tiles = await buildTiles(
       [...sessions.values()].map((s) => s.league),
       { sleeperUserId: SLEEPER_USER, players: playerMap },
