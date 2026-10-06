@@ -69,10 +69,13 @@ let lastForcedSync = 0
 /**
  * Opening a league refreshes a reading older than this, so a substitution made
  * a minute ago is on the page — and no more often than ON_DEMAND_EVERY, so a
- * reload-happy tab cannot turn into a poll.
+ * reload-happy tab cannot turn into a poll. Five minutes was too long to keep
+ * that promise: a lineup changed four minutes ago is the one you have come to
+ * check, and the request budget carries a two-minute window comfortably at
+ * three requests a league.
  */
-const ON_DEMAND_AFTER = 5 * 60_000
-const ON_DEMAND_EVERY = 3 * 60_000
+const ON_DEMAND_AFTER = 2 * 60_000
+const ON_DEMAND_EVERY = 2 * 60_000
 /**
  * Per league, not one clock for all of them.
  *
@@ -2009,7 +2012,20 @@ const server = createServer(async (req, res) => {
      */
     if (l.feed !== 'sleeper' && !preDraft && yahooApi.connected()) {
       const yid = String(l.leagueKey).split('.').pop() ?? ''
-      const read = yahooLeague.forLeague(yid)?.partsAt?.squads ?? 0
+      /*
+       * How old the lineup on this page is — not how recently the league's
+       * squads were listed.
+       *
+       * Those are different clocks and they move at different speeds. The
+       * squads reading is one request and rides along with every round, so it
+       * is almost always fresh; the lineup is `teams`, two requests a league,
+       * and runs hourly when no games are on. Gating on the first meant the
+       * second was suppressed precisely when it was the thing out of date: a
+       * man moved to the bench stayed in the flex on this screen, and opening
+       * the league — the one gesture that should have fixed it — decided
+       * nothing needed reading.
+       */
+      const read = yahooRoster.rosterFor(yid)?.at ?? 0
       if (Date.now() - read > ON_DEMAND_AFTER &&
           Date.now() - (lastOnDemand.get(yid) ?? 0) > ON_DEMAND_EVERY) {
         lastOnDemand.set(yid, Date.now())
