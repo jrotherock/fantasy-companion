@@ -73,7 +73,17 @@ let lastForcedSync = 0
  */
 const ON_DEMAND_AFTER = 5 * 60_000
 const ON_DEMAND_EVERY = 3 * 60_000
-let lastOnDemand = 0
+/**
+ * Per league, not one clock for all of them.
+ *
+ * It was a single timestamp, which was right while a refresh read every league
+ * at once: one in three minutes covered everything. Narrowing the refresh to
+ * the league you opened turned that same clock into a gate — open one league
+ * and the next two you look at are refused their own reading and show this
+ * morning's. The throttle that stops a reload-happy tab belongs on the tab's
+ * own league; the request budget is what protects Yahoo from all of them.
+ */
+const lastOnDemand = new Map<string, number>()
 
 /** Outstanding OAuth handshakes, by the state value each began with. */
 const oauthStates = new Map<string, number>()
@@ -1959,8 +1969,9 @@ const server = createServer(async (req, res) => {
     if (l.feed !== 'sleeper' && !preDraft && yahooApi.connected()) {
       const yid = String(l.leagueKey).split('.').pop() ?? ''
       const read = yahooLeague.forLeague(yid)?.partsAt?.squads ?? 0
-      if (Date.now() - read > ON_DEMAND_AFTER && Date.now() - lastOnDemand > ON_DEMAND_EVERY) {
-        lastOnDemand = Date.now()
+      if (Date.now() - read > ON_DEMAND_AFTER &&
+          Date.now() - (lastOnDemand.get(yid) ?? 0) > ON_DEMAND_EVERY) {
+        lastOnDemand.set(yid, Date.now())
         // This league, not all of them: the other four are not on the screen.
         void runYahooSync(['rosters', 'teams'], [yid], 'interactive')
           .catch((e) => console.warn('yahoo refresh failed:', String((e as Error)?.message ?? e)))
