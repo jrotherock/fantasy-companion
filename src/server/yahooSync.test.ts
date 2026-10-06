@@ -326,6 +326,22 @@ test('a round for one league reads that league and leaves the others alone', asy
   assert.equal(rosterStore.rosterFor('310904')?.at ?? 0, before, 'and the other was not')
 })
 
+test('a new week makes the lineups we hold due again', async () => {
+  /*
+   * `teams` runs hourly with no games on, which is exactly when the week turns
+   * and exactly when the next one is being set — so a Tuesday roster could sit
+   * an hour behind, showing a man in the slot he held on Sunday.
+   */
+  process.env.YAHOO_REPLAY = recording()
+  leagueStore.record({ yahooLeagueId: '1604981', current: { week: 1, at: 1 } as any })
+  const st0 = S.state()
+  st0.parts.teams = { at: Date.now(), tried: Date.now(), error: null }
+  const r = await S.round({ players, configured: [], live: true, now: Date.now(), force: ['scoreboard'] })
+  assert.deepEqual(r.failed, [])
+  assert.equal(S.state().parts.teams?.at, null,
+    'the week moved, so the lineups are asked for again')
+})
+
 test('a configured league is not discovered twice', async () => {
   process.env.YAHOO_REPLAY = recording()
   const r = await S.round({

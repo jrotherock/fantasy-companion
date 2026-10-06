@@ -933,8 +933,21 @@ const nextKickoffAfter = (now: number): number | null => {
   return ahead[0] ?? null
 }
 
+/*
+ * Never cached, said out loud.
+ *
+ * These answers carried no cache directive at all, which leaves it to the
+ * client's heuristics — and an installed PWA on iOS will happily serve a
+ * morning's reading back to itself for hours. The server corrected a record
+ * and a lineup and the phone went on showing the old ones, which looked for
+ * all the world like the staleness bug we had just fixed.
+ */
 const json = (res: any, code: number, body: unknown) => {
-  res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+  res.writeHead(code, {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'no-store, must-revalidate',
+  })
   res.end(JSON.stringify(body))
 }
 

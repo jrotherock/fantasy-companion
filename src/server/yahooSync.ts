@@ -615,6 +615,20 @@ async function run(
         const sb = Y.parseScoreboard(n.body)
         if (!l || !sb) continue
         const current = currentFrom(sb, deps.now)
+        /*
+         * A new week makes every lineup we hold a lineup for the old one.
+         *
+         * `teams` runs hourly when no games are on, which is exactly when the
+         * week turns and exactly when you are setting the next one — so a
+         * Tuesday roster could sit an hour behind, showing a man in the slot
+         * he held on Sunday rather than the bench you moved him to. Clearing
+         * the part's clock brings it back on the next round instead.
+         */
+        const held = leagueStore.forLeague(l.id)?.current?.week ?? null
+        if (current?.week != null && held != null && current.week !== held) {
+          const t = st.parts.teams
+          if (t) t.at = null
+        }
         leagueStore.record({ yahooLeagueId: l.id, current })
         const keysFor = (st.teamKeys[l.key] ??= { mine: null, theirs: null })
         if (l.guillotine || !keysFor.mine) { keysFor.theirs = null; continue }
