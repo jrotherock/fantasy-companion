@@ -205,6 +205,8 @@ function recording(without: string[] = []): string {
     [S.PATHS.discover()]: disc,
     [S.PATHS.settings(keys)]: only(F.settings, keys),
     [S.PATHS.rosters(keys)]: F.rosters,
+    // The same read narrowed to one league, for a round that was asked for one.
+    [S.PATHS.rosters([H2H])]: only(F.rosters, [H2H]),
     [S.PATHS.standings(keys)]: only(F.standings, keys),
     [S.PATHS.transactions(keys)]: F.transactions,
     [S.PATHS.scoreboard(keys)]: F.scoreboard,
@@ -304,6 +306,24 @@ test('a lineup that cannot be read costs its own grade, not the week\'s scores',
   const h2h = leagueStore.forLeague('1604981')!
   assert.deepEqual(h2h.weeks.map((w) => w.week), [1], 'the week was scored anyway')
   assert.deepEqual(h2h.mineWeeks, [], 'and the lineup simply went ungraded')
+})
+
+test('a round for one league reads that league and leaves the others alone', async () => {
+  /*
+   * Opening a screen used to refresh every league behind it. The parts that
+   * read a league at a time cost two requests each, so one tap spent nine and
+   * threw four leagues' worth away — most of how a day's budget went.
+   */
+  process.env.YAHOO_REPLAY = recording()
+  const before = rosterStore.rosterFor('310904')?.at ?? 0
+  await new Promise((r) => setTimeout(r, 2))
+  const r = await S.round({
+    players, configured: [], live: true, now: Date.now(),
+    force: ['rosters', 'teams'], only: ['1604981'],
+  })
+  assert.deepEqual(r.failed, [])
+  assert.ok((rosterStore.rosterFor('1604981')?.at ?? 0) > before, 'the one asked for was read')
+  assert.equal(rosterStore.rosterFor('310904')?.at ?? 0, before, 'and the other was not')
 })
 
 test('a configured league is not discovered twice', async () => {

@@ -585,6 +585,60 @@ function yahooSourceNote(l: LeagueConfig): string {
   return `${found}Yahoo API — every roster read ${mins < 1 ? 'just now' : mins < 90 ? `${mins}m ago` : `${Math.round(mins / 60)}h ago`}. Projections still come from the extension.`
 }
 
+/**
+ * Why Yahoo has gone quiet, when it has.
+ *
+ * The screens said "fresh 14h" for half a day while every part of the sync was
+ * failing with a reason the server could read off its own state: the daily
+ * budget was spent. A number that goes stale silently is worse than no number
+ * — it looks like the app is working and the leagues are quiet. So the one
+ * thing the reader cannot deduce, the app says.
+ *
+ * Null when nothing is wrong, so the screens show nothing at all in the normal
+ * case.
+ */
+function yahooTrouble(): { why: string; since: number | null; until: number | null } | null {
+  if (!yahooApi.connected()) {
+    return { why: 'Yahoo is not connected', since: null, until: null }
+  }
+  const st = yahooSync.state()
+  const lim = yahooApi.limitsNow()
+  const parts = Object.values(st.parts ?? {})
+  const failing = parts.filter((p) => p?.error)
+  // One part failing is that part's problem; all of them is the connection's.
+  if (!failing.length || failing.length < parts.length) return null
+  const since = Math.max(...parts.map((p) => p?.at ?? 0)) || null
+  const why = failing[0]?.error ?? 'Yahoo could not be read'
+  /*
+   * The budget is the one failure that ends by itself, at midnight UTC — so it
+   * is the one worth saying when rather than leaving the reader to wonder
+   * whether to go and fix something.
+   */
+  const midnightUtc = Date.UTC(
+    new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1)
+  const until = /daily cap/.test(why) ? midnightUtc : lim.backoffUntil || null
+  return { why, since, until }
+}
+
+/**
+ * What a reader may spend, said out loud.
+ *
+ * An agent asking this app for six leagues in a loop has no idea it is
+ * spending anything, and finds the wall by hitting it. A budget nobody can see
+ * is one every caller assumes is infinite — so the figure travels with the
+ * answers, and anything reading this can pace itself rather than guess.
+ */
+function yahooBudget(): {
+  tokens: number; burst: number; ratePerMin: number; reserve: number
+  callsToday: number; spend: Record<string, number>
+} {
+  const l = yahooApi.limitsNow()
+  return {
+    tokens: l.tokens, burst: l.burst, ratePerMin: l.ratePerMin, reserve: l.reserve,
+    callsToday: l.callsToday, spend: l.spend,
+  }
+}
+
 /** Where to act. iOS routes these to the league's own app when it is installed. */
 function leagueLink(l: any): string | null {
   if (l.feed === 'sleeper') return `https://sleeper.com/leagues/${l.leagueKey}/team`
@@ -1262,7 +1316,7 @@ const server = createServer(async (req, res) => {
         return json(res, 429, { error: 'a full sync ran under two minutes ago', at: lastForcedSync })
       }
       lastForcedSync = Date.now()
-      const r = await runYahooSync(yahooSync.PARTS)
+      const r = await runYahooSync(yahooSync.PARTS, undefined, 'interactive')
       return json(res, 200, { round: r, limits: yahooApi.limitsNow() })
     }
 
@@ -1273,7 +1327,7 @@ const server = createServer(async (req, res) => {
         return json(res, 400, { error: 'a Fantasy API path, like league/461.l.1604981/teams' })
       }
       try {
-        return json(res, 200, await yahooApi.call(path))
+        return json(res, 200, await yahooApi.call(path, { lane: 'interactive', by: 'raw' }))
       } catch (e) {
         return json(res, 502, { error: String((e as Error).message) })
       }
@@ -1419,7 +1473,10 @@ const server = createServer(async (req, res) => {
     // Basketball's leagues ride along as their own tiles; a failure there never costs football its screen.
     let nba: unknown[] = []
     try { nba = seasonTiles() } catch (e) { console.warn('nba tiles:', String((e as Error)?.message ?? e)) }
-    return json(res, 200, { generatedAt: Date.now(), tiles, marks, closeCalls: close, nba })
+    return json(res, 200, {
+      generatedAt: Date.now(), tiles, marks, closeCalls: close, nba,
+      yahoo: yahooTrouble(), budget: yahooBudget(),
+    })
   }
 
   /**
@@ -1904,7 +1961,8 @@ const server = createServer(async (req, res) => {
       const read = yahooLeague.forLeague(yid)?.partsAt?.squads ?? 0
       if (Date.now() - read > ON_DEMAND_AFTER && Date.now() - lastOnDemand > ON_DEMAND_EVERY) {
         lastOnDemand = Date.now()
-        void runYahooSync(['rosters', 'teams'])
+        // This league, not all of them: the other four are not on the screen.
+        void runYahooSync(['rosters', 'teams'], [yid], 'interactive')
           .catch((e) => console.warn('yahoo refresh failed:', String((e as Error)?.message ?? e)))
       }
     }
@@ -3653,12 +3711,14 @@ startNbaSeason()
 const YAHOO_TICK = 5 * 60_000
 /** One round at a time: a forced round waits for the scheduled one, then runs its own. */
 let yahooQueue: Promise<unknown> = Promise.resolve()
-function runYahooSync(force?: yahooSync.Part[]): Promise<yahooSync.Round | null> {
+function runYahooSync(
+  force?: yahooSync.Part[], only?: string[], lane: 'interactive' | 'background' = 'background',
+): Promise<yahooSync.Round | null> {
   const go = async (): Promise<yahooSync.Round | null> => {
     if (!yahooApi.connected()) return null
     const now = Date.now()
     const live = gameWindows.spans.some(([a, b]) => now >= a - 60 * 60_000 && now <= b)
-    const r = await yahooSync.round({ players, configured: configured.leagues, live, now, force })
+    const r = await yahooSync.round({ players, configured: configured.leagues, live, now, force, only, lane })
     for (const found of r.discovered) ensureDiscoveredLeague(found)
     if (r.ran.length || r.failed.length) {
       console.log(

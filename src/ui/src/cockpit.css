@@ -1497,3 +1497,12 @@ a.ckswl:hover, a.ckswl:focus-visible {
 .cksporthead { display: flex; align-items: center; gap: 0.5rem; margin: 1.6rem 0 0.8rem; padding-top: 1rem;
   border-top: 1px solid var(--line); font-family: var(--cond); font-weight: 600; font-size: 1.5rem; }
 .cksporthead:first-of-type { margin-top: 0.4rem; padding-top: 0; border-top: 0; }
+
+/* A stopped clock, said once at the top rather than implied by every tile. */
+.ckstop {
+  border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--line));
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  border-radius: 6px; padding: 0.55rem 0.7rem; margin-bottom: 0.6rem;
+  font-size: var(--t-sm); line-height: 1.45; color: var(--ink);
+}
+.ckstop b { color: var(--amber); font-weight: 600 }

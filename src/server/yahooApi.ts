@@ -219,15 +219,51 @@ export class YahooError extends Error {
   }
 }
 
-/** The most requests a day this app will make, whatever the schedule asks for. */
-export const DAILY_CAP = () => Number(process.env.YAHOO_DAILY_CAP ?? 3000)
+/**
+ * How fast this app may ask Yahoo anything, as a token bucket.
+ *
+ * It used to be two separate rules that between them regulated the wrong
+ * thing. A fixed 350ms gap allowed a hundred and seventy requests a minute
+ * sustained — and short-period excess is the only thing Yahoo's own agreement
+ * says it polices. Against that, a flat ceiling of three thousand a day
+ * governed a dimension Yahoo never mentions, and governed it as a cliff: fine
+ * at two thousand nine hundred and ninety-nine, and then nothing at all for
+ * fourteen hours, with the screens still showing a freshness number.
+ *
+ * One bucket replaces both. It refills at a rate that is polite by the hour
+ * and still bounds the day — two a minute is a shade under three thousand —
+ * and it carries a burst so a league page can read everything it needs at
+ * once without waiting. Nothing falls off a cliff: as the bucket empties the
+ * background work stops first and the screen in front of you keeps reading.
+ */
+export const RATE_PER_MIN = () => Number(process.env.YAHOO_RATE_PER_MIN ?? 2)
+export const BURST = () => Number(process.env.YAHOO_BURST ?? 30)
+/**
+ * What the background may not touch.
+ *
+ * The poller and the page you just opened used to draw on one undifferentiated
+ * pool, and the poller won: it runs every five minutes whether or not anybody
+ * is looking, so by the time a person asked for anything there was nothing
+ * left. The scheduled work now stops while this much is in the bucket, which
+ * keeps a league page answerable at any hour.
+ */
+export const RESERVE = () => Number(process.env.YAHOO_RESERVE ?? 8)
+/** How long an interactive request will wait for a token before giving up. */
+const MAX_WAIT = 3_000
+
+/**
+ * A fuse, not a governor. The bucket above decides the pace; this only catches
+ * a misconfigured rate, and in normal running it is never reached.
+ */
+export const DAILY_CAP = () => Number(process.env.YAHOO_DAILY_CAP ?? 6000)
 /** Long enough for Yahoo's limiter to forget us; doubled on every refusal after. */
 export const FIRST_BACKOFF = 15 * 60_000
 export const MAX_BACKOFF = 4 * 60 * 60_000
 const TIMEOUT = 20_000
 const RETRIES = 2
-/** The gap between one request and the next, so parts of a round cannot burst. */
-const SPACING = 350
+
+/** Who is asking. The background yields to the person waiting on a screen. */
+export type Lane = 'interactive' | 'background'
 
 const LIMITS = statePath('yahoo-limits.json')
 
@@ -241,6 +277,18 @@ interface Limits {
   /** Requests made on `day` (UTC), against the daily cap. */
   day: string
   calls: number
+  /** Tokens left in the bucket, and when that was true. */
+  tokens: number
+  tokensAt: number
+  /**
+   * What each caller spent today.
+   *
+   * "Three thousand requests" is not an answer to anything; "the scheduled
+   * poller spent two thousand and the league page four hundred" is. Working
+   * that out took an evening of reading state by hand, which is a thing the
+   * app should have been able to say.
+   */
+  spend: Record<string, number>
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -251,12 +299,27 @@ const today = () => new Date().toISOString().slice(0, 10)
  * limiter that refused it an hour ago has not forgotten.
  */
 function limits(): Limits {
-  const blank: Limits = { until: 0, strikes: 0, why: null, day: today(), calls: 0 }
+  const blank: Limits = {
+    until: 0, strikes: 0, why: null, day: today(), calls: 0,
+    tokens: BURST(), tokensAt: Date.now(), spend: {},
+  }
   if (!existsSync(LIMITS)) return blank
   try {
     const l = { ...blank, ...JSON.parse(readFileSync(LIMITS, 'utf8')) as Partial<Limits> }
-    return l.day === today() ? l : { ...l, day: today(), calls: 0 }
+    return l.day === today() ? l : { ...l, day: today(), calls: 0, spend: {} }
   } catch { return blank }
+}
+
+/**
+ * The bucket as it stands now, refilled for the time that has passed.
+ *
+ * Kept on the volume with the rest: a restart that handed back a full bucket
+ * would make a redeploy the fastest way to get around the limiter, and
+ * Railway restarts whenever it is deployed to.
+ */
+function filled(l: Limits, now: number): number {
+  const perMs = RATE_PER_MIN() / 60_000
+  return Math.min(BURST(), l.tokens + Math.max(0, now - l.tokensAt) * perMs)
 }
 
 function saveLimits(l: Limits): void {
@@ -264,10 +327,30 @@ function saveLimits(l: Limits): void {
   writeFileSync(LIMITS, JSON.stringify(l))
 }
 
-/** A refusal: back off, twice as long as last time, up to four hours. */
-function strike(why: string): number {
+/**
+ * How long Yahoo asked us to wait, where it said.
+ *
+ * `Retry-After` is either seconds or an HTTP date, and obeying it is the whole
+ * contract — a server that tells you when to come back has told you something
+ * our own doubling can only guess at. Ignored when it is absent, unreadable,
+ * or asks for longer than the cap we would have applied anyway.
+ */
+function askedToWait(res: { headers?: { get(n: string): string | null } }): number | null {
+  const raw = res.headers?.get?.('retry-after')
+  if (!raw) return null
+  const secs = Number(raw.trim())
+  const ms = Number.isFinite(secs) ? secs * 1000 : Date.parse(raw) - Date.now()
+  if (!Number.isFinite(ms) || ms <= 0) return null
+  return Math.min(ms, MAX_BACKOFF)
+}
+
+/**
+ * A refusal: back off, twice as long as last time, up to four hours — unless
+ * Yahoo named its own wait, which beats any guess of ours.
+ */
+function strike(why: string, asked?: number | null): number {
   const l = limits()
-  const wait = Math.min(MAX_BACKOFF, FIRST_BACKOFF * 2 ** l.strikes)
+  const wait = asked ?? Math.min(MAX_BACKOFF, FIRST_BACKOFF * 2 ** l.strikes)
   saveLimits({ ...l, until: Date.now() + wait, strikes: l.strikes + 1, why })
   return Date.now() + wait
 }
@@ -277,15 +360,14 @@ function cleared(): void {
   if (l.strikes || l.until) saveLimits({ ...l, strikes: 0, until: 0, why: null })
 }
 
-function counted(): void {
-  const l = limits()
-  saveLimits({ ...l, calls: l.calls + 1 })
-}
-
 /** Where the limits stand, for the status page. */
 export function limitsNow(): {
   backoffUntil: number | null; why: string | null; strikes: number
   callsToday: number; cap: number; replaying: string | null
+  /** What is in the bucket, and what it refills at. */
+  tokens: number; burst: number; ratePerMin: number; reserve: number
+  /** Who spent what today, so "where did the budget go" has an answer. */
+  spend: Record<string, number>
 } {
   const l = limits()
   return {
@@ -295,17 +377,55 @@ export function limitsNow(): {
     callsToday: l.calls,
     cap: DAILY_CAP(),
     replaying: replaying() ? REPLAY() : null,
+    tokens: Math.round(filled(l, Date.now()) * 10) / 10,
+    burst: BURST(),
+    ratePerMin: RATE_PER_MIN(),
+    reserve: RESERVE(),
+    spend: l.spend ?? {},
   }
 }
 
 let gate: Promise<void> = Promise.resolve()
-let lastAt = 0
-/** One request at a time, SPACING apart, whoever is asking. */
-function turn(): Promise<void> {
+
+/**
+ * Take a token, or say why not.
+ *
+ * Serialised behind one gate so two callers cannot both read a bucket with one
+ * token in it and both decide it is theirs.
+ *
+ * The background is refused the moment the bucket falls to the reserve, and
+ * refused rather than queued: a scheduled round comes back in five minutes
+ * anyway, and a poller sleeping on a lock is a poller holding the door shut.
+ * A person waiting on a screen will wait a few seconds, because by then a
+ * token has usually arrived and a short pause beats an empty page.
+ */
+function take(lane: Lane, by: string): Promise<void> {
   const mine = gate.then(async () => {
-    const wait = lastAt + SPACING - Date.now()
-    if (wait > 0) await sleeper(wait)
-    lastAt = Date.now()
+    const floor = lane === 'background' ? RESERVE() : 0
+    // A deadline rather than a loop count: the wait has to end even where the
+    // clock is stubbed, and a caller that spins is worse than one that fails.
+    const deadline = Date.now() + MAX_WAIT
+    for (;;) {
+      const now = Date.now()
+      const l = limits()
+      const have = filled(l, now)
+      if (have >= floor + 1) {
+        saveLimits({
+          ...l, tokens: have - 1, tokensAt: now,
+          calls: l.calls + 1, spend: { ...l.spend, [by]: (l.spend[by] ?? 0) + 1 },
+        })
+        return
+      }
+      const wait = Math.ceil((floor + 1 - have) / (RATE_PER_MIN() / 60_000))
+      if (lane === 'background' || wait > MAX_WAIT || now >= deadline) {
+        throw new YahooError(
+          lane === 'background'
+            ? `the background is holding back: ${have.toFixed(1)} of ${BURST()} requests in hand, ${RESERVE()} kept for the screen`
+            : `no request budget for ${Math.ceil(wait / 1000)}s`,
+          'budget')
+      }
+      await sleeper(Math.min(wait, MAX_WAIT))
+    }
   })
   gate = mine.catch(() => {})
   return mine
@@ -358,8 +478,14 @@ export const recordedAt = (): number | null => (replaying() ? theRecording().at 
  * indistinguishable from nothing to say, and that is precisely how a broken
  * parser stayed invisible for an evening.
  */
-export async function call<T = unknown>(path: string): Promise<T> {
+export async function call<T = unknown>(
+  path: string,
+  /** Who is asking, and on whose behalf. Background unless said otherwise. */
+  opts: { lane?: Lane; by?: string } = {},
+): Promise<T> {
   if (replaying()) return fromRecording(path) as T
+  const lane = opts.lane ?? 'background'
+  const by = opts.by ?? lane
 
   const l = limits()
   if (l.until > Date.now()) {
@@ -385,8 +511,12 @@ export async function call<T = unknown>(path: string): Promise<T> {
     }
     renew = false
 
-    await turn()
-    counted()
+    /*
+     * A token per attempt, retries included — they are real requests to
+     * Yahoo, and a flaky night used to cost three times what the schedule
+     * thought it was spending.
+     */
+    await take(lane, by)
     let res: Response
     try {
       res = await fetcher(url, {
@@ -399,7 +529,8 @@ export async function call<T = unknown>(path: string): Promise<T> {
     }
 
     if (res.status === 429 || res.status === 999) {
-      const until = strike(`HTTP ${res.status}`)
+      const asked = askedToWait(res)
+      const until = strike(`HTTP ${res.status}${asked ? ' (Yahoo named the wait)' : ''}`, asked)
       throw new YahooError(
         `Yahoo is rate limiting (HTTP ${res.status}) — nothing more until ${new Date(until).toISOString()}`,
         'rate-limited', res.status)

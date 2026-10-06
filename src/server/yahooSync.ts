@@ -439,6 +439,12 @@ export function configFrom(l: Y.YLeague, s: Y.YSettings, myTeamId: string | null
 
 export interface Deps {
   players: Player[]
+  /**
+   * Whose budget this round spends. A scheduled round is background and yields
+   * to anyone on a screen; a round fired because somebody opened a league is
+   * not, and should not wait behind the poller for its own data.
+   */
+  lane?: 'interactive' | 'background'
   /** The leagues somebody configured; everything else Yahoo lists is discovered. */
   configured: LeagueConfig[]
   /** Whether games are on or about to be, which sets how fresh everything must be. */
@@ -446,6 +452,18 @@ export interface Deps {
   now?: number
   /** Run these whatever their clocks say. */
   force?: Part[]
+  /**
+   * Narrow the round to these leagues, by Yahoo's own numeric id — the one
+   * `league_key` ends with, which is what every store here is keyed by. Not
+   * the configured league's id, which is a name somebody chose.
+   *
+   * Opening one league used to refresh all of them. The parts that read a
+   * league at a time — rosters, and `teams`, which costs two requests per
+   * league — looped over every league Yahoo had listed, so a tap on one
+   * screen spent nine requests on five leagues and the other four were thrown
+   * away. That is most of how a day's budget went.
+   */
+  only?: string[]
 }
 
 export interface Round {
@@ -467,6 +485,14 @@ export async function round(deps: Deps): Promise<Round> {
 
   const resolve = resolver(deps.players)
   const configuredKeys = new Set(deps.configured.map((c) => c.leagueKey))
+  /*
+   * A narrowed round reads the leagues it was asked for and nothing else. The
+   * discovery part is left alone: it takes one request for the account and
+   * does not know about leagues yet.
+   */
+  const scoped: SyncState = deps.only?.length
+    ? { ...st, leagues: st.leagues.filter((l) => deps.only!.includes(l.id)) }
+    : st
 
   for (const part of todo) {
     // Nothing to ask about until Yahoo has said which leagues there are.
@@ -474,7 +500,7 @@ export async function round(deps: Deps): Promise<Round> {
     const status: PartStatus = st.parts[part] ?? { at: null, tried: null, error: null }
     status.tried = now
     try {
-      await run(part, st, { ...deps, now }, resolve, configuredKeys)
+      await run(part, part === 'discover' ? st : scoped, { ...deps, now }, resolve, configuredKeys)
       status.at = now
       status.error = null
       out.ran.push(part)
@@ -498,11 +524,13 @@ async function run(
 ): Promise<void> {
   const keys = st.leagues.map((l) => l.key)
   const meta = new Map(st.leagues.map((l) => [l.key, l]))
-  const nodes = async (path: string) => Y.leagueNodes(await api.call(path))
+  const lane = deps.lane ?? 'background'
+  const ask = <T,>(path: string) => api.call<T>(path, { lane, by: `${lane}:${part}` })
+  const nodes = async (path: string) => Y.leagueNodes(await ask(path))
 
   switch (part) {
     case 'discover': {
-      const found = Y.parseDiscovery(await api.call(PATHS.discover()))
+      const found = Y.parseDiscovery(await ask(PATHS.discover()))
       // An answer with no leagues in it is not news that every league vanished.
       if (!found.length) throw new Error('Yahoo listed no leagues for this account')
       st.leagues = found
@@ -650,7 +678,7 @@ async function run(
           const graded = wide?.mineWeeks ?? []
           let mineWeeks = graded
           if (mine && !graded.some((x) => x.week === w)) {
-            const t = await api.call(PATHS.teamWeek(mine, w))
+            const t = await ask(PATHS.teamWeek(mine, w))
               .then((a) => Y.parseTeamWeek(a))
               .catch((e) => { if (e instanceof YahooError && e.stopsRound) throw e; return null })
             if (t) {
@@ -679,7 +707,7 @@ async function run(
         const week = leagueStore.forLeague(l.id)?.current?.week ?? l.currentWeek
         if (!k?.mine || week == null) continue
         const lineup = async (key: string) => {
-          const t = Y.parseTeamWeek(await api.call(PATHS.teamWeek(key, week)))
+          const t = Y.parseTeamWeek(await ask(PATHS.teamWeek(key, week)))
           if (!t) throw new Error(`no lineup in the answer for ${key}`)
           const ids: PlayerId[] = []
           const starters: PlayerId[] = []

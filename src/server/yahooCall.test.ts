@@ -22,7 +22,7 @@ const api = await import('./yahooApi.js')
 const TOKENS = join(DIR, 'yahoo-oauth.json')
 const LIMITS = join(DIR, 'yahoo-limits.json')
 
-type Reply = number | Error | { status: number; body: string }
+type Reply = number | Error | { status: number; body: string; headers?: Record<string, string> }
 /** A Yahoo that answers each request with the next reply in the list. */
 function yahoo(replies: Reply[]) {
   const seen: { url: string; method: string }[] = []
@@ -32,9 +32,11 @@ function yahoo(replies: Reply[]) {
     if (r === undefined) throw new Error('no more replies scripted')
     if (r instanceof Error) throw r
     const { status, body } = typeof r === 'number' ? { status: r, body: '{"ok":true}' } : r
+    const headers = (typeof r === 'number' ? undefined : (r as any).headers) ?? {}
     // Shaped by hand: the Response constructor refuses 999, which Yahoo does not.
     return {
       status, ok: status >= 200 && status < 300,
+      headers: { get: (n: string) => headers[n.toLowerCase()] ?? null },
       text: async () => body,
       json: async () => JSON.parse(body),
     } as unknown as Response
@@ -146,6 +148,77 @@ test('the daily cap is a hard stop, counted before Yahoo is asked', async () => 
     await api.call('b')
     await assert.rejects(api.call('c'), (e: any) => e.kind === 'budget' && e.stopsRound)
     assert.equal(y.seen.length, 2)
+  } finally { y.restore() }
+})
+
+test('the bucket, not a gap between requests, is what paces us', async () => {
+  /*
+   * A fixed 350ms gap allowed a hundred and seventy a minute, which is the
+   * short-period excess Yahoo's agreement is actually about. The burst is
+   * spendable at once — a league page needs several answers together — and
+   * then the pace is the refill rate.
+   */
+  process.env.YAHOO_BURST = '3'
+  process.env.YAHOO_RATE_PER_MIN = '1'
+  process.env.YAHOO_RESERVE = '0'
+  const y = yahoo([200, 200, 200, 200])
+  try {
+    for (let i = 0; i < 3; i++) await api.call('game/nfl', { lane: 'interactive' })
+    assert.equal(y.seen.length, 3, 'the burst goes at once')
+    await assert.rejects(api.call('game/nfl', { lane: 'interactive' }),
+      (e: any) => e.kind === 'budget', 'and the fourth waits for a refill')
+    assert.equal(y.seen.length, 3, 'Yahoo was never asked a fourth time')
+  } finally {
+    y.restore(); delete process.env.YAHOO_BURST
+    delete process.env.YAHOO_RATE_PER_MIN; delete process.env.YAHOO_RESERVE
+  }
+})
+
+test('the background stops while the screen in front of you can still read', async () => {
+  /*
+   * The poller runs whether or not anybody is looking, and used to draw on the
+   * same pool as the page you just opened — so by the time a person asked for
+   * anything there was nothing left. The reserve is the screen's.
+   */
+  process.env.YAHOO_BURST = '2'
+  process.env.YAHOO_RATE_PER_MIN = '1'
+  process.env.YAHOO_RESERVE = '1'
+  const y = yahoo([200, 200])
+  try {
+    // Two in the bucket, one of them the screen's: the poller may have the other.
+    await api.call('game/nfl', { lane: 'background' })
+    assert.equal(y.seen.length, 1, 'the poller spends what is above the reserve')
+    await assert.rejects(api.call('game/nfl', { lane: 'background' }),
+      (e: any) => e.kind === 'budget' && /kept for the screen/.test(e.message),
+      'and stops at it')
+    assert.equal(y.seen.length, 1, 'without asking Yahoo')
+    await api.call('game/nfl', { lane: 'interactive' })
+    assert.equal(y.seen.length, 2, 'while the screen may draw the reserve down')
+  } finally {
+    y.restore(); delete process.env.YAHOO_BURST
+    delete process.env.YAHOO_RATE_PER_MIN; delete process.env.YAHOO_RESERVE
+  }
+})
+
+test('a wait Yahoo names is the wait we take', async () => {
+  /* Our doubling is a guess; Retry-After is the server saying when. */
+  const y = yahoo([{ status: 429, body: '{}', headers: { 'retry-after': '90' } }])
+  try {
+    await assert.rejects(api.call('game/nfl'), (e: any) => e.kind === 'rate-limited')
+    const l = JSON.parse(readFileSync(LIMITS, 'utf8'))
+    const waited = l.until - Date.now()
+    assert.ok(waited > 80_000 && waited < 100_000,
+      `took Yahoo's ninety seconds, not our fifteen minutes (got ${Math.round(waited / 1000)}s)`)
+  } finally { y.restore() }
+})
+
+test('what each caller spent is kept, because "three thousand" answers nothing', async () => {
+  const y = yahoo([200, 200, 200])
+  try {
+    await api.call('game/nfl', { lane: 'interactive', by: 'raw' })
+    await api.call('game/nfl', { lane: 'background', by: 'background:teams' })
+    await api.call('game/nfl', { lane: 'background', by: 'background:teams' })
+    assert.deepEqual(api.limitsNow().spend, { raw: 1, 'background:teams': 2 })
   } finally { y.restore() }
 })
 

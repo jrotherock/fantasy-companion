@@ -1053,12 +1053,13 @@ function NbaCard({ t, onOpen }: { t: SeasonTile; onOpen: (id: string) => void })
   )
 }
 
-function Now({ tiles, onOpen, onOpenNba, marks, closeCalls, nba = [], sport, setSport, need: needBy }: {
+function Now({ tiles, onOpen, onOpenNba, marks, closeCalls, nba = [], sport, setSport, need: needBy, yahooOff }: {
   tiles: Tile[]; onOpen: (id: string) => void; onOpenNba: (id: string) => void
   marks?: Record<string, { count: number; worst: number; first: string }>
   closeCalls?: Record<string, number>
   nba?: SeasonTile[]
   sport: SportFilter; setSport: (v: SportFilter) => void; need: { nfl: number; nba: number }
+  yahooOff?: { why: string; since: number | null; until: number | null } | null
 }) {
   /* Counted from what the tiles are actually marked with, so the heading
      cannot say "nothing needs you" over a card that says otherwise. */
@@ -1097,6 +1098,22 @@ function Now({ tiles, onOpen, onOpenNba, marks, closeCalls, nba = [], sport, set
           ? `Next draft in ${inWords(next.inMs)} · ${new Date(next.at).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`
           : undefined}
       />
+      {/*
+        * Why the numbers below have stopped moving.
+        *
+        * Every tile said "fresh 14h" for half a day while the sync was failing
+        * with a reason the server could read off its own state. A freshness
+        * number that goes quiet looks like a quiet league; it has to say when
+        * it is actually a stopped clock, and when the clock starts again.
+        */}
+      {yahooOff && (
+        <div className="ckstop">
+          <b>Yahoo is not being read — {yahooOff.why}.</b>
+          {yahooOff.since != null && <> Last read {agoWords(new Date(yahooOff.since).toISOString())}.</>}
+          {yahooOff.until != null && <> Resumes {new Date(yahooOff.until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.</>}
+          {' '}Everything below is as it stood then.
+        </div>
+      )}
       {both && <SportBar on={shown} set={setSport} need={needBy} />}
       <div className="ckgrid ckleagues">
         {/* Worst first across both sports; a basketball card goes ahead of football cards of the same urgency, since a daily lineup locks sooner. */}
@@ -3743,6 +3760,8 @@ function Cockpit() {
   const setSport = (v: SportFilter) => { setSportState(v); try { localStorage.setItem(SPORT_KEY, v) } catch { /* private window */ } }
   const [marks, setMarks] = useState<Record<string, any>>({})
   const [closeCalls, setCloseCalls] = useState<Record<string, number>>({})
+  /** Why Yahoo has gone quiet, when it has. Null the rest of the time. */
+  const [yahooOff, setYahooOff] = useState<{ why: string; since: number | null; until: number | null } | null>(null)
   const [news, setNews] = useState<{ items: Item[]; scanned: number; baseline: number | null } | null>(null)
   const [sources, setSources] = useState<Source[]>([])
   const [alerts, setAlerts] = useState<any>(null)
@@ -3788,7 +3807,7 @@ function Cockpit() {
       fetch('/api/cockpit').then((r) => r.json())
         .then((d) => {
           setTiles(d.tiles); setMarks(d.marks ?? {}); setNba(d.nba ?? [])
-          setCloseCalls(d.closeCalls ?? {}); setErr(null)
+          setCloseCalls(d.closeCalls ?? {}); setYahooOff(d.yahoo ?? null); setErr(null)
         })
         .catch(() => setErr('The companion is not answering on :4600'))
       fetch('/api/cockpit/news').then((r) => r.json()).then(setNews).catch(() => {})
@@ -3873,7 +3892,7 @@ function Cockpit() {
               : openLeague
               ? <League id={openLeague} onBack={() => setOpenLeague(null)} />
               : <Now tiles={tiles} onOpen={setOpenLeague} onOpenNba={openNba} marks={marks} closeCalls={closeCalls} nba={nba}
-                     sport={sport} setSport={setSport} need={needBy} />)}
+                     sport={sport} setSport={setSport} need={needBy} yahooOff={yahooOff} />)}
             {tab === 'news' && <>
               {both && <SportBar on={shown} set={setSport} need={needBy} />}
               {fb && bb && <SportHead sport="nfl" />}
