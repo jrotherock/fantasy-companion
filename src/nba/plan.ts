@@ -93,7 +93,12 @@ export interface Prepared {
   teams: Map<string, TeamLoad>
   /** A player's projection against last season's, and who joined his team. */
   context: (id: string) => PlayerContext | null
+  /** The board's Draft rank (scripts/nba-draft-rank.ts), when this league has one: place, tier, weeks-won delta. */
+  draftRank: Map<string, { rank: number; tier: number; delta: number }>
 }
+
+/** data/nba/draft-rank/<league>.json, as written by scripts/nba-draft-rank.ts. */
+export interface DraftRankFile { players: { name: string; delta: number; tier: number }[] }
 
 /** Where a player's expected return comes from: a date you set, or CBS's injury report. */
 export interface Availability {
@@ -171,6 +176,7 @@ export function checkScoring(league: NbaLeague & { categories?: string[] }) {
 export function prepare(
   league: NbaLeague, rawPlayers: NbaPlayer[], noise: Record<Cat, number>, adpFor: (p: NbaPlayer) => number,
   schedule: PlayoffSchedule = {}, injuries: InjuryInputs | null = null, teamNotes: Record<string, string[]> = {},
+  draftRankFile: DraftRankFile | null = null,
 ): Prepared {
   checkScoring(league)
   // A player starting the season hurt is valued on the games he will be back for.
@@ -197,7 +203,11 @@ export function prepare(
     playoff, playoffNorm: games.length ? games[Math.floor(games.length / 2)] : null,
     returnNote: (id: string) => notes.get(id) ?? null,
     calendar: injuries ? calendarOf(injuries.teamDates) : null,
-    teams: new Map(), context: () => null,
+    teams: new Map(), context: () => null, draftRank: new Map(),
+  }
+  if (draftRankFile) {
+    const idOf = new Map(players.map((p) => [p.name, p.id]))
+    draftRankFile.players.forEach((r, i) => { const id = idOf.get(r.name); if (id) prepared.draftRank.set(id, { rank: i + 1, tier: r.tier, delta: r.delta }) })
   }
   // The 240 check, and each player's line against last season's (teamLoad.ts): information beside the advice, never in it.
   const loads = teamLoads(rawPlayers, teamNotes)
@@ -350,6 +360,14 @@ export function bestBuildOf(prep: Prepared, id: string): BestBuild | null {
 export interface BoardRow {
   id: string
   name: string
+  /** Place and tier in the league's Draft rank, when it has one (the board's default order). */
+  draftRank: number | null
+  tier: number | null
+  /**
+   * For my team: his card score less the best available's, in categories a week (or value in points)
+   * — what the cards would say of him for my roster now. Null outside the cards' shortlist.
+   */
+  forMe: number | null
   team: string | null
   positions: string[]
   gp: number
@@ -739,14 +757,30 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   }
 
   // ── Board ──
+  // Default order: the Draft rank where the league has one, the value rank for the rest after it.
+  const boardOrder = (r: { draftRank: number | null; rank: number }) => (r.draftRank != null ? r.draftRank : 10_000 + r.rank)
+  // For my team: the cards' own scores over a long shortlist, as a gap to the best of them.
+  const forMe = new Map<string, number>()
+  if (spot && !done) {
+    const wide = prep.cats
+      ? adviseCategories(prep.cats.rows.filter((x) => !taken.has(x.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
+        { canTake, neutralUntil: d.locks.length ? 0 : READ_FROM, ignore: d.locks, shortlist: 80, lookahead: 30 })
+      : advisePoints(prep.points!.rows.filter((x) => !taken.has(x.id)), spot, 80, canTake)
+    const scored = stretchBigs(prep, handicapAvoided(wide as { id: string; score: number }[], tags, avoidMargin(prep, wide)))
+    const top = scored[0]?.score ?? 0
+    for (const a of scored) forMe.set(a.id, a.score - top)
+  }
   const boardBuild = prep.cats ? (d.locks.length ? d.locks : active?.punt ?? []) : []
   const values = prep.cats ? buildValues(prep, boardBuild) : null
   const board: BoardRow[] = (prep.cats ? prep.cats.rows : prep.points!.rows).map((r) => {
     const pl = p(r.id)
     const v = values ? values.get(r.id)! : { value: (r as PointsRow).value, rank: (r as PointsRow).rank }
     const t = takenAt.get(r.id)
+    const dr = prep.draftRank.get(r.id)
     return {
       id: r.id, name: pl.name, team: pl.team, positions: prep.positions(r.id),
+      draftRank: dr?.rank ?? null, tier: dr?.tier ?? null,
+      forMe: forMe.has(r.id) ? forMe.get(r.id)! : null,
       gp: r.games.gp, adp: pl.yahoo?.adp ?? null, yahooRank: pl.yahoo?.rank ?? null,
       value: v.value, rank: v.rank,
       contrib: prep.cats ? contribution(r as CatRow) : undefined,
@@ -763,7 +797,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       takenAt: t?.overall ?? null, takenBy: t?.manager ?? null,
       mine: mine.includes(r.id),
     }
-  }).sort((a, b) => a.rank - b.rank).slice(0, 320)
+  }).sort((a, b) => boardOrder(a) - boardOrder(b)).slice(0, 320)
 
   // ── Review, once the roster is full ──
   let review: DraftView['review'] = null

@@ -24,7 +24,7 @@ import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { NameIndex } from '../nba/join.js'
 import { adpFor } from '../nba/draft.js'
-import { buildView, changes, compareView, prepare, recordOf, takeBy, type Availability, type DraftView, type InjuryInputs, type NbaLeague, type Prepared } from '../nba/plan.js'
+import { buildView, changes, compareView, prepare, recordOf, takeBy, type DraftRankFile, type Availability, type DraftView, type InjuryInputs, type NbaLeague, type Prepared } from '../nba/plan.js'
 import { parseCbsInjuries, type InjuryNote } from '../nba/sources.js'
 import { analyseMocks, type MockRecord } from '../nba/tendencies.js'
 import { adpSpread, backtest, fetchHistory, historyStatus, opponentReport } from './nbaHistory.js'
@@ -305,7 +305,7 @@ function reprepare() {
   const { players, noise } = load()
   const inj = injuryInputs()
   for (const s of sessions.values()) {
-    s.prep = prepare(s.league, players, noise, adpFor, schedule(), inj, notesByTeam())
+    s.prep = prepare(s.league, players, noise, adpFor, schedule(), inj, notesByTeam(), draftRankFor(s.league))
     s.dirty = true
   }
 }
@@ -326,6 +326,13 @@ function setReturn(playerId: string, date: string | null) {
 }
 
 // ── Sessions ──
+
+/** The league's Draft rank (data/nba/draft-rank/<league>.json): a mock or a -test league uses the league it copies. */
+function draftRankFor(league: NbaLeague): DraftRankFile | null {
+  const base = league.mock?.baseId ?? league.id.replace(/-test$/, '')
+  const f = `${DATA}/draft-rank/${base}.json`
+  try { return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) as DraftRankFile : null } catch { return null }
+}
 
 let teamNotes: Record<string, string[]> | null = null
 /** Team → judgement notes (a new coach), from the joined team table. */
@@ -365,7 +372,7 @@ function session(id: string): Session | null {
   const league = leagues.find((l) => l.id === id)
   if (!league) return null
   const draft: StoredDraft = existsSync(fileOf(id)) ? JSON.parse(readFileSync(fileOf(id), 'utf8')) : emptyDraft(id)
-  const s: Session = { league, prep: prepare(league, players, noise, adpFor, schedule(), injuryInputs(), notesByTeam()), draft, view: null, dirty: true }
+  const s: Session = { league, prep: prepare(league, players, noise, adpFor, schedule(), injuryInputs(), notesByTeam(), draftRankFor(league)), draft, view: null, dirty: true }
   sessions.set(id, s)
   return s
 }

@@ -5,13 +5,19 @@
  * adds only what football has no part for: the build tiles, the direction,
  * the next-picks strip, the category board and the drawer.
  *
- * The app fills the window and only the panel scrolls, as football's does; on
- * a phone the whole page scrolls instead.
+ * One scroll for the whole page, on every screen. It used to be the window-
+ * filling app with only the panel scrolling, as football's is, which meant the
+ * board dragged the next picks and the room with it and an iPhone fought two
+ * scrollers. The status bar stays pinned at the top, and the board's column
+ * headers pin under it once the board is reached.
  */
-.nb-app { height: 100%; max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; min-height: 0;
+html, body, #root { height: auto; }
+.nb-app { height: auto; max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; min-height: 0;
   padding: max(0.5rem, env(safe-area-inset-top, 0px)) max(0.75rem, env(safe-area-inset-right, 0px)) 0 max(0.75rem, env(safe-area-inset-left, 0px)); }
 .nb-fixed { flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--line); }
-.nb-panel { flex: 1 1 auto; overflow-y: auto; min-height: 9rem; padding: 0.5rem 0 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; -webkit-overflow-scrolling: touch; }
+.nb-panel { flex: 1 1 auto; overflow: visible; min-height: 9rem; padding: 0.5rem 0 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.nb-app > .statusbar { position: sticky; top: 0; z-index: 30; background: var(--bg); margin-bottom: 0.5rem; box-shadow: 0 0 0 0.75rem var(--bg); }
+.nb-table thead th { position: sticky; top: var(--nb-top, 0px); z-index: 20; background: var(--surface); }
 @media (max-width: 760px) {
   html, body, #root { height: auto; }
   .nb-app { height: auto; }
@@ -109,7 +115,7 @@ div.nb-cat { cursor: default; }
 .nb-hits { position: absolute; top: 100%; left: 0; z-index: 6; list-style: none; margin: 0.2rem 0 0; padding: 0.2rem; min-width: 16rem; background: var(--surface); border: 1px solid var(--line); border-radius: 3px; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
 .nb-hits button { width: 100%; text-align: left; background: none; border: 0; padding: 0.3rem 0.4rem; border-radius: 3px; color: var(--ink); cursor: pointer; }
 .nb-hits button:hover, .nb-hits .nb-first { background: var(--raise); }
-.nb-tablewrap { overflow-x: auto; }
+.nb-tablewrap { overflow: visible; }
 /* Wide enough for every column: no side scroll, so the header can stick to the board panel. */
 @media (min-width: 1000px) { .nb-tablewrap { overflow: visible; } }
 .nb-table { width: 100%; border-collapse: collapse; font-size: var(--t-xs); }
@@ -249,3 +255,19 @@ div.nb-cat { cursor: default; }
 .nb-acts { position: sticky; left: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.4rem 0.5rem; max-width: calc(100vw - 2.5rem); }
 .nb-acts .btn.nb-on { border-color: var(--blue); color: var(--blue); }
 .nb-avoidnote { font-size: var(--t-xs); color: var(--amber); }
+
+/* Compact board under 1000px: rank, name, position, Val, For me, Rd and Next; the rest is in the row's actions */
+@media (max-width: 999px) { .nb-table .nb-wide { display: none; } }
+.nb-actstats { display: flex; flex-wrap: wrap; gap: 0.2rem 0.75rem; padding: 0 0.5rem 0.45rem; font-size: var(--t-xs); font-family: var(--mono); color: var(--ink-3, var(--ink)); position: sticky; left: 0; max-width: calc(100vw - 2.5rem); }
+.nb-actstats b { font-weight: 600; padding: 0 2px; border-radius: 2px; color: var(--ink); }
+.nb-tierrow td { padding: 0.45rem 0.4rem 0.2rem !important; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue); border-top: 1px solid var(--line); text-align: left; }
+/* Narrow screens: names wrap, build badges and the tier note step aside, the status bar keeps only what a pick needs */
+@media (max-width: 999px) {
+  .nb-table td.nb-l { white-space: normal; }
+  .nb-table .nb-bb, .nb-tierrow .nb-dim { display: none; }
+}
+@media (max-width: 600px) { .nb-app > .statusbar .nb-sb-wide { display: none; } }
+@media (max-width: 600px) {
+  .nb-table td.nb-pos { white-space: normal; max-width: 3.4rem; line-height: 1.2; }
+  .nb-table td, .nb-table th { padding-left: 0.2rem; padding-right: 0.2rem; }
+}

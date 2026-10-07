@@ -103,6 +103,18 @@ function Screen({ id }: { id: string }) {
   const [rosterOpen, setRosterOpen] = useState(false)
   // A card being looked at: the build tiles preview my categories with him added.
   const [previewId, setPreviewId] = useState<string | null>(null)
+  // The board alone, for reading down it: the clock stays, the cards and build step aside.
+  const [boardOnly, setBoardOnly] = useState(false)
+  // The board's column headers pin under the status bar, whose height changes as it wraps.
+  useEffect(() => {
+    const bar = document.querySelector('.nb-app .statusbar')
+    if (!bar) return
+    const set = () => document.documentElement.style.setProperty('--nb-top', `${(bar as HTMLElement).offsetHeight}px`)
+    set()
+    const ro = new ResizeObserver(set)
+    ro.observe(bar)
+    return () => ro.disconnect()
+  }, [view == null, boardOnly])
   // Up to two players pinned side by side: two cards, or a player I am tempted by against the top card.
   const [pins, setPins] = useState<string[]>([])
   const pin = useCallback((pid: string) => setPins((ps) => (ps.includes(pid) ? ps.filter((x) => x !== pid) : [...ps, pid].slice(-2))), [])
@@ -124,11 +136,12 @@ function Screen({ id }: { id: string }) {
   const cats = view.league.scoring === 'categories'
   return (
     <div className="nb-app">
+      {/* Outside the decision area so it stays pinned while the whole page scrolls. */}
+      <Status view={view} error={error} act={act} rosterOpen={rosterOpen} setRosterOpen={setRosterOpen} drawer={drawer} setDrawer={setDrawer} />
       <div className="nb-fixed">
-        <Status view={view} error={error} act={act} rosterOpen={rosterOpen} setRosterOpen={setRosterOpen} drawer={drawer} setDrawer={setDrawer} />
         {rosterOpen && <RosterLine view={view} />}
         {view.league.slot == null ? <Gate view={view} act={act} />
-          : view.review ? null
+          : view.review || boardOnly ? null
           : <>
               <Notice view={view} />
               <Take view={view} act={act} previewId={previewId} setPreviewId={setPreviewId} pins={pins} pin={pin} comparePair={(a, b) => setPins([a, b])} />
@@ -140,10 +153,8 @@ function Screen({ id }: { id: string }) {
         <div className="nb-panel">
           {/* Once the draft is done nothing is on the clock, so the review scrolls with the board rather than pinning it out of sight. */}
           {view.review && <Review view={view} act={act} />}
-          <NextPicks view={view} />
-          <Room view={view} />
-          <Teams view={view} />
-          <Board view={view} act={act} id={id} pins={pins} pin={pin} />
+          {!boardOnly && <><NextPicks view={view} /><Room view={view} /><Teams view={view} /></>}
+          <Board view={view} act={act} id={id} pins={pins} pin={pin} full={boardOnly} onFull={() => { setBoardOnly(!boardOnly); window.scrollTo({ top: 0 }) }} />
         </div>
       )}
       {drawer && <Before view={view} id={id} close={() => setDrawer(false)} />}
@@ -171,11 +182,11 @@ function Status({ view, error, act, rosterOpen, setRosterOpen, drawer, setDrawer
       <span className={`feed ${feed}`} title={s.unresolved.length ? `couldn't place ${s.unresolved.join(', ')}` : undefined}><i />{said}</span>
       {error && <span className="nb-down">{error}</span>}
       <span className="spacer" />
-      <span>{view.league.label.toUpperCase()} · {view.league.scoring === 'points' ? 'POINTS' : '9-CAT'}{view.mock ? ' · MOCK' : ''}</span>
+      <span className="nb-sb-wide">{view.league.label.toUpperCase()} · {view.league.scoring === 'points' ? 'POINTS' : '9-CAT'}{view.mock ? ' · MOCK' : ''}</span>
       {view.league.slot != null && (
         <button className="chip" title="Change your draft slot — Yahoo can reshuffle the order before the draft" onClick={() => act('slot', { slot: null })}>SLOT {view.league.slot}</button>
       )}
-      <span className={`chip ${view.neverCount ? 'nb-chip-ok' : 'nb-chip-warn'}`} title="Players the advice never offers; tag them on the board">
+      <span className={`chip nb-sb-wide ${view.neverCount ? 'nb-chip-ok' : 'nb-chip-warn'}`} title="Players the advice never offers; tag them on the board">
         {view.neverCount ? `NEVER ${view.neverCount}` : 'NEVER LIST EMPTY'}
       </span>
       {view.history && <button className={`chip ${drawer ? 'on' : ''}`} onClick={() => setDrawer(!drawer)}>BEFORE YOU ▸</button>}
@@ -699,13 +710,15 @@ function NextPicks({ view }: { view: DraftView }) {
   )
 }
 
-type SortKey = 'rank' | 'gp' | 'po' | 'adp' | 'next' | Cat | 'fpg' | 'fpMin' | 'fpSeason' | 'value'
+type SortKey = 'rank' | 'vrank' | 'forme' | 'gp' | 'po' | 'adp' | 'next' | Cat | 'fpg' | 'fpMin' | 'fpSeason' | 'value'
 
 /** A column's value for sorting, oriented so bigger is better: earlier ADP sorts first, turnovers are already flipped. */
 function sortValue(r: BoardRow, key: SortKey): number {
   const missing = -1e9
   switch (key) {
-    case 'rank': return -r.rank
+    case 'rank': return -(r.draftRank ?? 10_000 + r.rank)
+    case 'vrank': return -r.rank
+    case 'forme': return r.forMe ?? missing
     case 'gp': return r.gp
     case 'po': return r.playoff ?? missing
     case 'adp': return r.adp == null ? missing : -r.adp
@@ -718,7 +731,7 @@ function sortValue(r: BoardRow, key: SortKey): number {
   }
 }
 
-function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: string; pins: string[]; pin: (id: string) => void }) {
+function Board({ view, act, id, pins, pin, full, onFull }: { view: DraftView; act: Act; id: string; pins: string[]; pin: (id: string) => void; full: boolean; onFull: () => void }) {
   const [pos, setPos] = useState('All')
   const [q, setQ] = useState('')
   const [showTaken, setShowTaken] = useState(false)
@@ -726,6 +739,8 @@ function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: st
   // A tapped name opens a row of actions under it: everything a phone could not reach at the row's far end.
   const [openId, setOpenId] = useState<string | null>(null)
   const cats = view.league.scoring === 'categories'
+  const hasDraft = view.board.some((r) => r.draftRank != null)
+  const cols = 3 + (hasDraft ? 1 : 0) + 1 + 5 + (cats ? CATS.length : 4)
   const locks = view.build?.locks ?? []
   const win = view.build?.win ?? null
   const need = win ? CATS.filter((c) => !locks.includes(c) && win[c] >= 0.35 && win[c] < 0.5) : []
@@ -744,15 +759,17 @@ function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: st
   return (
     <div className="nb-box">
       <div className="nb-boardhead">
-        <span className="nb-ph">BOARD · RANKED FOR {cats ? (locks.length ? 'YOUR LOCKED PUNT' : (view.aheadBuild || 'BALANCED').toUpperCase()) : 'POINTS'}</span>
+        <span className="nb-ph">BOARD · {hasDraft ? 'DRAFT RANK' : 'RANKED FOR'}{!hasDraft && ` ${cats ? (locks.length ? 'YOUR LOCKED PUNT' : (view.aheadBuild || 'BALANCED').toUpperCase()) : 'POINTS'}`}{hasDraft && cats && <span className="nb-dim"> · Val for {locks.length ? 'your locked punt' : (view.aheadBuild || 'balanced').toLowerCase()}</span>}</span>
         <Entry id={id} view={view} act={act} />
         <span className="spacer" />
+        <button className="nb-link" onClick={onFull}>{full ? 'Back to the cards' : 'Full screen'}</button>
         <button className="nb-link" onClick={() => setHelp(!help)}>{help ? 'Hide help' : 'How to use the board'}</button>
       </div>
       {help && (
         <div className="nb-help">
           <ul>
-            <li><b>#</b> is value for your build; it re-ranks when you lock, and locked columns fade. Click any column header to sort by it — best first, again to reverse — and # to go back.</li>
+            {hasDraft && <li><b>#</b> is the <b>Draft rank</b>: each player taken first in thousands of simulated seasons, ranked by weeks won, in <b>tiers</b> — inside a tier the order is close to a coin flip. <b>Val</b> is pure value for the build your roster leans to; <b>For me</b> is what the cards would say of him for your roster now (0 is the top card). Tap any header to sort by it.</li>}
+            <li><b>{hasDraft ? 'Val' : '#'}</b> is value for your build; it re-ranks when you lock, and locked columns fade. Click any column header to sort by it — best first, again to reverse — and # to go back.</li>
             <li><b>Coloured cells</b>: what a player adds per category over a season. Read down the <span className="nb-amber">amber headers</span> — your coin flips — to find who tips one to green.</li>
             {!cats && <li><b>FP/g</b> fantasy points a game; <b>FP/min</b> per minute he is projected to play — high means he scores in what he gets, so more minutes would show; <b>FP season</b> a game times his games. <b>Value</b> is not the season total: it is points a game above the replacement line times games, so a replacement-level player is worth nought however much he scores.</li>}
             {cats && <li><b>Blue note</b> beside a name: where he ranks in the build he is drafted for, when that is 20+ places higher than balanced — Giannis is a first-rounder only if your roster ends up punting FT%. Information: the cards already weigh it once your roster leans that way, without a lock.</li>}
@@ -774,17 +791,23 @@ function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: st
         <table className="nb-table">
           <thead>
             <tr>
-              {th('rank', '#')}<th className="nb-l">Player</th><th>Pos</th>{th('gp', 'G')}{th('po', 'PO', { title: 'Games in your playoff weeks' })}{th('adp', 'ADP')}{th('adp', 'Rd', { title: 'The round he usually goes: ADP over the teams in the league' })}{th('next', 'Next', { title: 'Chance he lasts to your next decision' })}
+              {th('rank', '#', { title: hasDraft ? 'Draft rank: weeks won in simulated seasons, in tiers' : 'Value rank' })}<th className="nb-l">Player</th><th>Pos</th>
+              {hasDraft && th('vrank', 'Val', { title: 'Value rank for the build the board is reading' })}
+              {th('forme', 'For me', { title: 'What the cards would say of him for your roster now: his score less the best available, in categories a week (or value). 0 is the top card.' })}
+              {th('gp', 'G', { className: 'nb-wide' })}{th('po', 'PO', { title: 'Games in your playoff weeks', className: 'nb-wide' })}{th('adp', 'ADP', { className: 'nb-wide' })}{th('adp', 'Rd', { title: 'The round he usually goes: ADP over the teams in the league' })}{th('next', 'Next', { title: 'Chance he lasts to your next decision' })}
               {cats
-                ? CATS.map((c) => <Fragment key={c}>{th(c, LABEL[c], { className: locks.includes(c) ? 'nb-off' : need.includes(c) ? 'nb-need' : '' })}</Fragment>)
-                : <>{th('fpg', 'FP/g', { title: 'Fantasy points a game' })}{th('fpMin', 'FP/min', { title: 'Fantasy points a minute' })}{th('fpSeason', 'FP season', { title: 'Fantasy points over the season: a game times games' })}{th('value', 'Value', { title: 'Points a game above the replacement line, times games' })}</>}
+                ? CATS.map((c) => <Fragment key={c}>{th(c, LABEL[c], { className: `nb-wide ${locks.includes(c) ? 'nb-off' : need.includes(c) ? 'nb-need' : ''}` })}</Fragment>)
+                : <>{th('fpg', 'FP/g', { title: 'Fantasy points a game', className: 'nb-wide' })}{th('fpMin', 'FP/min', { title: 'Fantasy points a minute', className: 'nb-wide' })}{th('fpSeason', 'FP season', { title: 'Fantasy points over the season: a game times games', className: 'nb-wide' })}{th('value', 'Value', { title: 'Points a game above the replacement line, times games', className: 'nb-wide' })}</>}
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rows.map((r, i) => (
               <Fragment key={r.id}>
+              {!sort && hasDraft && (i === 0 || rows[i - 1].tier !== r.tier) && (
+                <tr className="nb-tierrow"><td colSpan={cols}>{r.tier != null ? `Tier ${r.tier}` : 'Not in the simulated ranking — by value'}{i === 0 && r.tier != null && <span className="nb-dim"> · inside a tier the order is close to a coin flip</span>}</td></tr>
+              )}
               <tr className={`${r.tag === 'never' ? 'nb-never' : ''} ${r.takenAt != null ? 'nb-taken' : ''} ${r.mine ? 'nb-mine' : ''} ${pins.includes(r.id) ? 'nb-pinned' : ''}`}>
-                <td className="nb-dim">{r.rank}</td>
+                <td className="nb-dim">{hasDraft ? (r.draftRank ?? '—') : r.rank}</td>
                 <td className="nb-l">
                   {/* The name opens the row's actions: on a phone anything at the row's far end is off screen. */}
                   <button className="nb-name" aria-expanded={openId === r.id} title="Compare, like, avoid or never" onClick={() => setOpenId(openId === r.id ? null : r.id)}>{pins.includes(r.id) && <span className="nb-pin">⇄ </span>}{r.name}</button>
@@ -802,18 +825,20 @@ function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: st
                   {r.takenAt != null && <span className="nb-dim nb-small"> #{r.takenAt}{r.takenBy ? ` ${r.takenBy}` : ''}</span>}
                   <span className="nb-dim nb-small"> {r.team}</span>
                 </td>
-                <td className="nb-dim">{r.positions.join(',')}</td>
-                <td>{Math.round(r.gp)}</td>
-                <td className={r.playoff != null ? po(r.playoff, view.playoffNorm) : 'nb-dim'}>{r.playoff ?? '—'}</td>
-                <td className="nb-dim">{r.adp != null ? r.adp.toFixed(0) : '—'}</td>
+                <td className="nb-dim nb-pos">{r.positions.join(', ')}</td>
+                {hasDraft && <td className="nb-dim">{r.rank}</td>}
+                <td className="mono">{r.forMe == null || r.takenAt != null ? '' : cats ? (r.forMe === 0 ? '0' : r.forMe.toFixed(2)) : Math.round(r.forMe)}</td>
+                <td className="nb-wide">{Math.round(r.gp)}</td>
+                <td className={`nb-wide ${r.playoff != null ? po(r.playoff, view.playoffNorm) : 'nb-dim'}`}>{r.playoff ?? '—'}</td>
+                <td className="nb-dim nb-wide">{r.adp != null ? r.adp.toFixed(0) : '—'}</td>
                 <td className="nb-dim">{r.adp != null ? Math.ceil(r.adp / view.league.teams) : '—'}</td>
                 <td>{r.takenAt == null && r.survives != null ? pct(r.survives) : ''}</td>
-                {cats ? CATS.map((c) => <td key={c} className={`mono ${locks.includes(c) ? 'nb-off' : ''}`} style={locks.includes(c) ? undefined : heat(r.contrib![c])}>{r.contrib![c].toFixed(1)}</td>)
-                  : <><td className="mono">{r.fpg?.toFixed(1)}</td><td className="mono">{r.fpMin != null ? r.fpMin.toFixed(2) : '—'}</td><td className="mono">{r.fpSeason != null ? Math.round(r.fpSeason).toLocaleString() : ''}</td><td className="mono">{Math.round(r.value)}</td></>}
+                {cats ? CATS.map((c) => <td key={c} className={`mono nb-wide ${locks.includes(c) ? 'nb-off' : ''}`} style={locks.includes(c) ? undefined : heat(r.contrib![c])}>{r.contrib![c].toFixed(1)}</td>)
+                  : <><td className="mono nb-wide">{r.fpg?.toFixed(1)}</td><td className="mono nb-wide">{r.fpMin != null ? r.fpMin.toFixed(2) : '—'}</td><td className="mono nb-wide">{r.fpSeason != null ? Math.round(r.fpSeason).toLocaleString() : ''}</td><td className="mono nb-wide">{Math.round(r.value)}</td></>}
               </tr>
               {openId === r.id && (
                 <tr className="nb-actrow">
-                  <td colSpan={8 + (cats ? CATS.length : 4)}>
+                  <td colSpan={cols}>
                     <div className="nb-acts">
                       {r.takenAt == null && r.tag !== 'never' && !view.review && (
                         <button className={`btn ${pins.includes(r.id) ? 'nb-on' : ''}`} onClick={() => { pin(r.id); setOpenId(null) }}>{pins.includes(r.id) ? 'Unpin' : 'Compare'}</button>
@@ -822,6 +847,11 @@ function Board({ view, act, id, pins, pin }: { view: DraftView; act: Act; id: st
                       <button className={`btn ${r.tag === 'avoid' ? 'nb-on' : ''}`} onClick={() => tag(r, 'avoid')}>↓ Avoid</button>
                       <button className={`btn ${r.tag === 'never' ? 'nb-on' : ''}`} onClick={() => tag(r, 'never')}>✕ Never</button>
                       <button className="nb-link" onClick={() => setOpenId(null)}>Close</button>
+                    </div>
+                    <div className="nb-actstats">
+                      {cats ? CATS.map((c) => <span key={c} className={locks.includes(c) ? 'nb-off' : ''}>{LABEL[c]} <b style={heat(r.contrib![c])}>{r.contrib![c].toFixed(1)}</b></span>)
+                        : <><span>FP/g <b>{r.fpg?.toFixed(1)}</b></span><span>FP/min <b>{r.fpMin != null ? r.fpMin.toFixed(2) : '—'}</b></span><span>FP season <b>{r.fpSeason != null ? Math.round(r.fpSeason).toLocaleString() : '—'}</b></span><span>Value <b>{Math.round(r.value)}</b></span></>}
+                      <span>G <b>{Math.round(r.gp)}</b></span><span>ADP <b>{r.adp != null ? r.adp.toFixed(0) : '—'}</b></span>{r.playoff != null && <span>PO <b>{r.playoff}</b></span>}
                     </div>
                   </td>
                 </tr>

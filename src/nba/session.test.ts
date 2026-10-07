@@ -306,3 +306,22 @@ test('a card names the players I already have from his NBA team', () => {
   const first = hoops.players.get(hoops.adpOrder[0])!
   for (const a of v.advice) assert.deepEqual(a.mates, a.team === first.team ? [first.name] : [], a.name)
 })
+
+test('a league with a Draft rank opens the board in that order, tiers marked; one without keeps value order', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const file = JSON.parse(readFileSync('data/nba/draft-rank/nba-hoops.json', 'utf8'))
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor, {}, null, {}, file)
+  const d = emptyDraft('t'); d.slot = 5
+  const v = buildView(hoops, d, new Map())
+  const ranked = v.board.filter((r) => r.draftRank != null)
+  assert.equal(ranked[0].name, file.players[0].name)
+  assert.ok(ranked.every((r, i) => i === 0 || r.draftRank! > ranked[i - 1].draftRank!))
+  assert.ok(v.board.findIndex((r) => r.draftRank == null) > ranked.length - 1, 'unranked players come after the ranked')
+  assert.ok(v.board.some((r) => r.forMe === 0), 'the top card reads 0 for my team')
+  const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)
+  const h = buildView(harker, { ...emptyDraft('t'), slot: 5 }, new Map())
+  assert.ok(h.board.every((r) => r.draftRank == null))
+  assert.ok(h.board.every((r, i) => i === 0 || r.rank >= h.board[i - 1].rank))
+})
