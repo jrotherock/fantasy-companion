@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { evaluate, type Snapshot } from './rules.js'
+import { evaluate, PLANNING, type Snapshot } from './rules.js'
 
 const FRI = new Date(2026, 8, 4, 9, 0, 0).getTime()
 const player = (o: Partial<Snapshot['players'][0]> & { name: string }) => ({
@@ -69,6 +69,20 @@ test('every alert carries a deadline, or it is a note not an alert', () => {
   }), SUN)
   assert.ok(all.length >= 3)
   assert.ok(all.every((x) => x.deadline != null))
+})
+
+test('a bye a week out is planning, and does not mark a league today', () => {
+  /*
+   * The home screen counts what needs you now. A bye eleven days away is a
+   * thing to carry into the next waiver run — it still shows on the league's
+   * own screen and still earns a notification near its deadline, but marking a
+   * tile for it makes "three things in two leagues" mean less every time it is
+   * true of something nobody can act on yet.
+   */
+  assert.ok(PLANNING.has('bye-ahead'))
+  for (const r of ['starter-out', 'starter-questionable', 'lineup-gain', 'waivers-closing']) {
+    assert.ok(!PLANNING.has(r), `${r} is a thing to do now, not to plan for`)
+  }
 })
 
 test('waivers close when they close, not always "tonight"', () => {

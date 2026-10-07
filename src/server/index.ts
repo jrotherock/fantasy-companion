@@ -51,7 +51,7 @@ const parts0 = (u: URL) => u.pathname.split('/').filter(Boolean)[0]
 import * as deliver from './deliver.js'
 import * as alerts from './alerts.js'
 import type { Alert } from './alerts.js'
-import { evaluate } from './rules.js'
+import { evaluate, PLANNING } from './rules.js'
 import { survivalAlert } from './survival.js'
 import { practiceReport } from './nflverse.js'
 import { weeklyProjections, projFor } from './projections.js'
@@ -1499,7 +1499,10 @@ const server = createServer(async (req, res) => {
     // opened. Read from the last rules pass rather than recomputed here: four
     // league evaluations on every poll of the home screen would be absurd.
     const marks: Record<string, { count: number; worst: number; first: string }> = {}
-    for (const [leagueId, list] of outstanding) {
+    for (const [leagueId, all] of outstanding) {
+      // What needs you now. A bye eleven days out is for the league's own
+      // screen and for the next waiver run, not for a mark on this one.
+      const list = all.filter((a) => !PLANNING.has(a.rule))
       if (!list.length) continue
       const worst = Math.max(...list.map((a) => a.consequence))
       marks[leagueId] = {

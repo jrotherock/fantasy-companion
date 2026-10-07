@@ -448,7 +448,7 @@ if (MODE === 'nudge') {
     const ftPct = (id: string) => byId.get(id)!.projection?.shooting.ftPct ?? 0
     for (const t of pcts.split(',').map(Number)) {
       console.error(`bigs at ${Math.round(t * 100)}%+ FT in the top 150: ` + [...value.entries()].sort((a, b) => b[1] - a[1]).slice(0, 150).map(([id]) => id).filter((id) => isC(id) && ftPct(id) >= t).map((id) => byId.get(id)!.name).join(', '))
-      for (const d of [0.02, 0.04]) strategies[`bigs ${Math.round(t * 100)}%+ FT +${d}`] = nudged((id) => (isC(id) && ftPct(id) >= t ? d : 0))
+      for (const d of (arg('deltas') ?? '0.02,0.04').split(',').map(Number)) strategies[`bigs ${Math.round(t * 100)}%+ FT +${d}`] = nudged((id) => (isC(id) && ftPct(id) >= t ? d : 0))
     }
   } else {
     for (const d of [0.02, 0.04, 0.08]) strategies[`FT-friendly bigs +${d}`] = nudged((id) => (ftFriendlyBig(id) ? d : 0))
@@ -609,7 +609,7 @@ for (const [name, pick] of Object.entries(strategies)) {
       if (process.argv.includes('--dump') && name.startsWith('the app')) for (const id of mine) { const sp = seasonPlayer(id); console.error('DUMP', mine.indexOf(id) + 1, byId.get(id)!.name, sp.team, sp.play.toFixed(2), sp.from ?? '', sp.box.pts.toFixed(1), (rowOf.get(id)?.games.gp ?? 0).toFixed(0), contribOf.get(id)!.pts.toFixed(2)) }
       if (RAW) (modelRates[name] ??= []).push(winChances(strengthOf(mine), mine.length, base))
       res.allPlay.push(ap)
-      if (DUMP) appendFileSync(DUMP, JSON.stringify({ strategy: name, first: FIRST ?? null, slot, seed, ap }) + '\n')
+      if (DUMP) appendFileSync(DUMP, JSON.stringify({ strategy: name, first: FIRST ?? null, slot, seed, ap, ...(process.argv.includes('--dump-roster') ? { mine: mine.map((id) => byId.get(id)!.name) } : {}) }) + '\n')
       res.cats.push(expectedCats(me, mine.length, base))
       res.bySlot[slot - 1].push(ap)
     }

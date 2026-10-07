@@ -95,6 +95,21 @@ const NEAR_LOCK = 3 * 60 * 60 * 1000
  *
  * `display` drops the gates and keeps the rules. What gets pushed stays gated.
  */
+/**
+ * Rules that are planning rather than today.
+ *
+ * The home screen answers one question — what needs you now — and counts the
+ * leagues that do. A bye eleven days out does not: it is a thing to carry into
+ * the next waiver run, not a reason to mark a league this evening, and marking
+ * one for it makes "three things in two leagues" mean less every time it is
+ * true of something you cannot act on yet.
+ *
+ * They still belong on the league's own screen, where you have gone to look,
+ * and they still earn a notification when their deadline is close — only the
+ * tile stays quiet.
+ */
+export const PLANNING: ReadonlySet<string> = new Set(['bye-ahead'])
+
 export function evaluate(
   s: Snapshot,
   now = Date.now(),
