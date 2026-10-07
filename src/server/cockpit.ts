@@ -1206,9 +1206,27 @@ export async function buildTiles(
         const margin = chop.cushion == null ? ''
           : chop.onTheBlock ? ` · ${Math.abs(chop.cushion).toFixed(1)} below the next lowest`
           : ` · ${chop.cushion.toFixed(1)} clear of the chop`
+        /*
+         * What the week comes to, with the place and the cushion left to the
+         * card's own standing column and tag instead of said again in the
+         * sentence. Said twice they crowded out the one line that explains
+         * the card's pill — and a lineup to fix, already written into the
+         * note above, must survive this rewrite rather than be replaced by a
+         * number shown twice over.
+         */
+        const reading = phase === 'live' && chop.points != null
+          ? `${chop.points.toFixed(1)} so far \u00b7 projected ${chop.projected?.toFixed(1) ?? '\u2014'}.`
+          : `Projected ${chop.projected?.toFixed(1) ?? '\u2014'} this week.`
         if (score) {
-          score = { ...score, theirs: null, margin: null, contest: null, win: null,
-            note: `Projected ${where}${margin}.` }
+          const note = urgency === 'act' ? score.note : reading
+          score = { ...score, theirs: null, margin: null, contest: null, win: null, note }
+          /*
+           * A lineup to fix is carried onto the tile, because the guillotine
+           * card reads its sentence off the tile and not off the scoreline —
+           * there is no margin left to hang one beside. Nothing else is
+           * carried over: a starter worth watching has already said so.
+           */
+          if (urgency === 'act') why = note
         }
         /*
          * The survival reading replaces any head-to-head one, including the
@@ -1226,11 +1244,9 @@ export async function buildTiles(
           } else if (phase === 'live') {
             urgency = 'quiet'
             action = 'Live'
-            why = chop.points != null
-              ? `${chop.points.toFixed(1)} so far · projected ${where}${margin}.`
-              : `Projected ${where}${margin}.`
+            why = reading
           } else if (urgency === 'quiet') {
-            why = `Projected ${where}${margin}.`
+            why = reading
           }
         }
       }

@@ -940,11 +940,14 @@ function LeagueCard({ t, onOpen, mark, close }: {
       {t.chop && t.chop.cushion != null ? (
         <div className="cklive">
           <div>
-            <div className="ckwhy">
-              {t.phase === 'live' && t.chop.points != null
-                ? `${t.chop.points.toFixed(1)} so far · projected ${t.chop.projected?.toFixed(1) ?? '—'}.`
-                : `Projected ${t.chop.projected?.toFixed(1) ?? '—'} this week.`}
-            </div>
+            {/*
+              * The card's own sentence, not a projection rebuilt here. Rebuilt,
+              * it overwrote whatever explained the pill below it — "check one
+              * thing", a close call, a lineup to fix — with a number the
+              * standing column and the tag beside it already give. The server
+              * falls back to the projection when there is nothing better to say.
+              */}
+            <div className="ckwhy">{t.why}</div>
             {t.score && <Movers score={t.score} />}
           </div>
           <ChopTag c={t.chop} />
