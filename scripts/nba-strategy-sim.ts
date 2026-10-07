@@ -456,6 +456,24 @@ if (MODE === 'nudge') {
   }
 }
 
+if (MODE === 'sigma') {
+  // Option 2: wider category noise, so the cards give up less readily on categories they trail — against the bigs lift.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  const pickWith = (b: typeof base, bonus: (id: string) => number = () => 0): Pick => (avail, mine, overall, slot) => {
+    const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
+      { teams: league.teams, rounds, slot, overall, spread: H }, b, { canTake: canTake(mine), neutralUntil: 0 })
+    if (!advice.length) return windowOf(avail, mine)[0]
+    return advice.map((a) => ({ id: a.id, s: a.score + bonus(a.id) })).sort((x, y) => y.s - x.s)[0].id
+  }
+  const wide = (k: number) => ({ ...base, sigma: Object.fromEntries(CATS.map((c) => [c, base.sigma[c] * k])) as Strength })
+  const isC = (id: string) => seatPositions(posOf(id)).includes('C')
+  const stretch = (id: string) => (isC(id) && (byId.get(id)!.projection?.shooting.ftPct ?? 0) >= 0.8 ? 0.02 : 0)
+  strategies['the app (recommender)'] = pickWith(base)
+  strategies['cards + 80%+ FT bigs lift'] = pickWith(base, stretch)
+  for (const k of [1.25, 1.5, 2]) strategies[`noise x${k}`] = pickWith(wide(k))
+}
+
 if (MODE === 'informed') {
   // After pick 1, informed by builds: (1) the cards reading my real roster from pick 2; (2) a planner that plays the
   // rest of my draft forward under every build — the room taking players in ADP order between my turns, me taking the

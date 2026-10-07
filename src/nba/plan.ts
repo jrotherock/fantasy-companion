@@ -689,7 +689,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       avoided: tags.get(a.id) === 'avoid',
     }))
     // Avoid costs a player one near-tie: never the pick on a coin flip, still the pick when clearly best.
-    advice = handicapAvoided(advice, tags, avoidMargin(prep, advice))
+    advice = stretchBigs(prep, handicapAvoided(advice, tags, avoidMargin(prep, advice)))
   }
 
   // ── Paths and targets ahead ──
@@ -842,7 +842,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
         ? adviseCategories(prep.cats.rows.filter((x) => !taken.has(x.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
           { canTake, neutralUntil: d.locks.length ? 0 : READ_FROM, ignore: d.locks })
         : advisePoints(prep.points!.rows.filter((x) => !taken.has(x.id)), spot, 25, canTake)
-      return handicapAvoided(r as any, tags, avoidMargin(prep, r))
+      return stretchBigs(prep, handicapAvoided(r as any, tags, avoidMargin(prep, r)))
     }
     const ranked = onClock ? advice : fresh()
     // Ordered as the cards will be on the clock — those who will not last first, then the playoff
@@ -1073,6 +1073,23 @@ export function takeBy(prep: Prepared, slot: number, tags: Map<string, PrefTag>,
 export function avoidMargin(prep: Prepared, advice: { score: number }[]): number {
   return prep.cats ? 0.02 : Math.abs(advice[0]?.score ?? 0) * 0.01
 }
+/**
+ * Bigs who do not cost FT% (C-eligible, projected 80%+ at the line) get a small lift in
+ * categories leagues. The cards treat rebounds and FG% as mostly lost once a team falls
+ * behind in them, and so pass over the big who would give them back for free — Collins,
+ * Jaren Jackson, Towns. In box-score seasons the lift won +0.57 ± 0.57 and +1.23 ± 0.58
+ * weeks in 100 on two sets of fresh rooms (2026-10-07); 85%+ changed nothing, larger
+ * lifts and a lift for all bigs lost.
+ */
+export const STRETCH_BIG_FT = 0.8
+export const STRETCH_BIG_LIFT = 0.02
+export function stretchBigs<T extends { id: string; score: number }>(prep: Prepared, advice: T[]): T[] {
+  if (!prep.cats) return advice
+  const lift = (id: string) => (prep.positions(id).includes('C') && (prep.players.get(id)?.projection?.shooting.ftPct ?? 0) >= STRETCH_BIG_FT ? STRETCH_BIG_LIFT : 0)
+  if (!advice.some((a) => lift(a.id))) return advice
+  return advice.map((a) => (lift(a.id) ? { ...a, score: a.score + lift(a.id) } : a)).sort((a, b) => b.score - a.score)
+}
+
 export function handicapAvoided<T extends { id: string; score: number }>(advice: T[], tags: Map<string, PrefTag>, margin: number): T[] {
   if (!advice.some((a) => tags.get(a.id) === 'avoid')) return advice
   return advice.map((a) => (tags.get(a.id) === 'avoid' ? { ...a, score: a.score - margin } : a)).sort((a, b) => b.score - a.score)
