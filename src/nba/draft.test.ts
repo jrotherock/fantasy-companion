@@ -134,3 +134,13 @@ test('a player still on the board is likelier to last than his ADP alone says', 
   assert.equal(survives(20, 22, sp, 22), survives(20, 22, sp))
   assert.equal(survives(60, 30, sp), survives(60, 30, sp, undefined))
 })
+
+test('avoid costs one near-tie: an avoided player loses a coin flip and keeps a clear lead', async () => {
+  const { handicapAvoided } = await import('./plan.js')
+  const tags = new Map([['ad', 'avoid' as const]])
+  const close = handicapAvoided([{ id: 'ad', score: 5.01 }, { id: 'other', score: 5.0 }], tags, 0.02)
+  assert.equal(close[0].id, 'other')
+  const clear = handicapAvoided([{ id: 'ad', score: 5.1 }, { id: 'other', score: 5.0 }], tags, 0.02)
+  assert.equal(clear[0].id, 'ad')
+  assert.ok(Math.abs(clear[0].score - 5.08) < 1e-9)
+})

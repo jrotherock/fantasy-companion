@@ -424,7 +424,9 @@ export interface DraftView {
     locks: Cat[]
     expected: number | null
   }
-  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; context: PlayerContext | null; bestBuild: BestBuild | null
+  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; context: PlayerContext | null;
+    /** Tagged avoid: his score carries the handicap (handicapAvoided). */
+    avoided: boolean; bestBuild: BestBuild | null
     /** Which of my roster's weak categories he would help, from my first pick on. */
     fits: Cat[]
     /** Which of its strong ones he would add to: leaning in rather than covering. */
@@ -675,7 +677,10 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       fits: prep.cats ? fitsOf(contribution(prep.cats.byId.get(a.id)!)) : [],
       stacks: prep.cats ? stacksOf(contribution(prep.cats.byId.get(a.id)!)) : [],
       hurts: prep.cats ? hurtsOf(contribution(prep.cats.byId.get(a.id)!)) : [],
+      avoided: tags.get(a.id) === 'avoid',
     }))
+    // Avoid costs a player one near-tie: never the pick on a coin flip, still the pick when clearly best.
+    advice = handicapAvoided(advice, tags, avoidMargin(prep, advice))
   }
 
   // ── Paths and targets ahead ──
@@ -823,11 +828,14 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   let queue: DraftView['queue'] = null
   if (spot && myNext != null && myNext - overall <= 2) {
     // On the clock the cards are already unfiltered; off it, rank everyone as if the pick were now.
-    const ranked = onClock ? advice
-      : (prep.cats
-        ? adviseCategories(prep.cats.rows.filter((r) => !taken.has(r.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
+    const fresh = (): typeof advice[number][] => {
+      const r = prep.cats
+        ? adviseCategories(prep.cats.rows.filter((x) => !taken.has(x.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
           { canTake, neutralUntil: d.locks.length ? 0 : BUILD_FROM, ignore: d.locks })
-        : advisePoints(prep.points!.rows.filter((r) => !taken.has(r.id)), spot, 25, canTake))
+        : advisePoints(prep.points!.rows.filter((x) => !taken.has(x.id)), spot, 25, canTake)
+      return handicapAvoided(r as any, tags, avoidMargin(prep, r))
+    }
+    const ranked = onClock ? advice : fresh()
     // Ordered as the cards will be on the clock — those who will not last first, then the playoff
     // tiebreak — or a near-tie flips between now and then and the queue takes the wrong man.
     const order = onClock ? takeNow : (() => {
@@ -1046,6 +1054,19 @@ export function takeBy(prep: Prepared, slot: number, tags: Map<string, PrefTag>,
     if (k < groups.length && groups[k].players.length < perPick) groups[k].players.push(row(id, r, mine[k]))
   }
   return { slot, teams, gone, picks: groups }
+}
+
+/**
+ * The avoid tag's cost: one near-tie, the same margin the cards call a coin flip
+ * (0.02 categories a week, or 1% of the top score in points). An avoided player
+ * loses every close call and is still the pick when he is clearly the best.
+ */
+export function avoidMargin(prep: Prepared, advice: { score: number }[]): number {
+  return prep.cats ? 0.02 : Math.abs(advice[0]?.score ?? 0) * 0.01
+}
+export function handicapAvoided<T extends { id: string; score: number }>(advice: T[], tags: Map<string, PrefTag>, margin: number): T[] {
+  if (!advice.some((a) => tags.get(a.id) === 'avoid')) return advice
+  return advice.map((a) => (tags.get(a.id) === 'avoid' ? { ...a, score: a.score - margin } : a)).sort((a, b) => b.score - a.score)
 }
 
 export function changes(prev: DraftView | null, next: DraftView, now = Date.now()): FeedItem[] {

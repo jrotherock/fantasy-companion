@@ -17,7 +17,7 @@
  * all-play win rate. Expected categories a week against an average team is
  * reported beside it.
  */
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, appendFileSync } from 'node:fs'
 import type { NbaPlayer } from '../src/nba/types.js'
 import { categoryZ, rankBuild, rosterSpots, CATS, type Cat } from '../src/nba/value.js'
 import { adpFor, adviseCategories, survives, FOOTBALL_SPREAD, type AdpSpread, baseline, contribution, expectedCats, winChances, zero, BUILD_FROM, type Strength } from '../src/nba/draft.js'
@@ -40,6 +40,10 @@ const WINDOW = Number(arg('window') ?? 4)
 const MODE = arg('mode') ?? 'fit'
 /** `--first "Name"` takes that player with my first pick, from the slots where he is realistically there (`--slots 1-6`). */
 const FIRST = arg('first')
+/** `--reserve`: keep the `--first` player from the room until my first pick, so he is always there to take. */
+const RESERVE_FIRST = process.argv.includes('--reserve')
+/** `--dump path`: every draft's weeks won, as JSON lines, for paired comparisons across runs. */
+const DUMP = arg('dump')
 const [SLOT_FROM, SLOT_TO] = (arg('slots') ?? '').split('-').map(Number)
 /** `--room-spread 2,0.12`: how far the room strays from ADP (sd = a + b * ADP). Football's measure by default. */
 const ROOM: AdpSpread = (() => { const [a, b] = (arg('room-spread') ?? '2,0.18').split(',').map(Number); return { a, b } })()
@@ -245,7 +249,9 @@ function draft(slot: number, seed: number, pick: Pick): { mine: string[]; teams:
     else {
       const ok = canTake(teams[seat - 1])
       // A roster whose seats nobody left can fill takes the best player anyway, as a manager would.
-      id = byScatter(avail.filter((x) => ok(x) || never.has(x)))[0] ?? byScatter(avail)[0]
+      // --reserve: the forced first pick is held back from the room until I have taken him, so any player can be tested in my seat.
+      const held = RESERVE_FIRST && firstId && teams[slot - 1].length === 0 ? firstId : null
+      id = byScatter(avail.filter((x) => x !== held && (ok(x) || never.has(x))))[0] ?? byScatter(avail.filter((x) => x !== held))[0]
     }
     taken.add(id)
     teams[seat - 1].push(id)
@@ -400,6 +406,15 @@ if (MODE === 'centers') {
   strategies['3 C by my pick 13'] = cMin(3, 13)
 }
 
+if (MODE === 'pool') {
+  // One strategy: the app, after whatever --first forces (or its own first pick without one).
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  // --follow value: after the first pick, best available by value (a neutral drafter, no build-reading), to tell a
+  // player's own worth from what the cards' later picks happen to lack.
+  if (arg('follow') === 'value') strategies['best value'] = (avail, mine) => windowOf(avail, mine)[0]
+  else strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], { a: 2, b: 0.12 })
+}
+
 if (MODE === 'survival') {
   // Survival given that he is on the board at my pick, against survival from ADP alone (the old way).
   for (const k of Object.keys(strategies)) delete strategies[k]
@@ -514,6 +529,7 @@ for (const [name, pick] of Object.entries(strategies)) {
       if (process.argv.includes('--dump') && name.startsWith('the app')) for (const id of mine) { const sp = seasonPlayer(id); console.error('DUMP', mine.indexOf(id) + 1, byId.get(id)!.name, sp.team, sp.play.toFixed(2), sp.from ?? '', sp.box.pts.toFixed(1), (rowOf.get(id)?.games.gp ?? 0).toFixed(0), contribOf.get(id)!.pts.toFixed(2)) }
       if (RAW) (modelRates[name] ??= []).push(winChances(strengthOf(mine), mine.length, base))
       res.allPlay.push(ap)
+      if (DUMP) appendFileSync(DUMP, JSON.stringify({ strategy: name, first: FIRST ?? null, slot, seed, ap }) + '\n')
       res.cats.push(expectedCats(me, mine.length, base))
       res.bySlot[slot - 1].push(ap)
     }

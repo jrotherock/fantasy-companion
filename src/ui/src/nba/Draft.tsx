@@ -303,6 +303,9 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
               {a.mates.length > 0 && <span className="nb-mates" title="Same NBA team, same nights. Information only: in simulated seasons, avoiding teammates made no difference">shares {a.team}'s nights with {a.mates.map((n) => n.split(' ').at(-1)).join(', ')}</span>}
               {a.bestBuild && a.bestBuild.name !== view.aheadBuild && <span className="nb-bb">{ordinal(a.bestBuild.rank)} if {a.bestBuild.name.replace(/^Punt /, 'you punt ')}</span>}
             </div>
+            {a.avoided && <div className="nb-avoidnote">{i === 0 && cards[1]
+              ? `On your avoid list, and still the pick: ahead by ${view.league.scoring === 'categories' ? (a.score - cards[1].score).toFixed(3) : Math.round(a.score - cards[1].score)} after the handicap`
+              : 'On your avoid list: shown only when clearly better than the alternatives'}</div>}
             {a.context && <ContextLine c={a.context} />}
             {(a.fits.length > 0 || a.stacks.length > 0 || a.hurts.length > 0) && (
               <div className="nb-fits">

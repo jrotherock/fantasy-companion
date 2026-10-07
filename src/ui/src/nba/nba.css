@@ -248,3 +248,4 @@ div.nb-cat { cursor: default; }
 .nb-actrow td { padding: 0 !important; background: rgba(90,169,255,.06); }
 .nb-acts { position: sticky; left: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.4rem 0.5rem; max-width: calc(100vw - 2.5rem); }
 .nb-acts .btn.nb-on { border-color: var(--blue); color: var(--blue); }
+.nb-avoidnote { font-size: var(--t-xs); color: var(--amber); }
