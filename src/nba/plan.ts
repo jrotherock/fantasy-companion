@@ -1054,7 +1054,7 @@ export function compareView(prep: Prepared, d: StoredDraft, tags: Map<string, Pr
   }
 }
 
-export interface TakeByPlayer { id: string; name: string; team: string | null; positions: string[]; rank: number; adp: number; chance: number }
+export interface TakeByPlayer { id: string; name: string; team: string | null; positions: string[]; rank: number; adp: number; chance: number; tier: number | null }
 export interface TakeBy {
   slot: number
   teams: number
@@ -1073,15 +1073,18 @@ export interface TakeBy {
 export function takeBy(prep: Prepared, slot: number, tags: Map<string, PrefTag>, turns = 6, perPick = 8): TakeBy {
   const L = prep.league
   const teams = L.teams
-  const rank = prep.cats
+  const value = prep.cats
     ? new Map(rankBuild(prep.cats.rows, L, []).map((r) => [r.id, r.rank]))
     : new Map([...prep.points!.rows].sort((a, b) => b.value - a.value).map((r, i) => [r.id, i + 1]))
+  // The league's Draft rank where it has one, as the board orders it; everyone else after, by value.
+  const order = [...value.keys()].sort((a, b) => (prep.draftRank.get(a)?.rank ?? 10_000 + value.get(a)!) - (prep.draftRank.get(b)?.rank ?? 10_000 + value.get(b)!))
+  const rank = new Map(order.map((id, i) => [id, i + 1]))
   const mine: number[] = []
   for (let o = 1; o <= teams * prep.rounds && mine.length < turns + 1; o++) if (slotFor(o, teams) === slot) mine.push(o)
   const pool = [...rank.entries()].filter(([id]) => tags.get(id) !== 'never').sort((a, b) => a[1] - b[1]).slice(0, teams * (turns + 2))
   const row = (id: string, r: number, at: number): TakeByPlayer => {
     const p = prep.players.get(id)!
-    return { id, name: p.name, team: p.team, positions: prep.positions(id), rank: r, adp: prep.adp(id), chance: survives(prep.adp(id), at, L.adpSpread) }
+    return { id, name: p.name, team: p.team, positions: prep.positions(id), rank: r, adp: prep.adp(id), chance: survives(prep.adp(id), at, L.adpSpread), tier: prep.draftRank.get(id)?.tier ?? null }
   }
   // Each player's last turn of mine at which he is more likely there than not.
   const lastTurn = (id: string) => {

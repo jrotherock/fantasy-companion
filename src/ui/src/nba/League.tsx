@@ -111,7 +111,7 @@ async function post(path: string, data: unknown = {}) {
 type TakeByView = {
   slot: number; teams: number; knownSlot: number | null
   gone: { id: string; name: string; rank: number; adp: number; chance: number }[]
-  picks: { overall: number; round: number; players: { id: string; name: string; team: string | null; positions: string[]; rank: number; adp: number; chance: number }[] }[]
+  picks: { overall: number; round: number; players: { id: string; name: string; team: string | null; positions: string[]; rank: number; adp: number; chance: number; tier: number | null }[] }[]
 }
 
 /**
@@ -144,12 +144,12 @@ function TakeBySection({ leagueId }: { leagueId: string }) {
           <div className="nl-takebyh">Your pick {i + 1} <span className="nl-dim">· round {g.round}, #{g.overall}</span></div>
           {g.players.length === 0 ? <div className="nl-dim">—</div> : (
             <div className="nl-takebylist">{g.players.map((p) => (
-              <span key={p.id}><b>{p.name}</b> <span className="nl-dim">#{p.rank} · ADP {Math.round(p.adp)} · {pc(p.chance)}</span></span>
+              <span key={p.id}><b>{p.name}</b> <span className="nl-dim">#{p.rank}{p.tier != null ? ` · T${p.tier}` : ''} · ADP {Math.round(p.adp)} · {pc(p.chance)}</span></span>
             ))}</div>
           )}
         </div>
       ))}
-      <p className="nl-note">Each player sits at the last of your picks where he is more likely there than not; # is value rank, the % his chance at that pick. Grouped by when players go, not tiers of value; in the draft itself the cards already weigh who will be back.</p>
+      <p className="nl-note">Each player sits at the last of your picks where he is more likely there than not; # is the board's order (the Draft rank and its tier where the league has one, else value), the % his chance at that pick. Grouped by when players go, not tiers of value; in the draft itself the cards already weigh who will be back.</p>
     </Section>
   )
 }
