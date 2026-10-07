@@ -71,6 +71,26 @@ test('every alert carries a deadline, or it is a note not an alert', () => {
   assert.ok(all.every((x) => x.deadline != null))
 })
 
+test('waivers close when they close, not always "tonight"', () => {
+  /*
+   * The six-hour gate is on the notification; the screens ask for this ungated
+   * so the money and the hole stay visible all week. On those it announced a
+   * deadline six days out as though it were this evening.
+   */
+  const base = {
+    assumedDay: 'Tuesday', budget: 200, spent: 0,
+    holes: [{ slot: 'TE', reason: 'nobody who can play', severity: 95 }],
+    targets: [{ name: 'A Tight End', pos: 'TE', fills: 'TE', projected: 8 }],
+  }
+  const now = Date.UTC(2026, 9, 7, 19, 0) // a Wednesday evening
+  const said = (inMs: number) =>
+    evaluate(snap({ waivers: { ...base, clearsAt: now + inMs } }), now, { display: true })
+      .find((a) => a.rule === 'waivers-closing')!.headline
+  assert.match(said(3 * 3600_000), /close tonight/)
+  assert.match(said(20 * 3600_000), /close tomorrow/)
+  assert.match(said(6 * 86400_000), /close on Tuesday/, 'six days out is not tonight')
+})
+
 test('waivers need money, a hole and somebody to fix it — all three', () => {
   const SOON = Date.now() + 2 * 60 * 60 * 1000
   const full = {

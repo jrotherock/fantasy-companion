@@ -442,8 +442,18 @@ if (MODE === 'nudge') {
     return advice.map((a) => ({ id: a.id, s: a.score + bonus(a.id) })).sort((a, b) => b.s - a.s)[0].id
   }
   strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H, false, false, false, true)
-  for (const d of [0.02, 0.04, 0.08]) strategies[`FT-friendly bigs +${d}`] = nudged((id) => (ftFriendlyBig(id) ? d : 0))
-  strategies['all bigs +0.04'] = nudged((id) => (isC(id) ? 0.04 : 0))
+  // --ft-pcts 0.85,0.80: bigs whose projected FT% is at least each threshold, instead of the z cut.
+  const pcts = arg('ft-pcts')
+  if (pcts) {
+    const ftPct = (id: string) => byId.get(id)!.projection?.shooting.ftPct ?? 0
+    for (const t of pcts.split(',').map(Number)) {
+      console.error(`bigs at ${Math.round(t * 100)}%+ FT in the top 150: ` + [...value.entries()].sort((a, b) => b[1] - a[1]).slice(0, 150).map(([id]) => id).filter((id) => isC(id) && ftPct(id) >= t).map((id) => byId.get(id)!.name).join(', '))
+      for (const d of [0.02, 0.04]) strategies[`bigs ${Math.round(t * 100)}%+ FT +${d}`] = nudged((id) => (isC(id) && ftPct(id) >= t ? d : 0))
+    }
+  } else {
+    for (const d of [0.02, 0.04, 0.08]) strategies[`FT-friendly bigs +${d}`] = nudged((id) => (ftFriendlyBig(id) ? d : 0))
+    strategies['all bigs +0.04'] = nudged((id) => (isC(id) ? 0.04 : 0))
+  }
 }
 
 if (MODE === 'informed') {

@@ -267,11 +267,24 @@ export function evaluate(
     if (left > 0 && closing > 0 && (closing < SIX_HOURS || opts.display)) {
       const hole = w.holes[0]
       const pick = w.targets[0]
+      /*
+       * When they actually close.
+       *
+       * This said "tonight" whatever the clock held. The six-hour gate is on
+       * the notification; the screens ask for it ungated so the money and the
+       * hole are visible all week, and on those it was announcing a deadline
+       * six days out as though it were this evening. Said in the reader's own
+       * terms — tonight, tomorrow, or the day by name.
+       */
+      const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+      const when = closing < 12 * 3600_000 ? 'tonight'
+        : closing < 36 * 3600_000 ? 'tomorrow'
+        : `on ${DAYS[new Date(w.clearsAt).getDay()]}`
       out.push({
         id: `${s.leagueId}:waiver:${Math.floor(w.clearsAt / 86400000)}:${hole.slot}`,
         leagueId: s.leagueId,
         rule: 'waivers-closing',
-        headline: `Waivers close tonight with $${left} unspent — ${s.label}`,
+        headline: `Waivers close ${when} with $${left} unspent — ${s.label}`,
         detail: `${hole.slot}: ${hole.reason}. ${pick.name} is available${
           pick.projected ? ` and projects ${pick.projected.toFixed(1)}` : ''}.`,
         // Real money and a real hole, but recoverable next week — so it is
