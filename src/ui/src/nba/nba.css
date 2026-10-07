@@ -16,8 +16,10 @@ html, body, #root { height: auto; }
   padding: max(0.5rem, env(safe-area-inset-top, 0px)) max(0.75rem, env(safe-area-inset-right, 0px)) 0 max(0.75rem, env(safe-area-inset-left, 0px)); }
 .nb-fixed { flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--line); }
 .nb-panel { flex: 1 1 auto; overflow: visible; min-height: 9rem; padding: 0.5rem 0 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
-.nb-app > .statusbar { position: sticky; top: 0; z-index: 30; background: var(--bg); margin-bottom: 0.5rem; box-shadow: 0 0 0 0.75rem var(--bg); }
-.nb-table thead th { position: sticky; top: var(--nb-top, 0px); z-index: 20; background: var(--surface); }
+/* Pinned below the iPhone's own status area (the safe area), with its gutters and that area painted over. */
+.nb-app > .statusbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg); margin-bottom: 0.5rem;
+  box-shadow: 0 0 0 0.75rem var(--bg), 0 calc(-1 * env(safe-area-inset-top, 0px)) 0 0.75rem var(--bg); }
+.nb-table thead th { position: sticky; top: calc(var(--nb-top, 0px) + env(safe-area-inset-top, 0px)); z-index: 20; background: var(--surface); }
 @media (max-width: 760px) {
   html, body, #root { height: auto; }
   .nb-app { height: auto; }
@@ -274,3 +276,6 @@ div.nb-cat { cursor: default; }
 /* Every width: the player cell wraps (a drafted row carries "#14 Team 7"), so the table never outgrows its box */
 .nb-table td.nb-l { white-space: normal; min-width: 9rem; }
 .nb-table .nb-tierrow td { white-space: normal; }
+
+/* A phone: the filter gets its own full line above the position chips */
+@media (max-width: 600px) { .nb-filters { flex-wrap: wrap; } .nb-filters .field { flex: 1 1 100%; max-width: none; min-width: 0; } }
