@@ -382,7 +382,21 @@ export function advise(
   for (const [slotIdx, inc] of promoted) {
     // Pair each promotion with the weakest player it displaces that it could
     // actually replace, so the move reads as one the manager can make.
-    const outIdx = benched.findIndex((o) => eligibleFor(slots[slotIdx], o))
+    let outIdx = benched.findIndex((o) => eligibleFor(slots[slotIdx], o))
+    /*
+     * Failing that, the weakest man who is actually leaving the lineup.
+     *
+     * A cascade moves people between slots: a receiver promoted into WR pushes
+     * the incumbent receiver out to the flex, which drops the back who was
+     * standing there — and a back is not eligible for a receiver's slot. The
+     * pairing found nobody, charged the promotion nothing, and the reshuffle
+     * reported itself as an empty slot being filled. One lineup came out at
+     * "15.0 points on your bench" with five and a half actually on the table,
+     * the difference being a receiver's whole projection counted as gain.
+     */
+    if (outIdx < 0 && benched.length) {
+      outIdx = benched.reduce((lo, o, i, all) => (value(o) < value(all[lo]) ? i : lo), 0)
+    }
     const out = outIdx >= 0 ? benched.splice(outIdx, 1)[0] : null
     // Nothing to measure against: he is not projected at nought, he is unread.
     const unknownOut = !!out && out.projected == null && !cannotPlay(out.injuryStatus)

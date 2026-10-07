@@ -539,7 +539,21 @@ async function runAlerts(): Promise<void> {
  * poll — a freshly started server would otherwise show an empty callout for ten
  * minutes while the header counted problems it would not name.
  */
-function leagueNeeds(l: any, roster: any, waivers: any): Alert[] {
+/**
+ * What this league is asking of you, for the league's own screen.
+ *
+ * The same rules the home screen's marks come from, and they have to be given
+ * the same things to look at. They were not: the alert pass handed the rules
+ * the byes, the week and the scoreline, and this handed them the roster and
+ * nothing else — so a tile could say "week 6 leaves you short at K, DST",
+ * and opening the league, which is the one thing that sentence invites you to
+ * do, showed no sign of it. A screen that marks a league has to be able to
+ * say what for.
+ */
+function leagueNeeds(
+  l: any, roster: any, waivers: any,
+  also: { byes?: unknown; week?: number | null; matchup?: unknown; capturedAt?: number | null } = {},
+): Alert[] {
   const draftAt = l.draftTime ? new Date(l.draftTime).getTime() : null
   const draft = draftAt != null && draftAt > Date.now()
     ? { at: draftAt, slotSet: l.mySlot != null, mySlot: l.mySlot ?? null }
@@ -562,6 +576,10 @@ function leagueNeeds(l: any, roster: any, waivers: any): Alert[] {
     link: leagueLink(l),
     waivers: waivers ?? null,
     draft,
+    byes: (also.byes ?? null) as any,
+    week: also.week ?? null,
+    matchup: (also.matchup ?? null) as any,
+    capturedAt: also.capturedAt ?? null,
     players: roster.players.map((p: any) => ({
       id: p.id, name: p.name, pos: p.pos, starter: p.starter,
       injuryStatus: p.injuryStatus, projected: p.projected,
@@ -3083,7 +3101,14 @@ const server = createServer(async (req, res) => {
       guillotine: l.feed === 'sleeper' ? null : yahooLeague.chopFor(String(l.leagueKey).split('.').pop() ?? ''),
       /** A league found through the API that has not played its first week yet. */
       startsWeek: (l as any).startWeek != null && week < (l as any).startWeek ? (l as any).startWeek : null,
-      needs: leagueNeeds(l, roster, waivers).map((a) => ({
+      needs: leagueNeeds(l, roster, waivers, {
+        byes, week: (roster as any)?.week ?? null,
+        matchup: matchup
+          ? { mine: matchup.projected.mine, theirs: matchup.projected.theirs,
+              started: matchup.started }
+          : null,
+        capturedAt: l.feed === 'sleeper' ? null : (roster?.capturedAt ?? null),
+      }).map((a) => ({
         rule: a.rule, headline: a.headline, detail: a.detail,
         consequence: a.consequence,
         deadline: a.deadline,

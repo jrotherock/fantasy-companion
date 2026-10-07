@@ -441,3 +441,29 @@ test('a real nought still counts as one', () => {
   assert.equal(Number(swap.gain.toFixed(2)), 14.21, 'measured against a man projected to score nothing')
   assert.ok(out.decisive > 14, 'which is genuinely on the table')
 })
+
+test('a cascade charges the man who actually leaves, not nothing', () => {
+  /*
+   * A receiver promoted into WR pushes the incumbent receiver to the flex,
+   * which drops the back standing there — and a back cannot fill a receiver's
+   * slot. Pairing only on eligibility left him unpaired, charged the promotion
+   * nothing, and reported a reshuffle as an empty slot being filled: one real
+   * lineup came out at "15.0 points on your bench" with five and a half on the
+   * table.
+   */
+  const slots = slotsFor({ WR: 2 }, [{ name: 'W/R/T', eligible: ['RB', 'WR', 'TE'], count: 1 }])
+  const p = (id: string, pos: string, projected: number, starter: boolean) =>
+    ({ id, name: id, pos, projected, starter, injuryStatus: null })
+  const squad = [
+    p('WR_A', 'WR', 13.53, true), p('WR_B', 'WR', 10.71, true),
+    p('RB_FLEX', 'RB', 9.11, true),
+    p('WR_BENCH', 'WR', 12.53, false),
+  ]
+  const a = advise(slots, squad)
+  assert.ok(a.swaps.every((s) => s.out != null), 'somebody always leaves a full lineup')
+  assert.equal(a.swaps[0].out!.id, 'RB_FLEX', 'the man who actually drops out')
+  assert.ok(Math.abs(a.gain - (a.optimal - a.current)) < 1e-9)
+  assert.ok(a.decisive <= a.gain + 1e-9,
+    `what is decisive cannot exceed what is on the table (${a.decisive} vs ${a.gain})`)
+  assert.ok(Math.abs(a.gain - 3.42) < 0.01, `13.53+12.53+10.71 against 13.53+10.71+9.11 (got ${a.gain})`)
+})
