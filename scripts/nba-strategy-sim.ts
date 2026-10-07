@@ -201,10 +201,10 @@ const strategies: Record<string, Pick> = {
 }
 
 /** The app's advice, with near-ties (within 0.02 categories, as on the screen) broken by fit or not at all. */
-function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack' | 'mates', locks: Cat[] = [], spread: AdpSpread = FOOTBALL_SPREAD, lineup = false, naiveTurns = false, unconditional = false): string {
+function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack' | 'mates', locks: Cat[] = [], spread: AdpSpread = FOOTBALL_SPREAD, lineup = false, naiveTurns = false, unconditional = false, readNow = false): string {
   // As the app does: a lock drops the category and ends the four-pick wait.
   const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
-    { teams: league.teams, rounds, slot, overall, spread, naiveTurns, unconditional }, base, { canTake: canTake(mine), neutralUntil: locks.length ? 0 : BUILD_FROM, ignore: locks,
+    { teams: league.teams, rounds, slot, overall, spread, naiveTurns, unconditional }, base, { canTake: canTake(mine), neutralUntil: locks.length || readNow ? 0 : BUILD_FROM, ignore: locks,
       strength: lineup ? (rs) => startedStrength(rs.map((r) => r.id)) : undefined })
   if (!advice.length) return windowOf(avail, mine)[0]
   if (tie === 'none' || !mine.length) return advice[0].id
@@ -415,6 +415,76 @@ if (MODE === 'pool') {
   else strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], { a: 2, b: 0.12 })
 }
 
+if (MODE === 'build') {
+  // Building around a forced first pick from pick 2: the roster read as it is at once, with or without punts locked.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  strategies['cards as they are (read from pick 4)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  strategies['read the roster from pick 2'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H, false, false, false, true)
+  for (const punt of (arg('punts') ?? 'ft;ft+tpm;ft+to').split(';')) {
+    const p = punt.split('+') as Cat[]
+    strategies[`punt ${punt} from pick 2`] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', mine.length >= 1 ? p : [], H)
+  }
+}
+
+if (MODE === 'nudge') {
+  // A nudge toward bigs who do not cost FT% (C-eligible, FT% z no worse than -0.5: about 76% or better on modest volume): a bonus on the card score, in
+  // categories a week, against the cards as they now are (reading the roster from pick 2).
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  const isC = (id: string) => seatPositions(posOf(id)).includes('C')
+  const ftFriendlyBig = (id: string) => isC(id) && (rowOf.get(id)?.z.ft ?? -9) >= -0.5
+  console.error('FT-friendly bigs in the top 150 by value: ' + [...value.entries()].sort((a, b) => b[1] - a[1]).slice(0, 150).map(([id]) => id).filter(ftFriendlyBig).map((id) => byId.get(id)!.name).join(', '))
+  const nudged = (bonus: (id: string) => number): Pick => (avail, mine, overall, slot) => {
+    const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
+      { teams: league.teams, rounds, slot, overall, spread: H }, base, { canTake: canTake(mine), neutralUntil: 0 })
+    if (!advice.length) return windowOf(avail, mine)[0]
+    return advice.map((a) => ({ id: a.id, s: a.score + bonus(a.id) })).sort((a, b) => b.s - a.s)[0].id
+  }
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H, false, false, false, true)
+  for (const d of [0.02, 0.04, 0.08]) strategies[`FT-friendly bigs +${d}`] = nudged((id) => (ftFriendlyBig(id) ? d : 0))
+  strategies['all bigs +0.04'] = nudged((id) => (isC(id) ? 0.04 : 0))
+}
+
+if (MODE === 'informed') {
+  // After pick 1, informed by builds: (1) the cards reading my real roster from pick 2; (2) a planner that plays the
+  // rest of my draft forward under every build — the room taking players in ADP order between my turns, me taking the
+  // best for that build still there — and follows whichever build finishes strongest on all nine categories.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  const planPaths: { punt: Cat[] }[] = [...PATHS, { punt: ['reb'] }, { punt: ['fg', 'reb'] }, { punt: ['ft', 'to'] }]
+  const planRanks = planPaths.map((pp) => ({ punt: pp.punt, rank: new Map(rankBuild(rows, league, pp.punt).map((r) => [r.id, r.rank])) }))
+  const byAdp = [...pool].sort((a, b) => adp(a) - adp(b))
+  const finish = (avail: string[], mine: string[], overall: number, slot: number, rank: Map<string, number>): string[] => {
+    const left = new Set(avail), team = [...mine]
+    for (let o = overall; o <= league.teams * rounds && team.length < rounds; o++) {
+      let id: string | undefined
+      if (slotFor(o, league.teams) === slot) {
+        const ok = canTake(team)
+        id = [...left].filter((x) => ok(x)).sort((a, b) => (rank.get(a) ?? 999) - (rank.get(b) ?? 999))[0]
+        if (id) team.push(id)
+      } else id = byAdp.find((x) => left.has(x))
+      if (id) left.delete(id)
+    }
+    return team
+  }
+  const planned = (avail: string[], mine: string[], overall: number, slot: number) => {
+    let best = planRanks[0], bestScore = -Infinity
+    for (const pr of planRanks) {
+      const team = finish(avail, mine, overall, slot, pr.rank)
+      const score = expectedCats(strengthOf(team), team.length, base)
+      if (score > bestScore) { bestScore = score; best = pr }
+    }
+    return best.punt
+  }
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  strategies['read the roster from pick 2'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H, false, false, false, true)
+  strategies['build planner from pick 2'] = (avail, mine, overall, slot) => {
+    if (!mine.length) return appPick(avail, mine, overall, slot, 'none', [], H)
+    return appPick(avail, mine, overall, slot, 'none', planned(avail, mine, overall, slot), H, false, false, false, true)
+  }
+}
+
 if (MODE === 'survival') {
   // Survival given that he is on the board at my pick, against survival from ADP alone (the old way).
   for (const k of Object.keys(strategies)) delete strategies[k]
@@ -548,7 +618,7 @@ for (const [name, r] of Object.entries(results)) {
   const diff = r.allPlay.map((x, i) => x - ref[i])
   console.log(`${name.padEnd(24)} ${(mean(r.allPlay) * 100).toFixed(1).padStart(6)}%  ${(2 * se(r.allPlay) * 100).toFixed(1).padStart(4)}   ${(mean(diff) * 100 >= 0 ? '+' : '') + (mean(diff) * 100).toFixed(1).padStart(5)} pts  ${(2 * se(diff) * 100).toFixed(1).padStart(4)}       ${mean(r.cats).toFixed(2)}   ${(mean(r.idle) * 100).toFixed(1)}%`)
 }
-const app = results['the app (recommender)'].allPlay
+const app = (results['the app (recommender)'] ?? Object.values(results)[0]).allPlay
 for (const name of Object.keys(results).filter((n) => n !== 'the app (recommender)' && n !== 'best value' && (MODE !== 'fit' || n.startsWith('app +')))) {
   const d = results[name].allPlay.map((x, i) => x - app[i])
   console.log(`${name} vs the app: ${(mean(d) * 100).toFixed(2)} pts ± ${(2 * se(d) * 100).toFixed(2)} (2se); changed the pick in ${d.filter((x) => x !== 0).length} of ${d.length} drafts`)

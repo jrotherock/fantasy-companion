@@ -523,7 +523,7 @@ function Build({ view, act, preview }: { view: DraftView; act: Act; preview: Dra
       <div className="nb-cats">
         {CATS.map((c) => b.locks.includes(c)
           ? <button key={c} className="nb-cat nb-cat-lock" onClick={() => tap(c)} title="Locked as a punt — click to unlock"><span className="l">{LABEL[c]}</span><span className="v">punt 🔒</span></button>
-          : <button key={c} className={`nb-cat ${win ? `nb-cat-${tone(win[c]) || 'even'}` : 'nb-cat-open'}${early ? ' nb-cat-early' : ''}`} onClick={() => tap(c)} title={early ? 'Early: moves a lot until your 4th pick. Click to lock as a punt' : 'Click to lock as a punt'}><span className="l">{LABEL[c]}</span><span className="v">{win ? pct(win[c]) : '—'}{after && win && <PreviewDelta from={win[c]} to={after[c]} />}</span></button>)}
+          : <button key={c} className={`nb-cat ${win ? `nb-cat-${tone(win[c]) || 'even'}` : 'nb-cat-open'}${early ? ' nb-cat-early' : ''}`} onClick={() => tap(c)} title={early ? 'Early: moves a lot until your 4th pick, though the cards already read it. Click to lock as a punt' : 'Click to lock as a punt'}><span className="l">{LABEL[c]}</span><span className="v">{win ? pct(win[c]) : '—'}{after && win && <PreviewDelta from={win[c]} to={after[c]} />}</span></button>)}
       </div>
       <div className="nb-bfoot">
         {win ? (
@@ -534,10 +534,10 @@ function Build({ view, act, preview }: { view: DraftView; act: Act; preview: Dra
             <span><i className="nb-dot" style={{ background: 'var(--red)' }} />{count('r') + b.locks.length} given up</span>
             <span className="mono">{live.reduce((s, c) => s + win[c], 0).toFixed(1)} of 9 a week</span>
             <span className="nb-dim">{early
-              ? `Early — after ${view.roster.length} pick${view.roster.length === 1 ? '' : 's'}, against an average team's first ${view.roster.length}. These move a lot until your ${b.buildFrom}th pick; until then the cards take the best player.`
+              ? `Early — after ${view.roster.length} pick${view.roster.length === 1 ? '' : 's'}, against an average team's first ${view.roster.length}. These move a lot until your ${b.buildFrom}th pick, but the cards already weigh them: they read your roster from your 2nd pick.`
               : 'Goal: 5–6 winning, 2–3 given up on purpose.'}</span>
           </div>
-        ) : <div className="nb-meter nb-dim">Win chances show from your first pick. Until your {b.buildFrom}th the cards take the best player; the direction is a lean, not a plan.</div>}
+        ) : <div className="nb-meter nb-dim">Win chances show from your first pick, and the cards read your roster from your 2nd. Until your {b.buildFrom}th the direction is a lean, not a plan.</div>}
         {p.length > 1 && (
           <div className="nb-dir">
             <div className="nb-arrow">{gap < 0.15 ? `→ Open · top builds within ${spread.toFixed(2)}` : `→ ${p[0].name} · ${LEAN_TEXT[lead]}`}</div>

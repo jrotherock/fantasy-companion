@@ -526,6 +526,15 @@ export function roomOf(prep: Prepared, d: StoredDraft, teams: number, mySlot: nu
  * everyone left is below the line, nought outranks them all. He stays on the
  * board, with his injury note; he is just never the pick.
  */
+/**
+ * From which pick the cards read my roster as it is, rather than as an average team's.
+ * It was the 4th (BUILD_FROM), on the grounds that one to three picks do not make a build.
+ * Reading it from the 2nd tested even (2026-10-07, 400 drafts every slot: +0.35 ± 0.14 on
+ * the category model, -0.6 ± 0.7 in box-score seasons), and the cards then answer the
+ * first pick at once — which is what a person drafting expects to see.
+ */
+export const READ_FROM = 1
+
 export const MIN_GAMES = 10
 
 const gamesOf = (prep: Prepared, id: string) => prep.cats?.byId.get(id)?.games.gp ?? prep.points?.byId.get(id)?.games.gp ?? 0
@@ -568,7 +577,7 @@ function forward(prep: Prepared, taken: Set<string>, mine: string[], slot: numbe
       const canTake = canTakeFor(prep, roster, tags)
       const advice = prep.cats
         ? adviseCategories(prep.cats.rows.filter((r) => !gone.has(r.id)), roster.map((x) => prep.cats!.byId.get(x)!).filter(Boolean), spot, prep.cats.base,
-          { shortlist: 6, lookahead: 10, canTake, ignore: punt, neutralUntil: punt.length ? 0 : BUILD_FROM })
+          { shortlist: 6, lookahead: 10, canTake, ignore: punt, neutralUntil: punt.length ? 0 : READ_FROM })
         : advisePoints(prep.points!.rows.filter((r) => !gone.has(r.id)), spot, 6, canTake)
       id = advice[0]?.id
       if (id) { roster.push(id); plan.push({ overall, id }) }
@@ -655,7 +664,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     const raw = prep.cats
       ? adviseCategories(prep.cats.rows.filter((r) => !taken.has(r.id) && there(r.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
         // A lock is a build you have declared: from then on the roster is read as it is.
-        { canTake, neutralUntil: d.locks.length ? 0 : BUILD_FROM, ignore: d.locks })
+        { canTake, neutralUntil: d.locks.length ? 0 : READ_FROM, ignore: d.locks })
       : advisePoints(prep.points!.rows.filter((r) => !taken.has(r.id) && there(r.id)), spot, 25, canTake)
     // Fifteen, though the screen shows six: comparing mocks needs the score of whoever I took instead.
     advice = raw.slice(0, 15).map((a) => ({
@@ -831,7 +840,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     const fresh = (): typeof advice[number][] => {
       const r = prep.cats
         ? adviseCategories(prep.cats.rows.filter((x) => !taken.has(x.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
-          { canTake, neutralUntil: d.locks.length ? 0 : BUILD_FROM, ignore: d.locks })
+          { canTake, neutralUntil: d.locks.length ? 0 : READ_FROM, ignore: d.locks })
         : advisePoints(prep.points!.rows.filter((x) => !taken.has(x.id)), spot, 25, canTake)
       return handicapAvoided(r as any, tags, avoidMargin(prep, r))
     }
@@ -948,7 +957,7 @@ export function compareView(prep: Prepared, d: StoredDraft, tags: Map<string, Pr
   if (!want.length) return null
   const scored = prep.cats
     ? adviseCategories(prep.cats.rows.filter((r) => !taken.has(r.id)), mine.map((id) => prep.cats!.byId.get(id)!).filter(Boolean), spot, prep.cats.base,
-      { canTake, neutralUntil: d.locks.length ? 0 : BUILD_FROM, ignore: d.locks, include: want })
+      { canTake, neutralUntil: d.locks.length ? 0 : READ_FROM, ignore: d.locks, include: want })
     : advisePoints(prep.points!.rows.filter((r) => !taken.has(r.id)), spot, 25, canTake, want)
   const back = (id: string) => nextAfter == null ? 0 : nextAfter === myNext + 1 ? 1 : survives(prep.adp(id), nextAfter, L.adpSpread, myNext)
   const sides: CompareSide[] = want.map((id) => {
