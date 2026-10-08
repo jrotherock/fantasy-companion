@@ -279,3 +279,11 @@ div.nb-cat { cursor: default; }
 
 /* A phone: the filter gets its own full line above the position chips */
 @media (max-width: 600px) { .nb-filters { flex-wrap: wrap; } .nb-filters .field { flex: 1 1 100%; max-width: none; min-width: 0; } }
+
+/* The simulations' marks: where they disagree with the round a player usually goes. */
+.nb-sim { margin-left: 0.3rem; font-size: var(--t-xs); }
+.nb-sim-down { color: var(--red); }
+.nb-sim-up { color: var(--green); }
+.nb-sim-lean { color: var(--green); opacity: 0.5; }
+.nb-actsim { font-size: var(--t-xs); margin: 0.2rem 0; text-align: left; white-space: normal; }
+.nb-actsim.nb-sim-lean { opacity: 0.8; }

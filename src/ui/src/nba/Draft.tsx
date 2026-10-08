@@ -733,6 +733,14 @@ function sortValue(r: BoardRow, key: SortKey, teams = 10): number {
   }
 }
 
+/** The simulations' mark on a player, in words. */
+function simNote(m: NonNullable<BoardRow['simMark']>): string {
+  const peers = `players who usually go in rounds ${m.rounds[0]}–${m.rounds[1]}`
+  if (m.kind === 'down') return `Sims: about ${-m.gap} weeks in 100 worse than ${peers} — let him go`
+  if (m.kind === 'up') return `Sims: about ${m.gap} weeks in 100 better than ${peers}`
+  return `Sims lean: about ${m.gap} weeks in 100 better than ${peers}, near the edge of the noise`
+}
+
 function Board({ view, act, id, pins, pin, full, onFull }: { view: DraftView; act: Act; id: string; pins: string[]; pin: (id: string) => void; full: boolean; onFull: () => void }) {
   const [pos, setPos] = useState('All')
   const [q, setQ] = useState('')
@@ -785,7 +793,7 @@ function Board({ view, act, id, pins, pin, full, onFull }: { view: DraftView; ac
       {help && (
         <div className="nb-help">
           <ul>
-            {hasDraft && <li><b>#</b> is the <b>Draft rank</b>: each player taken first in thousands of simulated seasons, ranked by weeks won, in <b>tiers</b> — inside a tier the order is close to a coin flip. <b>Val</b> is pure value for the build your roster leans to; <b>For me</b> is what the cards would say of him for your roster now (0 is the top card). Tap any header to sort by it.</li>}
+            {hasDraft && <li><b>#</b> is the board's order: the <b>simulations' top 5</b> (each player taken first in thousands of simulated seasons, ranked by weeks won), then everyone by the <b>round he usually goes</b> — past the top 5 the simulations cannot tell most players apart. Where they can: <b>▼</b> about 2.5+ weeks in 100 worse than players going around the same rounds (let him go), <b>▲</b> that much better, a faint <b>▲</b> a lean of 2+. Tap the name for the numbers. <b>Val</b> is pure value for the build your roster leans to; <b>For me</b> is what the cards would say of him for your roster now (0 is the top card). Tap any header to sort by it.</li>}
             <li><b>{hasDraft ? 'Val' : '#'}</b> is value for your build; it re-ranks when you lock, and locked columns fade. Click any column header to sort by it, best first; click again to reverse, a third time to drop it. Several at once: the last one clicked leads and the earlier ones break its ties (Val, then Rd: each round, best value first), numbered beside the arrows. <b>#</b> clears every sort.</li>
             <li><b>Coloured cells</b>: what a player adds per category over a season. Read down the <span className="nb-amber">amber headers</span> — your coin flips — to find who tips one to green.</li>
             {!cats && <li><b>FP/g</b> fantasy points a game; <b>FP/min</b> per minute he is projected to play — high means he scores in what he gets, so more minutes would show; <b>FP season</b> a game times his games. <b>Value</b> is not the season total: it is points a game above the replacement line times games, so a replacement-level player is worth nought however much he scores.</li>}
@@ -808,7 +816,7 @@ function Board({ view, act, id, pins, pin, full, onFull }: { view: DraftView; ac
         <table className="nb-table">
           <thead>
             <tr>
-              {th('rank', '#', { title: hasDraft ? 'Draft rank: weeks won in simulated seasons, in tiers' : 'Value rank' })}<th className="nb-l">Player</th><th>Pos</th>
+              {th('rank', '#', { title: hasDraft ? 'The simulations’ top 5, then by usual round' : 'Value rank' })}<th className="nb-l">Player</th><th>Pos</th>
               {hasDraft && th('vrank', 'Val', { title: 'Value rank for the build the board is reading' })}
               {th('forme', 'For me', { title: 'What the cards would say of him for your roster now: his score less the best available, in categories a week (or value). 0 is the top card.' })}
               {th('gp', 'G', { className: 'nb-wide' })}{th('po', 'PO', { title: 'Games in your playoff weeks', className: 'nb-wide' })}{th('adp', 'ADP', { className: 'nb-wide' })}{th('rd', 'Rd', { title: 'The round he usually goes: ADP over the teams in the league' })}{th('next', 'Next', { title: 'Chance he lasts to your next decision' })}
@@ -820,14 +828,15 @@ function Board({ view, act, id, pins, pin, full, onFull }: { view: DraftView; ac
           <tbody>
             {rows.map((r, i) => (
               <Fragment key={r.id}>
-              {!sort && hasDraft && (i === 0 || rows[i - 1].tier !== r.tier) && (
-                <tr className="nb-tierrow"><td colSpan={cols}>{r.tier != null ? `Tier ${r.tier}` : 'Not in the simulated ranking — by value'}{i === 0 && r.tier != null && <span className="nb-dim"> · inside a tier the order is close to a coin flip</span>}</td></tr>
+              {!sort && hasDraft && (i === 0 || rows[i - 1].simTop !== r.simTop || (rows[i - 1].draftRank != null) !== (r.draftRank != null)) && (
+                <tr className="nb-tierrow"><td colSpan={cols}>{r.simTop ? 'The simulations’ top 5' : r.draftRank != null ? <>Then by the round each usually goes <span className="nb-dim">· <span className="nb-sim-down">▼</span> the simulations say let him go, <span className="nb-sim-up">▲</span> they like him more than his round, <span className="nb-sim-lean">▲</span> a lean</span></> : 'No ADP — by value'}</td></tr>
               )}
               <tr className={`${r.tag === 'never' ? 'nb-never' : ''} ${r.takenAt != null ? 'nb-taken' : ''} ${r.mine ? 'nb-mine' : ''} ${pins.includes(r.id) ? 'nb-pinned' : ''}`}>
                 <td className="nb-dim">{hasDraft ? (r.draftRank ?? '—') : r.rank}</td>
                 <td className="nb-l">
                   {/* The name opens the row's actions: on a phone anything at the row's far end is off screen. */}
                   <button className="nb-name" aria-expanded={openId === r.id} title="Compare, like, avoid or never" onClick={() => setOpenId(openId === r.id ? null : r.id)}>{pins.includes(r.id) && <span className="nb-pin">⇄ </span>}{r.name}</button>
+                  {r.simMark && <span className={`nb-sim nb-sim-${r.simMark.kind}`} title={simNote(r.simMark)}>{r.simMark.kind === 'down' ? '▼' : '▲'}</span>}
                   {r.tag && <span className={`nb-tag nb-${r.tag}`}>{r.tag}</span>}
                   {r.bestBuild && r.bestBuild.name !== view.aheadBuild && !locks.length && (
                     <span className="nb-bb" title={`${r.bestBuild.balanced}th balanced; ${ordinal(r.bestBuild.rank)} in a ${r.bestBuild.name} build`}>{ordinal(r.bestBuild.rank)} {r.bestBuild.name.replace(/^Punt /, 'punting ')}</span>
@@ -865,6 +874,7 @@ function Board({ view, act, id, pins, pin, full, onFull }: { view: DraftView; ac
                       <button className={`btn ${r.tag === 'never' ? 'nb-on' : ''}`} onClick={() => tag(r, 'never')}>✕ Never</button>
                       <button className="nb-link" onClick={() => setOpenId(null)}>Close</button>
                     </div>
+                    {r.simMark && <div className={`nb-actsim nb-sim-${r.simMark.kind}`}>{simNote(r.simMark)}</div>}
                     <div className="nb-actstats">
                       {cats ? CATS.map((c) => <span key={c} className={locks.includes(c) ? 'nb-off' : ''}>{LABEL[c]} <b style={heat(r.contrib![c])}>{r.contrib![c].toFixed(1)}</b></span>)
                         : <><span>FP/g <b>{r.fpg?.toFixed(1)}</b></span><span>FP/min <b>{r.fpMin != null ? r.fpMin.toFixed(2) : '—'}</b></span><span>FP season <b>{r.fpSeason != null ? Math.round(r.fpSeason).toLocaleString() : '—'}</b></span><span>Value <b>{Math.round(r.value)}</b></span></>}

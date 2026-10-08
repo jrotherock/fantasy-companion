@@ -93,12 +93,44 @@ export interface Prepared {
   teams: Map<string, TeamLoad>
   /** A player's projection against last season's, and who joined his team. */
   context: (id: string) => PlayerContext | null
-  /** The board's Draft rank (scripts/nba-draft-rank.ts), when this league has one: place, tier, weeks-won delta. */
-  draftRank: Map<string, { rank: number; tier: number; delta: number }>
+  /**
+   * The board's order where the league has a Draft rank (scripts/nba-draft-rank.ts): the simulations' top
+   * players first, then everyone with an ADP by the round he usually goes. A mark where the simulations
+   * disagree with that round (simMarks).
+   */
+  draftRank: Map<string, { rank: number; mark: SimMark | null }>
 }
 
 /** data/nba/draft-rank/<league>.json, as written by scripts/nba-draft-rank.ts. */
-export interface DraftRankFile { players: { name: string; delta: number; tier: number }[] }
+export interface DraftRankFile { players: { name: string; delta: number; err: number; tier: number }[] }
+
+/**
+ * Where the first-pick simulations disagree with when a player usually goes. Each tested player against the
+ * others who go within a round of him (the middle of their weeks won in 100): 2.5 or more weeks better or
+ * worse, and beyond his own error bar, is a mark; 2 or more better is a softer lean. Thresholds checked
+ * 2026-10-08: at 2 a dozen players qualify, most on the edge of their error bars; at 3 even Giannis (−2.9)
+ * misses.
+ */
+export interface SimMark { kind: 'up' | 'lean' | 'down'; gap: number; rounds: [number, number] }
+const SIM_MARK = 2.5, SIM_LEAN = 2
+/** The simulations' top places kept first on the board, above the rounds: the gaps there are real. */
+export const SIM_TOP = 5
+
+export function simMarks(file: DraftRankFile, roundOf: (name: string) => number | null): Map<string, SimMark> {
+  const rows = file.players.map((r) => ({ ...r, rd: roundOf(r.name) })).filter((r): r is typeof r & { rd: number } => r.rd != null)
+  const median = (x: number[]) => { const s = [...x].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 }
+  const out = new Map<string, SimMark>()
+  for (const r of rows) {
+    const peers = rows.filter((x) => x !== r && Math.abs(x.rd - r.rd) <= 1)
+    if (peers.length < 5) continue
+    const gap = Math.round((r.delta - median(peers.map((x) => x.delta))) * 10) / 10
+    const rounds: [number, number] = [Math.max(1, r.rd - 1), r.rd + 1]
+    if (gap <= -SIM_MARK && -gap > r.err) out.set(r.name, { kind: 'down', gap, rounds })
+    else if (gap >= SIM_MARK && gap > r.err) out.set(r.name, { kind: 'up', gap, rounds })
+    else if (gap >= SIM_LEAN) out.set(r.name, { kind: 'lean', gap, rounds })
+  }
+  return out
+}
 
 /** Where a player's expected return comes from: a date you set, or CBS's injury report. */
 export interface Availability {
@@ -206,15 +238,22 @@ export function prepare(
     teams: new Map(), context: () => null, draftRank: new Map(),
   }
   if (draftRankFile) {
-    const idOf = new Map(players.map((p) => [p.name, p.id]))
-    // The rank is the board's order: tier by tier, and inside a tier by the round each player usually goes,
-    // earliest first (the order inside a tier is close to a coin flip, so when he goes decides it); ties by weeks won.
+    // Past the top few the simulations cannot tell most players apart (error bars of ±2 weeks in 100 against
+    // gaps of 1 or 2), so the board goes by the round each player usually goes, earliest first; inside a round
+    // the simulations' order, then the untested by ADP. Players with no ADP at all stay off it (value order, after).
+    const byName = new Map(players.map((p) => [p.name, p]))
     const round = (id: string) => Math.ceil(adp(id) / league.teams)
-    draftRankFile.players
-      .map((r, i) => ({ id: idOf.get(r.name), r, i }))
-      .filter((x): x is { id: string; r: DraftRankFile['players'][number]; i: number } => x.id != null)
-      .sort((a, b) => a.r.tier - b.r.tier || round(a.id) - round(b.id) || a.i - b.i)
-      .forEach(({ id, r }, i) => prepared.draftRank.set(id, { rank: i + 1, tier: r.tier, delta: r.delta }))
+    const simAt = new Map(draftRankFile.players.map((r, i) => [byName.get(r.name)?.id, i]))
+    const marks = simMarks(draftRankFile, (name) => { const p = byName.get(name); return p?.yahoo ? round(p.id) : null })
+    players
+      .filter((p) => p.projection && (p.yahoo != null || (simAt.get(p.id) ?? Infinity) < SIM_TOP))
+      .map((p) => ({ id: p.id, name: p.name, sim: simAt.get(p.id) ?? Infinity }))
+      .sort((a, b) => {
+        const ta = a.sim < SIM_TOP, tb = b.sim < SIM_TOP
+        if (ta || tb) return ta && tb ? a.sim - b.sim : ta ? -1 : 1
+        return round(a.id) - round(b.id) || a.sim - b.sim || adp(a.id) - adp(b.id)
+      })
+      .forEach(({ id, name }, i) => prepared.draftRank.set(id, { rank: i + 1, mark: marks.get(name) ?? null }))
   }
   // The 240 check, and each player's line against last season's (teamLoad.ts): information beside the advice, never in it.
   const loads = teamLoads(rawPlayers, teamNotes)
@@ -367,9 +406,11 @@ export function bestBuildOf(prep: Prepared, id: string): BestBuild | null {
 export interface BoardRow {
   id: string
   name: string
-  /** Place and tier in the league's Draft rank, when it has one (the board's default order). */
+  /** Place in the board's default order where the league has a Draft rank; the simulations' mark on him. */
   draftRank: number | null
-  tier: number | null
+  simMark: SimMark | null
+  /** One of the simulations' top places, kept above the rounds. */
+  simTop: boolean
   /**
    * For my team: his card score less the best available's, in categories a week (or value in points)
    * — what the cards would say of him for my roster now. Null outside the cards' shortlist.
@@ -764,7 +805,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   }
 
   // ── Board ──
-  // Default order: the Draft rank where the league has one (tiers, then usual round), the value rank for the rest after it.
+  // Default order: the Draft rank where the league has one (the top few, then usual round), the value rank for the rest after it.
   const boardOrder = (r: { draftRank: number | null; rank: number }) => (r.draftRank != null ? r.draftRank : 10_000 + r.rank)
   // For my team: the cards' own scores over a long shortlist, as a gap to the best of them.
   const forMe = new Map<string, number>()
@@ -786,7 +827,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     const dr = prep.draftRank.get(r.id)
     return {
       id: r.id, name: pl.name, team: pl.team, positions: prep.positions(r.id),
-      draftRank: dr?.rank ?? null, tier: dr?.tier ?? null,
+      draftRank: dr?.rank ?? null, simMark: dr?.mark ?? null, simTop: dr != null && dr.rank <= SIM_TOP,
       forMe: forMe.has(r.id) ? forMe.get(r.id)! : null,
       gp: r.games.gp, adp: pl.yahoo?.adp ?? null, yahooRank: pl.yahoo?.rank ?? null,
       value: v.value, rank: v.rank,
@@ -1061,7 +1102,7 @@ export function compareView(prep: Prepared, d: StoredDraft, tags: Map<string, Pr
   }
 }
 
-export interface TakeByPlayer { id: string; name: string; team: string | null; positions: string[]; rank: number; adp: number; chance: number; tier: number | null }
+export interface TakeByPlayer { id: string; name: string; team: string | null; positions: string[]; rank: number; adp: number; chance: number; simMark: SimMark | null }
 export interface TakeBy {
   slot: number
   teams: number
@@ -1091,7 +1132,7 @@ export function takeBy(prep: Prepared, slot: number, tags: Map<string, PrefTag>,
   const pool = [...rank.entries()].filter(([id]) => tags.get(id) !== 'never').sort((a, b) => a[1] - b[1]).slice(0, teams * (turns + 2))
   const row = (id: string, r: number, at: number): TakeByPlayer => {
     const p = prep.players.get(id)!
-    return { id, name: p.name, team: p.team, positions: prep.positions(id), rank: r, adp: prep.adp(id), chance: survives(prep.adp(id), at, L.adpSpread), tier: prep.draftRank.get(id)?.tier ?? null }
+    return { id, name: p.name, team: p.team, positions: prep.positions(id), rank: r, adp: prep.adp(id), chance: survives(prep.adp(id), at, L.adpSpread), simMark: prep.draftRank.get(id)?.mark ?? null }
   }
   // Each player's last turn of mine at which he is more likely there than not.
   const lastTurn = (id: string) => {

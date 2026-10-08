@@ -307,7 +307,7 @@ test('a card names the players I already have from his NBA team', () => {
   for (const a of v.advice) assert.deepEqual(a.mates, a.team === first.team ? [first.name] : [], a.name)
 })
 
-test('a league with a Draft rank opens the board in tiers, by usual round inside each; one without keeps value order', () => {
+test('a league with a Draft rank opens the board with the simulations\' top 5, then by usual round; one without keeps value order', () => {
   const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
   const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
   const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
@@ -315,12 +315,19 @@ test('a league with a Draft rank opens the board in tiers, by usual round inside
   const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor, {}, null, {}, file)
   const d = emptyDraft('t'); d.slot = 5
   const v = buildView(hoops, d, new Map())
+  assert.deepEqual(v.board.slice(0, 5).map((r) => r.name), file.players.slice(0, 5).map((x: any) => x.name))
+  assert.ok(v.board.slice(0, 5).every((r) => r.simTop) && !v.board[5].simTop)
   const ranked = v.board.filter((r) => r.draftRank != null)
-  assert.equal(ranked[0].name, file.players[0].name)
   assert.ok(ranked.every((r, i) => i === 0 || r.draftRank! > ranked[i - 1].draftRank!))
-  const rd = (r: { adp: number | null }) => Math.ceil(hoops.adp(ranked.find((x) => x === r)!.id) / 10)
-  assert.ok(ranked.every((r, i) => i === 0 || r.tier! > ranked[i - 1].tier! || (r.tier === ranked[i - 1].tier && rd(r) >= rd(ranked[i - 1]))), 'tiers, then the usual round inside each')
-  assert.ok(v.board.findIndex((r) => r.draftRank == null) > ranked.length - 1, 'unranked players come after the ranked')
+  const rd = (r: { id: string }) => Math.ceil(hoops.adp(r.id) / 10)
+  assert.ok(ranked.slice(5).every((r, i) => i === 0 || rd(r) >= rd(ranked[4 + i])), 'by usual round after the top 5')
+  const off = v.board.findIndex((r) => r.draftRank == null)
+  assert.ok(off === -1 || off > ranked.length - 1, 'players with no ADP come after')
+  const mark = (name: string) => v.board.find((r) => r.name === name)?.simMark?.kind ?? null
+  assert.equal(mark('Giannis Antetokounmpo'), 'down')
+  assert.equal(mark('Trae Young'), 'down')
+  assert.equal(mark('Anthony Edwards'), null)
+  assert.equal(mark('Donovan Clingan'), 'lean')
   assert.ok(v.board.some((r) => r.forMe === 0), 'the top card reads 0 for my team')
   const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)
   const h = buildView(harker, { ...emptyDraft('t'), slot: 5 }, new Map())
