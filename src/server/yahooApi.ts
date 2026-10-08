@@ -372,6 +372,14 @@ function cleared(): void {
 }
 
 /** Where the limits stand, for the status page. */
+/**
+ * Clears today's count and spend, by hand: for a day whose budget went somewhere it should not have (a leak,
+ * since fixed). Leaves Yahoo's own backoff and the bucket alone, so the pace is unchanged.
+ */
+export function resetToday(): void {
+  saveLimits({ ...limits(), day: today(), calls: 0, spend: {} })
+}
+
 export function limitsNow(): {
   backoffUntil: number | null; why: string | null; strikes: number
   callsToday: number; cap: number; replaying: string | null

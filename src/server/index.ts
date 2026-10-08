@@ -1364,6 +1364,11 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { round: r, limits: yahooApi.limitsNow() })
     }
 
+    if (step === 'reset-budget' && req.method === 'POST') {
+      yahooApi.resetToday()
+      return json(res, 200, yahooApi.limitsNow())
+    }
+
     if (step === 'raw') {
       if (!yahooApi.connected()) return json(res, 409, { error: 'not connected' })
       const path = url.searchParams.get('path') ?? ''
