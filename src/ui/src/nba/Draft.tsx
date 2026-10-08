@@ -379,7 +379,8 @@ function Tied({ view, act, pins, pin, second }: { view: DraftView; act: Act; pin
           <div key={x.id} className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''}`}>
             <span className="nm">{x.appPick && <span className="nb-apppick" title="The app's own pick">★ </span>}{x.name}
               {x.tag === 'like' && <span className="nb-tag nb-like">like</span>}{x.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
-            <span className="sub">{x.team} · {x.positions.join(', ')}{!x.appPick && <span className="nb-dim"> · {x.behind < 0.0005 ? 'level' : `−${x.behind.toFixed(3)}`}</span>}</span>
+            <span className="sub">{x.team} · {x.positions.join(', ')}<span className="nb-dim"> · {x.behind < 0.0005 ? 'top score' : `−${x.behind.toFixed(3)}`}</span></span>
+            {x.appPick && view.takeNow[0]?.tiebreak && <div className="nb-tiedwhy">The app’s pick on a playoff tiebreak: {view.takeNow[0].playoff} games in your playoff weeks</div>}
             <div className="nb-tiedfit">
               {x.adds.length > 0 && <span>{t.with ? 'adds' : 'best at'} {names(x.adds)}</span>}
               {x.fills.length > 0 && <span className="nb-fill"> — {names(x.fills)} where {t.with === 'your roster' ? 'you are' : `${t.with} is`} short</span>}

@@ -350,7 +350,7 @@ test('a near-tie shows the whole group, ordered by fit, the app\'s pick marked; 
   assert.equal(v.tied!.with, 'Tyrese Maxey')
   assert.equal(v.tied!.players.filter((x) => x.appPick).length, 1)
   assert.equal(v.tied!.players.find((x) => x.appPick)!.id, v.takeNow[0].id)
-  assert.ok(v.tied!.players.every((x) => v.takeNow[0].score - v.advice.find((a) => a.id === x.id)!.score <= 0.06 + 1e-9))
+  assert.ok(v.tied!.players.every((x) => v.takeNow[0].score - v.advice.find((a) => a.id === x.id)!.score <= 0.06 + 1e-9 && x.behind >= 0))
   const w = v.tied!.players.map((x) => x.canWait)
   assert.ok(w.every((x, i) => i === 0 || !w[i - 1] || x), 'those likely back next turn come last')
   const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)

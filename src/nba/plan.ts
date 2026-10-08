@@ -450,7 +450,7 @@ export interface TiedPlayer {
   name: string
   team: string | null
   positions: string[]
-  /** Card score behind the top card, categories a week. */
+  /** Card score behind the best in the group, categories a week (the app's pick can trail it by a playoff tiebreak). */
   behind: number
   /** The top card: the app's own pick. */
   appPick: boolean
@@ -977,13 +977,14 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     // Those who will not last first, then those likely back next turn (taking one of them now spends the turn).
     const group = advice.filter((a) => head.score - a.score <= TIE_GROUP).slice(0, TIE_MAX)
     if (group.length >= 4) {
+      const best = Math.max(...group.map((a) => a.score))
       const roster = CATS.reduce((o, c) => ({ ...o, [c]: mine.reduce((n, id) => n + contribution(prep.cats!.byId.get(id)!)[c], 0) }), {} as Record<Cat, number>)
       tied = {
         with: !mine.length ? null : mine.length === 1 ? p(mine[0]).name : 'your roster',
         players: group.map((a) => ({ a, fit: tiedFit(a.contrib!, roster, d.locks) }))
           .sort((x, y) => Number(waits(x.a)) - Number(waits(y.a)) || (mine.length ? y.fit.score - x.fit.score : y.a.score - x.a.score))
           .map(({ a, fit }) => ({
-            id: a.id, name: a.name, team: a.team, positions: a.positions, behind: head.score - a.score, appPick: a.id === head.id,
+            id: a.id, name: a.name, team: a.team, positions: a.positions, behind: best - a.score, appPick: a.id === head.id,
             adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), thenName: a.thenName, there: a.there, tag: a.tag,
           })),
       }

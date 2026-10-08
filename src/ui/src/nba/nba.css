@@ -296,3 +296,4 @@ div.nb-cat { cursor: default; }
 .nb-tiedwait { opacity: 0.75; }
 .nb-apppick { color: var(--amber); }
 @media (max-width: 600px) { .nb-tied { grid-template-columns: 1fr; } }
+.nb-tiedwhy { font-size: var(--t-xs); color: var(--amber); }
