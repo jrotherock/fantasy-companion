@@ -373,8 +373,8 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
   return (
     <div>
       <div className="nb-tiednote nb-dim">
-        {t.players.length} players within 0.06 categories a week of the app’s pick — the simulations cannot separate them.{' '}
-        {t.with ? <>Whoever will not be back first, then by fit with <b>{t.with}</b>.</> : 'In the cards’ order: no roster yet to fit.'} <b>★</b> is the app’s own pick.
+        {t.players.length} players who will not last, within 0.06 categories a week of the app’s pick — the simulations cannot separate them; those likely back are in the plan below.{' '}
+        {t.with ? <>Surest gone first, then by fit with <b>{t.with}</b>.</> : 'In the cards’ order: no roster yet to fit.'} <b>★</b> is the app’s own pick.
         <span className="nb-tiedkey"> <span className="nb-chip nb-chip-fill">+</span> fills a gap{t.with && t.with !== 'your roster' ? ` next to ${t.with.split(' ').at(-1)}` : ''} · <span className="nb-chip">plain</span> a strength you already have · <span className="nb-chip nb-chip-cost">−</span> he costs · tap a card for its numbers on Your build</span>
       </div>
       <div className="nb-tied">
@@ -572,7 +572,15 @@ function Build({ view, act, preview }: { view: DraftView; act: Act; preview: { n
   // Before the build is read the numbers are real but young: one or two players against an average start.
   const early = b.stage === 'open'
   const live = CATS.filter((c) => !b.locks.includes(c))
-  const count = (t: string) => (win ? live.filter((c) => tone(win[c]) === t).length : 0)
+  const countIn = (w: Record<Cat, number> | null, t: string) => (w ? live.filter((c) => tone(w[c]) === t).length : 0)
+  const count = (t: string) => countIn(win, t)
+  // While a card is looked at, the meter reads as if he were added, with the change beside each count.
+  const shown = after ?? win
+  const meter = (t: string) => {
+    const n = countIn(shown, t), d = after ? n - count(t) : 0
+    return <>{n}{d !== 0 && <b className={d > 0 === (t !== 'r' && t !== 'a') ? 'nb-up' : 'nb-down'}> ({d > 0 ? '+' : ''}{d})</b>}</>
+  }
+  const total = (w: Record<Cat, number>) => live.reduce((s, c) => s + w[c], 0)
   const tap = (c: Cat) => (b.locks.includes(c) ? act('locks', { locks: b.locks.filter((x) => x !== c) }) : setConfirm(c))
   const p = view.paths
   const gap = p.length > 1 ? p[0].expected - p[1].expected : 0
@@ -592,11 +600,11 @@ function Build({ view, act, preview }: { view: DraftView; act: Act; preview: { n
       <div className="nb-bfoot">
         {win ? (
           <div className="nb-meter">
-            <span><i className="nb-dot" style={{ background: 'var(--green)' }} />{count('g')} winning</span>
-            <span><i className="nb-dot nb-dot-lean" />{count('l')} leaning</span>
-            <span><i className="nb-dot" style={{ background: 'var(--amber)' }} />{count('a')} coin flips</span>
-            <span><i className="nb-dot" style={{ background: 'var(--red)' }} />{count('r') + b.locks.length} given up</span>
-            <span className="mono">{live.reduce((s, c) => s + win[c], 0).toFixed(1)} of 9 a week</span>
+            <span><i className="nb-dot" style={{ background: 'var(--green)' }} />{meter('g')} winning</span>
+            <span><i className="nb-dot nb-dot-lean" />{meter('l')} leaning</span>
+            <span><i className="nb-dot" style={{ background: 'var(--amber)' }} />{meter('a')} coin flips</span>
+            <span><i className="nb-dot" style={{ background: 'var(--red)' }} />{meter('r')}{b.locks.length ? ` + ${b.locks.length} locked` : ''} given up</span>
+            <span className="mono">{total(shown!).toFixed(2)} of 9 a week{after && <b className={total(after) >= total(win) ? 'nb-up' : 'nb-down'}> ({total(after) >= total(win) ? '+' : ''}{(total(after) - total(win)).toFixed(2)})</b>}</span>
             <span className="nb-dim">{early
               ? `Early — after ${view.roster.length} pick${view.roster.length === 1 ? '' : 's'}, against an average team's first ${view.roster.length}. These move a lot until your ${b.buildFrom}th pick, but the cards already weigh them: they read your roster from your 2nd pick.`
               : 'Goal: 5–6 winning, 2–3 given up on purpose.'}</span>

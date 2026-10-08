@@ -346,11 +346,11 @@ test('a near-tie shows the whole group, ordered by fit, the app\'s pick marked; 
   const d = emptyDraft('t'); d.slot = 5
   d.picks = [...before, maxey, ...rest.slice(0, 10)].map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
   const v = buildView(hoops, d, new Map())
-  assert.ok(v.tied && v.tied.players.length >= 4, 'round 2 at slot 5 is a near-tie')
+  assert.ok(v.tied && v.tied.players.length >= 3 && v.tied.players.length <= 6, 'round 2 at slot 5 is a near-tie')
   assert.equal(v.tied!.with, 'Tyrese Maxey')
   assert.equal(v.tied!.players.filter((x) => x.appPick).length, 1)
   assert.equal(v.tied!.players.find((x) => x.appPick)!.id, v.takeNow[0].id)
-  assert.ok(v.tied!.players.every((x) => v.takeNow[0].score - v.advice.find((a) => a.id === x.id)!.score <= 0.06 + 1e-9 && x.behind >= 0))
+  assert.ok(v.tied!.players.every((x) => Math.abs(v.takeNow[0].score - v.advice.find((a) => a.id === x.id)!.score) <= 0.06 + 1e-9 && x.behind >= 0 && !x.canWait))
   const u = v.tied!.players.map((x) => (x.canWait ? 2 : x.survives <= 0.25 ? 0 : 1))
   assert.ok(u.every((x, i) => i === 0 || x >= u[i - 1]), 'likely gone first, then coin flips, then those likely back')
   const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)

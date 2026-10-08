@@ -470,11 +470,13 @@ export interface TiedPlayer {
   tag: PrefTag | null
 }
 
-/** How close counts as a tie for the group: within the simulations' noise at a pick, categories a week. */
-/** Checked over slots 1–10 after each plausible first pick: at 0.05 slots 3 and 4 almost never group (the 4th player
- * sits just past it); at 0.06 slots 1 and 3–10 do, 4–8 players. */
+/**
+ * How close counts as a tie for the group: within the simulations' noise at a pick, categories a week. Checked over
+ * slots 1–10 after each plausible first pick: at 0.05 slots 3 and 4 almost never grouped; 0.06 groups most turns.
+ */
 export const TIE_GROUP = 0.06
-const TIE_MAX = 8
+/** Two rows of three at most; fewer than three is what the three cards already show. */
+const TIE_MAX = 6, TIE_MIN = 3
 
 /**
  * How a player fits a roster: his category values, weighted up where the roster is short (below zero)
@@ -521,7 +523,7 @@ export interface DraftView {
    */
   alsoClose: { id: string; name: string; behind: number }[]
   /**
-   * Categories only: when four or more players are within TIE_GROUP of the top card,
+   * Categories only: when three or more players who will not last are within TIE_GROUP of the top card,
    * the simulations cannot separate them, and the screen shows them all instead of three cards, ordered
    * by how each fits my roster so far (tiedFit). Information for the choice, never the advice: in 400
    * simulated drafts, letting fit break near-ties cost about half a point of all-play, so the top card
@@ -978,17 +980,21 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   const waits = (a: { canWait: boolean }) => a.canWait && !pairTurn
   // An empty roster has nothing to fit: only the first of a back-to-back pair groups then, in the cards' order.
   if (prep.cats && head && !waits(head) && (mine.length || pairTurn)) {
-    // Equal players, so the one who will not be back goes first: likely gone (75%+), then a coin flip, then those
-    // likely back next turn (taking one of them now spends the turn). Fit orders each group.
+    // Only the choices for this pick: those likely back next turn are the plan line's, not this one's (mocks
+    // 2026-10-08: eight of them crowded out the app's own pick). Likely gone (75%+) first, then coin flips; fit
+    // orders each. The app's pick is always in.
     const urgency = (a: { canWait: boolean; survives: number }): 0 | 1 | 2 => (waits(a) ? 2 : pairTurn || a.survives <= 0.25 ? 0 : 1)
-    const group = advice.filter((a) => head.score - a.score <= TIE_GROUP).slice(0, TIE_MAX)
-    if (group.length >= 4) {
+    const group = advice.filter((a) => !waits(a) && Math.abs(head.score - a.score) <= TIE_GROUP)
+    if (group.length >= TIE_MIN) {
       const best = Math.max(...group.map((a) => a.score))
       const roster = CATS.reduce((o, c) => ({ ...o, [c]: mine.reduce((n, id) => n + contribution(prep.cats!.byId.get(id)!)[c], 0) }), {} as Record<Cat, number>)
+      const ordered = group.map((a) => ({ a, fit: tiedFit(a.contrib!, roster, d.locks) }))
+        .sort((x, y) => urgency(x.a) - urgency(y.a) || (mine.length ? y.fit.score - x.fit.score : y.a.score - x.a.score))
+      const shown = ordered.slice(0, TIE_MAX)
+      if (!shown.some((x) => x.a.id === head.id)) shown[TIE_MAX - 1] = ordered.find((x) => x.a.id === head.id)!
       tied = {
         with: !mine.length ? null : mine.length === 1 ? p(mine[0]).name : 'your roster',
-        players: group.map((a) => ({ a, fit: tiedFit(a.contrib!, roster, d.locks) }))
-          .sort((x, y) => urgency(x.a) - urgency(y.a) || (mine.length ? y.fit.score - x.fit.score : y.a.score - x.a.score))
+        players: shown
           .map(({ a, fit }) => ({
             id: a.id, name: a.name, team: a.team, positions: a.positions, behind: best - a.score, appPick: a.id === head.id,
             adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName,
