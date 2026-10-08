@@ -21,7 +21,7 @@ const n = prep.league.teams
 const name = (id: string) => prep.players.get(id)!.name
 const idOf = new Map([...prep.players.values()].map((p: any) => [p.name, p.id]))
 const FIRSTS = ['Nikola Jokić', 'Shai Gilgeous-Alexander', 'Victor Wembanyama', 'Luka Dončić', 'Tyrese Maxey', 'Cade Cunningham', 'Giannis Antetokounmpo', 'Anthony Edwards', 'Karl-Anthony Towns', 'Scottie Barnes']
-const tags = new Map<string, any>([['Joel Embiid', 'never'], ['Kristaps Porziņģis', 'never'], ['Anthony Davis', 'avoid']].map(([nm, t]) => [idOf.get(nm)!, t]).filter(([id]) => id))
+const tags = new Map<string, any>(([['Joel Embiid', 'never'], ['Kristaps Porziņģis', 'never'], ['Anthony Davis', 'avoid']] as [string, string][]).map(([nm, t]) => [idOf.get(nm) as string, t] as [string, string]).filter(([id]) => id))
 
 for (let slot = 1; slot <= 7; slot++) {
   const second = 2 * n - slot + 1
