@@ -309,7 +309,8 @@ div.nb-cat { cursor: default; }
   .nb-app .nb-tied .vc.nb-tiedmore { display: none; }
   .nb-tiedmorebtn { display: inline; margin-top: 0.3rem; }
 }
-.nb-tiedwhy { font-size: var(--t-xs); color: var(--amber); }
+.nb-app .nb-tied .vc { position: relative; }
+.nb-tiedwhy { position: absolute; top: 6px; right: 8px; font-family: var(--mono); font-size: var(--t-xs); color: var(--amber); }
 .nb-tiedfit { display: flex; flex-wrap: wrap; gap: 3px; margin: 0.15rem 0; }
 .nb-chip { font-family: var(--mono); font-size: var(--t-xs); padding: 0 5px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink); }
 .nb-chip-fill { border-color: var(--green); color: var(--green); background: rgba(69,217,160,.12); }
