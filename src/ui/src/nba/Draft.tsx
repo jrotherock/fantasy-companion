@@ -146,7 +146,7 @@ function Screen({ id }: { id: string }) {
               <Notice view={view} />
               <Take view={view} act={act} previewId={previewId} setPreviewId={setPreviewId} pins={pins} pin={pin} comparePair={(a, b) => setPins([a, b])} />
               {pins.length > 0 && <Compare id={id} view={view} act={act} pins={pins} pin={pin} clear={() => setPins([])} />}
-              {cats && <Build view={view} act={act} preview={view.takeNow.find((a) => a.id === previewId) ?? null} />}
+              {cats && <Build view={view} act={act} preview={view.takeNow.find((a) => a.id === previewId) ?? view.tied?.players.find((x) => x.id === previewId) ?? null} />}
             </>}
       </div>
       {view.league.slot != null && (
@@ -296,7 +296,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
           <span className="vlabel" title="In this order. Yahoo skips whoever goes first, so set it now and leave it: a timeout then takes the app's pick">QUEUE IN YAHOO</span> {queue.map((q, i) => <span key={q.id}>{i ? ' · ' : ''}<b>{q.name}</b></span>)}
         </div>
       )}
-      {view.tied ? <Tied view={view} act={act} pins={pins} pin={pin} second={second} /> : <div className="threeup">
+      {view.tied ? <Tied view={view} act={act} pins={pins} pin={pin} second={second} previewId={previewId} setPreviewId={setPreviewId} /> : <div className="threeup">
         {cards.map((a, i) => (
           <div key={a.id} className={`vc ${i === 0 ? 'sel' : ''}${previewId === a.id ? ' nb-previewing' : ''}`}
             onMouseEnter={() => a.preview && setPreviewId(a.id)} onMouseLeave={() => setPreviewId(null)}
@@ -364,7 +364,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
  * A near-tie shown whole: every player within the simulations' noise of the top card, ordered by how he fits
  * the roster so far, those likely back next turn last. The app's own pick is marked; the choice is yours.
  */
-function Tied({ view, act, pins, pin, second }: { view: DraftView; act: Act; pins: string[]; pin: (id: string) => void; second: number }) {
+function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view: DraftView; act: Act; pins: string[]; pin: (id: string) => void; second: number; previewId: string | null; setPreviewId: (id: string | null) => void }) {
   const t = view.tied!
   // Three rows at most: three across on a wide screen holds all eight; on a phone, one across, three shown and the rest behind a tap.
   const [more, setMore] = useState(false)
@@ -375,18 +375,21 @@ function Tied({ view, act, pins, pin, second }: { view: DraftView; act: Act; pin
       <div className="nb-tiednote nb-dim">
         {t.players.length} players within 0.06 categories a week of the app’s pick — the simulations cannot separate them.{' '}
         {t.with ? <>Whoever will not be back first, then by fit with <b>{t.with}</b>.</> : 'In the cards’ order: no roster yet to fit.'} <b>★</b> is the app’s own pick.
-        <span className="nb-tiedkey"> <span className="nb-chip">+</span> he adds{t.with && <>, <span className="nb-chip nb-chip-fill">green</span> where {t.with === 'your roster' ? 'your roster' : t.with.split(' ').at(-1)} is short</>} · <span className="nb-chip nb-chip-cost">−</span> he costs</span>
+        <span className="nb-tiedkey"> <span className="nb-chip nb-chip-fill">+</span> he adds · <span className="nb-chip nb-chip-cost">−</span> he costs · tap a card for its numbers on Your build</span>
       </div>
       <div className="nb-tied">
         {t.players.map((x, i) => (
           <Fragment key={x.id}>
-          <div className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''} ${i >= 3 && !x.appPick && !more ? 'nb-tiedmore' : ''}`}>
+          <div className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''} ${i >= 3 && !x.appPick && !more ? 'nb-tiedmore' : ''}${previewId === x.id ? ' nb-previewing' : ''}`}
+            // Looking at a card shows its numbers on the build tiles: a hover, or a tap on a phone.
+            onMouseEnter={() => setPreviewId(x.id)} onMouseLeave={() => setPreviewId(null)}
+            onClick={() => setPreviewId(previewId === x.id ? null : x.id)}>
             <span className="nm">{x.appPick && <span className="nb-apppick" title="The app's own pick">★ </span>}{x.name}
               {x.tag === 'like' && <span className="nb-tag nb-like">like</span>}{x.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
             <span className="sub">{x.team} · {x.positions.join(', ')}<span className="nb-dim"> · {x.behind < 0.0005 ? 'top score' : `−${x.behind.toFixed(3)}`}</span></span>
             {x.appPick && view.takeNow[0]?.tiebreak && <div className="nb-tiedwhy">The app’s pick on a playoff tiebreak: {view.takeNow[0].playoff} games in your playoff weeks</div>}
             <div className="nb-tiedfit">
-              {x.adds.map((c) => <span key={c} className={`nb-chip ${x.fills.includes(c) ? 'nb-chip-fill' : ''}`}>+{c === 'to' ? 'low TO' : LABEL[c]}</span>)}
+              {x.adds.map((c) => <span key={c} className="nb-chip nb-chip-fill">+{c === 'to' ? 'low TO' : LABEL[c]}</span>)}
               {x.costs.map((c) => <span key={c} className="nb-chip nb-chip-cost">−{c === 'to' ? 'high TO' : LABEL[c]}</span>)}
             </div>
             <div className={`nb-fate ${x.canWait ? 'nb-wait' : 'nb-gone'}`}>
@@ -396,8 +399,8 @@ function Tied({ view, act, pins, pin, second }: { view: DraftView; act: Act; pin
                 : x.urgency === 1 ? `Coin flip: ${pct(x.survives)} back next turn` : `${pct(1 - x.survives)} gone by your next turn`}
             </div>
             <div className="nb-cardbtns">
-              <button className={`btn ${x.appPick && view.clock.onClock ? 'primary' : ''}`} onClick={() => act('pick', { playerId: x.id })}>Mark drafted</button>
-              <button className={`btn nb-cmp ${pins.includes(x.id) ? 'on' : ''}`} title="Compare side by side" onClick={() => pin(x.id)}>{pins.includes(x.id) ? 'Comparing' : 'Compare'}</button>
+              <button className={`btn ${x.appPick && view.clock.onClock ? 'primary' : ''}`} onClick={(e) => { e.stopPropagation(); act('pick', { playerId: x.id }) }}>Mark drafted</button>
+              <button className={`btn nb-cmp ${pins.includes(x.id) ? 'on' : ''}`} title="Compare side by side" onClick={(e) => { e.stopPropagation(); pin(x.id) }}>{pins.includes(x.id) ? 'Comparing' : 'Compare'}</button>
             </div>
           </div>
           </Fragment>
@@ -558,7 +561,7 @@ function PreviewDelta({ from, to }: { from: number; to: number }) {
   return <span className={`nb-delta ${d > 0 ? 'up' : 'down'}`}> → {pct(to)}</span>
 }
 
-function Build({ view, act, preview }: { view: DraftView; act: Act; preview: DraftView['takeNow'][number] | null }) {
+function Build({ view, act, preview }: { view: DraftView; act: Act; preview: { name: string; preview?: Record<Cat, number> } | null }) {
   const b = view.build!
   const after = preview?.preview ?? null
   const [confirm, setConfirm] = useState<Cat | null>(null)

@@ -464,6 +464,8 @@ export interface TiedPlayer {
   urgency: 0 | 1 | 2
   /** Back to back: who the cards would take with the pick straight after. */
   thenName: string | null
+  /** My weekly win chance per category with him added, for the build tiles while his card is looked at. */
+  preview: Record<Cat, number>
   there: number | null
   tag: PrefTag | null
 }
@@ -989,7 +991,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
           .sort((x, y) => urgency(x.a) - urgency(y.a) || (mine.length ? y.fit.score - x.fit.score : y.a.score - x.a.score))
           .map(({ a, fit }) => ({
             id: a.id, name: a.name, team: a.team, positions: a.positions, behind: best - a.score, appPick: a.id === head.id,
-            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName, there: a.there, tag: a.tag,
+            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName,
+            preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base), there: a.there, tag: a.tag,
           })),
       }
     }
