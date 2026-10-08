@@ -710,10 +710,10 @@ function NextPicks({ view }: { view: DraftView }) {
   )
 }
 
-type SortKey = 'rank' | 'vrank' | 'forme' | 'gp' | 'po' | 'adp' | 'next' | Cat | 'fpg' | 'fpMin' | 'fpSeason' | 'value'
+type SortKey = 'rank' | 'vrank' | 'forme' | 'rd' | 'gp' | 'po' | 'adp' | 'next' | Cat | 'fpg' | 'fpMin' | 'fpSeason' | 'value'
 
 /** A column's value for sorting, oriented so bigger is better: earlier ADP sorts first, turnovers are already flipped. */
-function sortValue(r: BoardRow, key: SortKey): number {
+function sortValue(r: BoardRow, key: SortKey, teams = 10): number {
   const missing = -1e9
   switch (key) {
     case 'rank': return -(r.draftRank ?? 10_000 + r.rank)
@@ -722,6 +722,8 @@ function sortValue(r: BoardRow, key: SortKey): number {
     case 'gp': return r.gp
     case 'po': return r.playoff ?? missing
     case 'adp': return r.adp == null ? missing : -r.adp
+    // Whole rounds, so a second sort can order the players inside each.
+    case 'rd': return r.adp == null ? missing : -Math.ceil(r.adp / teams)
     case 'next': return r.survives ?? missing
     case 'fpg': return r.fpg ?? missing
     case 'fpMin': return r.fpMin ?? missing
@@ -740,20 +742,35 @@ function Board({ view, act, id, pins, pin, full, onFull }: { view: DraftView; ac
   const [openId, setOpenId] = useState<string | null>(null)
   const cats = view.league.scoring === 'categories'
   const hasDraft = view.board.some((r) => r.draftRank != null)
+  const teams = view.league.teams
   const cols = 3 + (hasDraft ? 1 : 0) + 1 + 5 + (cats ? CATS.length : 4)
   const locks = view.build?.locks ?? []
   const win = view.build?.win ?? null
   const need = win ? CATS.filter((c) => !locks.includes(c) && win[c] >= 0.35 && win[c] < 0.5) : []
-  // Sorting by any column header: best first on the first click, reversed on the second; # is the build's own order.
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null)
-  const by = (key: SortKey) => setSort((cur) => (key === 'rank' ? null : cur?.key === key ? { key, dir: cur.dir === 1 ? -1 : 1 } : { key, dir: 1 }))
-  const arrow = (key: SortKey) => (sort?.key === key ? (sort.dir === 1 ? ' ▼' : ' ▲') : key === 'rank' && !sort ? ' ▼' : '')
+  // Sorting by column headers, several at once. A click makes a column the main sort, best first, and keeps
+  // what was sorted before as tiebreakers (three at most): Val then Rd gives each round, best value first.
+  // Clicking the main column again reverses it; a third click drops it. # clears every sort.
+  const [sorts, setSorts] = useState<{ key: SortKey; dir: 1 | -1 }[]>([])
+  const sort = sorts.length ? sorts : null
+  const by = (key: SortKey) => setSorts((cur) => {
+    if (key === 'rank') return []
+    if (cur[0]?.key === key) return cur[0].dir === 1 ? [{ key, dir: -1 }, ...cur.slice(1)] : cur.slice(1)
+    return [{ key, dir: 1 as const }, ...cur.filter((x) => x.key !== key)].slice(0, 3)
+  })
+  const arrow = (key: SortKey) => {
+    const i = sorts.findIndex((x) => x.key === key)
+    if (i < 0) return key === 'rank' && !sort ? ' ▼' : ''
+    return `${sorts[i].dir === 1 ? ' ▼' : ' ▲'}${sorts.length > 1 ? i + 1 : ''}`
+  }
   const th = (key: SortKey, label: string, extra: { className?: string; title?: string } = {}) => (
-    <th className={`nb-sort ${extra.className ?? ''} ${sort?.key === key || (key === 'rank' && !sort) ? 'nb-sorted' : ''}`} title={extra.title} onClick={() => by(key)}>{label}{arrow(key)}</th>
+    <th className={`nb-sort ${extra.className ?? ''} ${sorts.some((x) => x.key === key) || (key === 'rank' && !sort) ? 'nb-sorted' : ''}`} title={extra.title} onClick={() => by(key)}>{label}{arrow(key)}</th>
   )
   const filtered = view.board.filter((r) =>
     (showTaken || r.takenAt == null) && (pos === 'All' || r.positions.includes(pos)) && (!q || r.name.toLowerCase().includes(q.toLowerCase())))
-  const rows = (sort ? [...filtered].sort((a, b) => sort.dir * (sortValue(b, sort.key) - sortValue(a, sort.key))) : filtered).slice(0, 150)
+  const rows = (sort ? [...filtered].sort((a, b) => {
+    for (const x of sorts) { const d = x.dir * (sortValue(b, x.key, teams) - sortValue(a, x.key, teams)); if (d) return d }
+    return 0
+  }) : filtered).slice(0, 150)
   const tag = (r: BoardRow, t: Tag) => act('tag', { playerId: r.id, tag: r.tag === t ? null : t })
   const heat = (v: number) => { const a = Math.min(1, Math.abs(v) / 1.2) * 0.55; return { background: v >= 0 ? `rgba(69,217,160,${a})` : `rgba(255,92,99,${a})` } }
   return (
@@ -769,7 +786,7 @@ function Board({ view, act, id, pins, pin, full, onFull }: { view: DraftView; ac
         <div className="nb-help">
           <ul>
             {hasDraft && <li><b>#</b> is the <b>Draft rank</b>: each player taken first in thousands of simulated seasons, ranked by weeks won, in <b>tiers</b> — inside a tier the order is close to a coin flip. <b>Val</b> is pure value for the build your roster leans to; <b>For me</b> is what the cards would say of him for your roster now (0 is the top card). Tap any header to sort by it.</li>}
-            <li><b>{hasDraft ? 'Val' : '#'}</b> is value for your build; it re-ranks when you lock, and locked columns fade. Click any column header to sort by it — best first, again to reverse — and # to go back.</li>
+            <li><b>{hasDraft ? 'Val' : '#'}</b> is value for your build; it re-ranks when you lock, and locked columns fade. Click any column header to sort by it, best first; click again to reverse, a third time to drop it. Several at once: the last one clicked leads and the earlier ones break its ties (Val, then Rd: each round, best value first), numbered beside the arrows. <b>#</b> clears every sort.</li>
             <li><b>Coloured cells</b>: what a player adds per category over a season. Read down the <span className="nb-amber">amber headers</span> — your coin flips — to find who tips one to green.</li>
             {!cats && <li><b>FP/g</b> fantasy points a game; <b>FP/min</b> per minute he is projected to play — high means he scores in what he gets, so more minutes would show; <b>FP season</b> a game times his games. <b>Value</b> is not the season total: it is points a game above the replacement line times games, so a replacement-level player is worth nought however much he scores.</li>}
             {cats && <li><b>Blue note</b> beside a name: where he ranks in the build he is drafted for, when that is 20+ places higher than balanced — Giannis is a first-rounder only if your roster ends up punting FT%. Information: the cards already weigh it once your roster leans that way, without a lock.</li>}
@@ -794,7 +811,7 @@ function Board({ view, act, id, pins, pin, full, onFull }: { view: DraftView; ac
               {th('rank', '#', { title: hasDraft ? 'Draft rank: weeks won in simulated seasons, in tiers' : 'Value rank' })}<th className="nb-l">Player</th><th>Pos</th>
               {hasDraft && th('vrank', 'Val', { title: 'Value rank for the build the board is reading' })}
               {th('forme', 'For me', { title: 'What the cards would say of him for your roster now: his score less the best available, in categories a week (or value). 0 is the top card.' })}
-              {th('gp', 'G', { className: 'nb-wide' })}{th('po', 'PO', { title: 'Games in your playoff weeks', className: 'nb-wide' })}{th('adp', 'ADP', { className: 'nb-wide' })}{th('adp', 'Rd', { title: 'The round he usually goes: ADP over the teams in the league' })}{th('next', 'Next', { title: 'Chance he lasts to your next decision' })}
+              {th('gp', 'G', { className: 'nb-wide' })}{th('po', 'PO', { title: 'Games in your playoff weeks', className: 'nb-wide' })}{th('adp', 'ADP', { className: 'nb-wide' })}{th('rd', 'Rd', { title: 'The round he usually goes: ADP over the teams in the league' })}{th('next', 'Next', { title: 'Chance he lasts to your next decision' })}
               {cats
                 ? CATS.map((c) => <Fragment key={c}>{th(c, LABEL[c], { className: `nb-wide ${locks.includes(c) ? 'nb-off' : need.includes(c) ? 'nb-need' : ''}` })}</Fragment>)
                 : <>{th('fpg', 'FP/g', { title: 'Fantasy points a game', className: 'nb-wide' })}{th('fpMin', 'FP/min', { title: 'Fantasy points a minute', className: 'nb-wide' })}{th('fpSeason', 'FP season', { title: 'Fantasy points over the season: a game times games', className: 'nb-wide' })}{th('value', 'Value', { title: 'Points a game above the replacement line, times games', className: 'nb-wide' })}</>}

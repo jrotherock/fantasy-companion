@@ -207,7 +207,14 @@ export function prepare(
   }
   if (draftRankFile) {
     const idOf = new Map(players.map((p) => [p.name, p.id]))
-    draftRankFile.players.forEach((r, i) => { const id = idOf.get(r.name); if (id) prepared.draftRank.set(id, { rank: i + 1, tier: r.tier, delta: r.delta }) })
+    // The rank is the board's order: tier by tier, and inside a tier by the round each player usually goes,
+    // earliest first (the order inside a tier is close to a coin flip, so when he goes decides it); ties by weeks won.
+    const round = (id: string) => Math.ceil(adp(id) / league.teams)
+    draftRankFile.players
+      .map((r, i) => ({ id: idOf.get(r.name), r, i }))
+      .filter((x): x is { id: string; r: DraftRankFile['players'][number]; i: number } => x.id != null)
+      .sort((a, b) => a.r.tier - b.r.tier || round(a.id) - round(b.id) || a.i - b.i)
+      .forEach(({ id, r }, i) => prepared.draftRank.set(id, { rank: i + 1, tier: r.tier, delta: r.delta }))
   }
   // The 240 check, and each player's line against last season's (teamLoad.ts): information beside the advice, never in it.
   const loads = teamLoads(rawPlayers, teamNotes)
@@ -757,7 +764,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   }
 
   // ── Board ──
-  // Default order: the Draft rank where the league has one, the value rank for the rest after it.
+  // Default order: the Draft rank where the league has one (tiers, then usual round), the value rank for the rest after it.
   const boardOrder = (r: { draftRank: number | null; rank: number }) => (r.draftRank != null ? r.draftRank : 10_000 + r.rank)
   // For my team: the cards' own scores over a long shortlist, as a gap to the best of them.
   const forMe = new Map<string, number>()
