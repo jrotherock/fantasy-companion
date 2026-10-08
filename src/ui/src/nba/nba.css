@@ -294,6 +294,7 @@ div.nb-cat { cursor: default; }
 .nb-tiedfit { font-size: var(--t-xs); }
 .nb-tiedfit .nb-fill { color: var(--green); }
 .nb-tiedwait { opacity: 0.75; }
-.nb-apppick { color: var(--amber); }
+.nb-apppick { color: var(--amber); font-size: 0.6em; vertical-align: 0.25em; }
 @media (max-width: 600px) { .nb-tied { grid-template-columns: 1fr; } }
 .nb-tiedwhy { font-size: var(--t-xs); color: var(--amber); }
+.nb-tiedbucket { grid-column: 1 / -1; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue); margin-top: 0.3rem; }

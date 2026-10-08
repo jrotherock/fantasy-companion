@@ -351,8 +351,8 @@ test('a near-tie shows the whole group, ordered by fit, the app\'s pick marked; 
   assert.equal(v.tied!.players.filter((x) => x.appPick).length, 1)
   assert.equal(v.tied!.players.find((x) => x.appPick)!.id, v.takeNow[0].id)
   assert.ok(v.tied!.players.every((x) => v.takeNow[0].score - v.advice.find((a) => a.id === x.id)!.score <= 0.06 + 1e-9 && x.behind >= 0))
-  const w = v.tied!.players.map((x) => x.canWait)
-  assert.ok(w.every((x, i) => i === 0 || !w[i - 1] || x), 'those likely back next turn come last')
+  const u = v.tied!.players.map((x) => (x.canWait ? 2 : x.survives <= 0.25 ? 0 : 1))
+  assert.ok(u.every((x, i) => i === 0 || x >= u[i - 1]), 'likely gone first, then coin flips, then those likely back')
   const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)
   const h = { ...emptyDraft('t'), slot: 5 }
   h.picks = harker.adpOrder.slice(0, 26).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))

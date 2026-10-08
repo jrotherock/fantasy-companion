@@ -371,12 +371,16 @@ function Tied({ view, act, pins, pin, second }: { view: DraftView; act: Act; pin
   return (
     <div>
       <div className="nb-tiednote nb-dim">
-        {t.players.length} players within 0.06 categories a week of each other — the simulations cannot separate them.{' '}
-        {t.with ? <>Ordered by how each fits <b>{t.with}</b>.</> : 'In the cards’ order: no roster yet to fit.'} <b>★</b> is the app’s own pick.
+        {t.players.length} players within 0.06 categories a week of the app’s pick — the simulations cannot separate them.{' '}
+        {t.with ? <>Whoever will not be back first; inside that, by how each fits <b>{t.with}</b>.</> : 'In the cards’ order: no roster yet to fit.'} <b>★</b> is the app’s own pick.
       </div>
       <div className="nb-tied">
-        {t.players.map((x) => (
-          <div key={x.id} className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''}`}>
+        {t.players.map((x, i) => (
+          <Fragment key={x.id}>
+          {(i === 0 ? x.urgency > 0 || t.players.some((y) => y.urgency > 0) : x.urgency !== t.players[i - 1].urgency) && (
+            <div className="nb-tiedbucket">{['Likely gone by your next turn', 'Coin flip to be back', 'Likely back next turn — better taken then'][x.urgency]}</div>
+          )}
+          <div className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''}`}>
             <span className="nm">{x.appPick && <span className="nb-apppick" title="The app's own pick">★ </span>}{x.name}
               {x.tag === 'like' && <span className="nb-tag nb-like">like</span>}{x.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
             <span className="sub">{x.team} · {x.positions.join(', ')}<span className="nb-dim"> · {x.behind < 0.0005 ? 'top score' : `−${x.behind.toFixed(3)}`}</span></span>
@@ -396,6 +400,7 @@ function Tied({ view, act, pins, pin, second }: { view: DraftView; act: Act; pin
               <button className={`btn nb-cmp ${pins.includes(x.id) ? 'on' : ''}`} title="Compare side by side" onClick={() => pin(x.id)}>{pins.includes(x.id) ? 'Comparing' : 'Compare'}</button>
             </div>
           </div>
+          </Fragment>
         ))}
       </div>
     </div>

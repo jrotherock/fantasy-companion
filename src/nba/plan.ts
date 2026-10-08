@@ -460,6 +460,8 @@ export interface TiedPlayer {
   costs: Cat[]
   survives: number
   canWait: boolean
+  /** Which group of the order he is in: likely gone by my next turn, a coin flip, or likely back. */
+  urgency: 0 | 1 | 2
   /** Back to back: who the cards would take with the pick straight after. */
   thenName: string | null
   there: number | null
@@ -974,7 +976,9 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   const waits = (a: { canWait: boolean }) => a.canWait && !pairTurn
   // An empty roster has nothing to fit: only the first of a back-to-back pair groups then, in the cards' order.
   if (prep.cats && head && !waits(head) && (mine.length || pairTurn)) {
-    // Those who will not last first, then those likely back next turn (taking one of them now spends the turn).
+    // Equal players, so the one who will not be back goes first: likely gone (75%+), then a coin flip, then those
+    // likely back next turn (taking one of them now spends the turn). Fit orders each group.
+    const urgency = (a: { canWait: boolean; survives: number }): 0 | 1 | 2 => (waits(a) ? 2 : pairTurn || a.survives <= 0.25 ? 0 : 1)
     const group = advice.filter((a) => head.score - a.score <= TIE_GROUP).slice(0, TIE_MAX)
     if (group.length >= 4) {
       const best = Math.max(...group.map((a) => a.score))
@@ -982,10 +986,10 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       tied = {
         with: !mine.length ? null : mine.length === 1 ? p(mine[0]).name : 'your roster',
         players: group.map((a) => ({ a, fit: tiedFit(a.contrib!, roster, d.locks) }))
-          .sort((x, y) => Number(waits(x.a)) - Number(waits(y.a)) || (mine.length ? y.fit.score - x.fit.score : y.a.score - x.a.score))
+          .sort((x, y) => urgency(x.a) - urgency(y.a) || (mine.length ? y.fit.score - x.fit.score : y.a.score - x.a.score))
           .map(({ a, fit }) => ({
             id: a.id, name: a.name, team: a.team, positions: a.positions, behind: best - a.score, appPick: a.id === head.id,
-            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), thenName: a.thenName, there: a.there, tag: a.tag,
+            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName, there: a.there, tag: a.tag,
           })),
       }
     }
