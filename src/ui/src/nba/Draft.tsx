@@ -293,8 +293,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
         </div>
       ) : queue.length > 0 && (
         <div className="nb-queue">
-          <span className="vlabel">QUEUE IN YAHOO</span> {queue.map((q, i) => <span key={q.id}>{i ? ' · ' : ''}<b>{q.name}</b></span>)}
-          <span className="nb-dim"> — in this order. Yahoo skips whoever goes first, so set it now and leave it: a timeout then takes the app's pick</span>
+          <span className="vlabel" title="In this order. Yahoo skips whoever goes first, so set it now and leave it: a timeout then takes the app's pick">QUEUE IN YAHOO</span> {queue.map((q, i) => <span key={q.id}>{i ? ' · ' : ''}<b>{q.name}</b></span>)}
         </div>
       )}
       {view.tied ? <Tied view={view} act={act} pins={pins} pin={pin} second={second} /> : <div className="threeup">
@@ -367,33 +366,34 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
  */
 function Tied({ view, act, pins, pin, second }: { view: DraftView; act: Act; pins: string[]; pin: (id: string) => void; second: number }) {
   const t = view.tied!
-  const names = (cs: Cat[]) => cs.map((c) => LABEL[c]).join(', ')
+  // Three rows at most: three across on a wide screen holds all eight; on a phone, one across, three shown and the rest behind a tap.
+  const [more, setMore] = useState(false)
+  // The app's own pick always shows, wherever fit puts him.
+  const hidden = t.players.filter((x, i) => i >= 3 && !x.appPick).length
   return (
     <div>
       <div className="nb-tiednote nb-dim">
         {t.players.length} players within 0.06 categories a week of the app’s pick — the simulations cannot separate them.{' '}
-        {t.with ? <>Whoever will not be back first; inside that, by how each fits <b>{t.with}</b>.</> : 'In the cards’ order: no roster yet to fit.'} <b>★</b> is the app’s own pick.
+        {t.with ? <>Whoever will not be back first, then by fit with <b>{t.with}</b>.</> : 'In the cards’ order: no roster yet to fit.'} <b>★</b> is the app’s own pick.
+        <span className="nb-tiedkey"> <span className="nb-chip nb-chip-fill">green</span> fills a gap{t.with ? ` next to ${t.with === 'your roster' ? 'your roster' : t.with.split(' ').at(-1)}` : ''} · <span className="nb-chip">plain</span> his other strengths · <span className="nb-chip nb-chip-cost">red</span> costs</span>
       </div>
       <div className="nb-tied">
         {t.players.map((x, i) => (
           <Fragment key={x.id}>
-          {(i === 0 ? x.urgency > 0 || t.players.some((y) => y.urgency > 0) : x.urgency !== t.players[i - 1].urgency) && (
-            <div className="nb-tiedbucket">{['Likely gone by your next turn', 'Coin flip to be back', 'Likely back next turn — better taken then'][x.urgency]}</div>
-          )}
-          <div className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''}`}>
+          <div className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''} ${i >= 3 && !x.appPick && !more ? 'nb-tiedmore' : ''}`}>
             <span className="nm">{x.appPick && <span className="nb-apppick" title="The app's own pick">★ </span>}{x.name}
               {x.tag === 'like' && <span className="nb-tag nb-like">like</span>}{x.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
             <span className="sub">{x.team} · {x.positions.join(', ')}<span className="nb-dim"> · {x.behind < 0.0005 ? 'top score' : `−${x.behind.toFixed(3)}`}</span></span>
             {x.appPick && view.takeNow[0]?.tiebreak && <div className="nb-tiedwhy">The app’s pick on a playoff tiebreak: {view.takeNow[0].playoff} games in your playoff weeks</div>}
             <div className="nb-tiedfit">
-              {x.adds.length > 0 && <span>{t.with ? 'adds' : 'best at'} {names(x.adds)}</span>}
-              {x.fills.length > 0 && <span className="nb-fill"> — {names(x.fills)} where {t.with === 'your roster' ? 'you are' : `${t.with} is`} short</span>}
-              {x.costs.length > 0 && <span className="nb-hurts"> · costs {names(x.costs)}</span>}
+              {x.adds.map((c) => <span key={c} className={`nb-chip ${x.fills.includes(c) ? 'nb-chip-fill' : ''}`}>{LABEL[c]}</span>)}
+              {x.costs.map((c) => <span key={c} className="nb-chip nb-chip-cost">{LABEL[c]}</span>)}
             </div>
             <div className={`nb-fate ${x.canWait ? 'nb-wait' : 'nb-gone'}`}>
               {x.thenName ? <span className="nb-pair">then {x.thenName} at pick {second}</span>
                 : x.there != null ? `${pct(x.there)} there at pick ${view.clock.myNext}`
-                : x.canWait ? `${pct(x.survives)} back next turn — better taken then` : `${pct(1 - x.survives)} gone by your next turn`}
+                : x.urgency === 2 ? `Likely back: ${pct(x.survives)} next turn — better taken then`
+                : x.urgency === 1 ? `Coin flip: ${pct(x.survives)} back next turn` : `${pct(1 - x.survives)} gone by your next turn`}
             </div>
             <div className="nb-cardbtns">
               <button className={`btn ${x.appPick && view.clock.onClock ? 'primary' : ''}`} onClick={() => act('pick', { playerId: x.id })}>Mark drafted</button>
@@ -403,6 +403,7 @@ function Tied({ view, act, pins, pin, second }: { view: DraftView; act: Act; pin
           </Fragment>
         ))}
       </div>
+      {hidden > 0 && !more && <button className="nb-link nb-tiedmorebtn" onClick={() => setMore(true)}>{hidden} more in the tie</button>}
     </div>
   )
 }
