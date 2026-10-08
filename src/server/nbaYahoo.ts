@@ -38,14 +38,26 @@ interface Watch {
   names: Map<string, { name: string; team: string | null }>
   nextAt: number
   error: string | null
+  /** When the pick count last moved, and what it was: a mock with no new pick for a while has closed. */
+  picks: number
+  changedAt: number
 }
+
+/**
+ * A mock room that has gone quiet has closed, whether or not Yahoo ever reported its last picks. One that
+ * stopped at 141 of 144 (2026-10-03) was read every few seconds for five days and spent most of each day's
+ * budget, football's sync included. A real league is followed to its end by the league's own status.
+ */
+export const MOCK_QUIET = 20 * 60_000
 
 const watches = new Map<string, Watch>()
 let timer: ReturnType<typeof setTimeout> | null = null
 
 async function step(leagueId: string, key: string): Promise<number> {
-  const w = watches.get(leagueId) ?? { status: null, statusAt: 0, teams: [], teamsAt: 0, names: new Map(), nextAt: 0, error: null }
+  const w = watches.get(leagueId) ?? { status: null, statusAt: 0, teams: [], teamsAt: 0, names: new Map(), nextAt: 0, error: null, picks: -1, changedAt: Date.now() }
   watches.set(leagueId, w)
+  const mock = leagueId.startsWith('nba-mock-')
+  if (mock && Date.now() - w.changedAt > MOCK_QUIET) return Infinity
   try {
     // Status is re-read every couple of minutes mid-draft, which is how the end is noticed.
     // A mock drafts from the moment it is found, and has no meta worth asking for.
@@ -68,6 +80,7 @@ async function step(leagueId: string, key: string): Promise<number> {
     }
 
     const picks = parseDraftResults(await yahooApi.call(`league/${key}/draftresults`))
+    if (picks.length !== w.picks) { w.picks = picks.length; w.changedAt = Date.now() }
     const unknown = picks.map((p) => p.playerKey).filter((k) => !playerByYahooId(k.split('.').pop()!) && !w.names.has(k))
     for (let i = 0; i < unknown.length; i += 25) {
       const batch = unknown.slice(i, i + 25)

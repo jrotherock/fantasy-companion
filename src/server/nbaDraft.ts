@@ -215,8 +215,12 @@ export function draftDone(leagueId: string): boolean {
   return s.draft.picks.length >= (s.draft.order.length || s.league.teams) * s.prep.rounds
 }
 
-export function nbaLeagues(): NbaLeague[] {
-  return load().leagues.filter((l) => !l.id.endsWith('-test') && (!l.mock || l.mock.apiOk === true))
+/** A mock is a sitting: one found more than a day ago is over, and the API is not asked about it again. */
+const MOCK_LIFE = 24 * 60 * 60_000
+
+/** The leagues the server reads from the Yahoo API: the real ones, and mocks it can read that are still young. */
+export function nbaLeagues(now = Date.now()): NbaLeague[] {
+  return load().leagues.filter((l) => !l.id.endsWith('-test') && (!l.mock || (l.mock.apiOk === true && now - l.mock.createdAt < MOCK_LIFE)))
 }
 
 let byYahoo: Map<string, NbaPlayer> | null = null
