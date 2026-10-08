@@ -445,6 +445,49 @@ export interface BoardRow {
   mine: boolean
 }
 
+export interface TiedPlayer {
+  id: string
+  name: string
+  team: string | null
+  positions: string[]
+  /** Card score behind the top card, categories a week. */
+  behind: number
+  /** The top card: the app's own pick. */
+  appPick: boolean
+  /** His best categories, those where my roster is short first; of those, the ones it is short in; where he costs. */
+  adds: Cat[]
+  fills: Cat[]
+  costs: Cat[]
+  survives: number
+  canWait: boolean
+  /** Back to back: who the cards would take with the pick straight after. */
+  thenName: string | null
+  there: number | null
+  tag: PrefTag | null
+}
+
+/** How close counts as a tie for the group: within the simulations' noise at a pick, categories a week. */
+/** Checked over slots 1–10 after each plausible first pick: at 0.05 slots 3 and 4 almost never group (the 4th player
+ * sits just past it); at 0.06 slots 1 and 3–10 do, 4–8 players. */
+export const TIE_GROUP = 0.06
+const TIE_MAX = 8
+
+/**
+ * How a player fits a roster: his category values, weighted up where the roster is short (below zero)
+ * and down where it is already strong. For ordering a tie, not for choosing the pick.
+ */
+export function tiedFit(his: Record<Cat, number>, roster: Record<Cat, number>, ignore: Cat[]): { score: number; adds: Cat[]; fills: Cat[]; costs: Cat[] } {
+  const cats = CATS.filter((c) => !ignore.includes(c))
+  const w = (c: Cat) => (roster[c] < 0 ? 1.5 : roster[c] > 1.5 ? 0.5 : 1)
+  const adds = cats.filter((c) => his[c] >= 0.4).sort((a, b) => his[b] * w(b) - his[a] * w(a)).slice(0, 3)
+  return {
+    score: cats.reduce((n, c) => n + his[c] * w(c), 0),
+    adds,
+    fills: adds.filter((c) => roster[c] < 0),
+    costs: cats.filter((c) => his[c] <= -0.4).sort((a, b) => his[a] - his[b]).slice(0, 2),
+  }
+}
+
 export interface PathView {
   name: string
   punt: Cat[]
@@ -473,6 +516,14 @@ export interface DraftView {
    * Those who will last are in the plan line instead.
    */
   alsoClose: { id: string; name: string; behind: number }[]
+  /**
+   * Categories only: when four or more players are within TIE_GROUP of the top card,
+   * the simulations cannot separate them, and the screen shows them all instead of three cards, ordered
+   * by how each fits my roster so far (tiedFit). Information for the choice, never the advice: in 400
+   * simulated drafts, letting fit break near-ties cost about half a point of all-play, so the top card
+   * stays the app's pick and is marked as such. Null outside a near-tie and in points leagues.
+   */
+  tied: { with: string | null; players: TiedPlayer[] } | null
   /** Yahoo's pick clock read off the draft room by the extension (server adds it; absent without the extension). */
   yahooClock?: { seconds: number; at: number } | null
   sensor: StoredDraft['sensor']
@@ -915,6 +966,30 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     .filter((a) => !a.canWait && !takeNow.some((t) => t.id === a.id) && lastCard.score - a.score <= closeMargin)
     .slice(0, 3).map((a) => ({ id: a.id, name: a.name, behind: lastCard.score - a.score }))
 
+  // ── The tied group ──
+  let tied: DraftView['tied'] = null
+  const head = takeNow[0]
+  // Back to back, everyone "can wait" a pick; the pair is on the cards' own line, so the group treats all as now.
+  const pairTurn = myNext != null && nextAfter === myNext + 1
+  const waits = (a: { canWait: boolean }) => a.canWait && !pairTurn
+  // An empty roster has nothing to fit: only the first of a back-to-back pair groups then, in the cards' order.
+  if (prep.cats && head && !waits(head) && (mine.length || pairTurn)) {
+    // Those who will not last first, then those likely back next turn (taking one of them now spends the turn).
+    const group = advice.filter((a) => head.score - a.score <= TIE_GROUP).slice(0, TIE_MAX)
+    if (group.length >= 4) {
+      const roster = CATS.reduce((o, c) => ({ ...o, [c]: mine.reduce((n, id) => n + contribution(prep.cats!.byId.get(id)!)[c], 0) }), {} as Record<Cat, number>)
+      tied = {
+        with: !mine.length ? null : mine.length === 1 ? p(mine[0]).name : 'your roster',
+        players: group.map((a) => ({ a, fit: tiedFit(a.contrib!, roster, d.locks) }))
+          .sort((x, y) => Number(waits(x.a)) - Number(waits(y.a)) || (mine.length ? y.fit.score - x.fit.score : y.a.score - x.a.score))
+          .map(({ a, fit }) => ({
+            id: a.id, name: a.name, team: a.team, positions: a.positions, behind: head.score - a.score, appPick: a.id === head.id,
+            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), thenName: a.thenName, there: a.there, tag: a.tag,
+          })),
+      }
+    }
+  }
+
   // ── What to queue in Yahoo, two picks out or on the clock ──
   let queue: DraftView['queue'] = null
   if (spot && myNext != null && myNext - overall <= 2) {
@@ -944,6 +1019,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     takeNow,
     canWait,
     alsoClose,
+    tied,
     queue,
     teams: [...prep.teams.values()].sort((a, b) => b.playsPct - a.playsPct),
     pickingBefore,

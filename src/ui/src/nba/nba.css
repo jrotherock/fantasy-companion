@@ -287,3 +287,12 @@ div.nb-cat { cursor: default; }
 .nb-sim-lean { color: var(--green); opacity: 0.5; }
 .nb-actsim { font-size: var(--t-xs); margin: 0.2rem 0; text-align: left; white-space: normal; }
 .nb-actsim.nb-sim-lean { opacity: 0.8; }
+
+/* The tied group: a near-tie shown whole, ordered by fit. */
+.nb-tied { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; }
+.nb-tiednote { font-size: var(--t-xs); margin: 0.2rem 0 0.4rem; }
+.nb-tiedfit { font-size: var(--t-xs); }
+.nb-tiedfit .nb-fill { color: var(--green); }
+.nb-tiedwait { opacity: 0.75; }
+.nb-apppick { color: var(--amber); }
+@media (max-width: 600px) { .nb-tied { grid-template-columns: 1fr; } }

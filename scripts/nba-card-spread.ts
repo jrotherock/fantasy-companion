@@ -23,7 +23,7 @@ const idOf = new Map([...prep.players.values()].map((p: any) => [p.name, p.id]))
 const FIRSTS = ['Nikola Jokić', 'Shai Gilgeous-Alexander', 'Victor Wembanyama', 'Luka Dončić', 'Tyrese Maxey', 'Cade Cunningham', 'Giannis Antetokounmpo', 'Anthony Edwards', 'Karl-Anthony Towns', 'Scottie Barnes']
 const tags = new Map<string, any>(([['Joel Embiid', 'never'], ['Kristaps Porziņģis', 'never'], ['Anthony Davis', 'avoid']] as [string, string][]).map(([nm, t]) => [idOf.get(nm) as string, t] as [string, string]).filter(([id]) => id))
 
-for (let slot = 1; slot <= 7; slot++) {
+for (let slot = 1; slot <= n; slot++) {
   const second = 2 * n - slot + 1
   console.log(`\nSlot ${slot} — second pick is #${second}`)
   // Who the room takes before my first pick: ADP order.
@@ -38,6 +38,7 @@ for (let slot = 1; slot <= 7; slot++) {
     const v = buildView(prep, d, tags)
     const cards = v.advice.slice(0, 3).map((a) => `${a.name} ${a.score.toFixed(3)}`).join(' · ')
     console.log(`  ${first.padEnd(24)} → ${cards}`)
+    if (v.tied) console.log(`  ${''.padEnd(24)}   tied (${v.tied.players.length}): ${v.tied.players.map((t) => `${t.name}${t.appPick ? '*' : ''}${t.canWait ? '(w)' : ''} [+${t.adds.join('/')}${t.costs.length ? ' −' + t.costs.join('/') : ''}]`).join(' · ')}`)
   }
 }
 

@@ -334,3 +334,27 @@ test('a league with a Draft rank opens the board with the simulations\' top 5, t
   assert.ok(h.board.every((r) => r.draftRank == null))
   assert.ok(h.board.every((r, i) => i === 0 || r.rank >= h.board[i - 1].rank))
 })
+
+test('a near-tie shows the whole group, ordered by fit, the app\'s pick marked; never in points', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
+  const maxey = [...hoops.players.values()].find((p) => p.name === 'Tyrese Maxey')!.id
+  const before = hoops.adpOrder.filter((id) => id !== maxey).slice(0, 4)
+  const rest = hoops.adpOrder.filter((id) => id !== maxey && !before.includes(id))
+  const d = emptyDraft('t'); d.slot = 5
+  d.picks = [...before, maxey, ...rest.slice(0, 10)].map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
+  const v = buildView(hoops, d, new Map())
+  assert.ok(v.tied && v.tied.players.length >= 4, 'round 2 at slot 5 is a near-tie')
+  assert.equal(v.tied!.with, 'Tyrese Maxey')
+  assert.equal(v.tied!.players.filter((x) => x.appPick).length, 1)
+  assert.equal(v.tied!.players.find((x) => x.appPick)!.id, v.takeNow[0].id)
+  assert.ok(v.tied!.players.every((x) => v.takeNow[0].score - v.advice.find((a) => a.id === x.id)!.score <= 0.06 + 1e-9))
+  const w = v.tied!.players.map((x) => x.canWait)
+  assert.ok(w.every((x, i) => i === 0 || !w[i - 1] || x), 'those likely back next turn come last')
+  const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)
+  const h = { ...emptyDraft('t'), slot: 5 }
+  h.picks = harker.adpOrder.slice(0, 26).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
+  assert.equal(buildView(harker, h, new Map()).tied, null)
+})
