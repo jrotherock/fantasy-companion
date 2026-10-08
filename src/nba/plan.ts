@@ -956,7 +956,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     // No fit tiebreak: in 400 simulated Hoops drafts, breaking near-ties toward my weak
     // categories cost 0.46 points of all-play (±0.14), and toward my strong ones 0.62.
     // The advice's own score already weighs fit where it matters (scripts/nba-strategy-sim.ts).
-    const tb = playoffTiebreak(takeNow, margin)
+    const tb = playoffTiebreak(takeNow, margin, (a) => a.canWait)
     takeNow = tb.advice
     playoffNote = tb.note
   }
@@ -1022,7 +1022,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       const wait = (id: string) => nextAfter != null && (nextAfter === myNext + 1 || survives(prep.adp(id), nextAfter, prep.league.adpSpread, myNext) >= 0.6)
       const first3 = [...ranked.filter((a) => !wait(a.id)), ...ranked.filter((a) => wait(a.id))].slice(0, 3)
       const margin = prep.cats ? 0.02 : Math.abs(first3[0]?.score ?? 0) * 0.01
-      return first3.length ? playoffTiebreak(first3.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), margin).advice : []
+      return first3.length ? playoffTiebreak(first3.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), margin, (a) => wait(a.id)).advice : []
     })()
     const top = order[0] ?? ranked[0]
     const ids = [...new Set([top?.id, top?.then, ...order.map((a) => a.id), ...ranked.map((a) => a.id)].filter(Boolean) as string[])].slice(0, 3)
@@ -1368,10 +1368,13 @@ export const CLOSE_LOW = 0.35
 export const CLOSE_HIGH = 0.65
 
 
-export function playoffTiebreak<T extends { name: string; score: number; playoff: number | null; tiebreak?: boolean }>(advice: T[], margin: number): { advice: T[]; note: string | null } {
+export function playoffTiebreak<T extends { name: string; score: number; playoff: number | null; tiebreak?: boolean }>(advice: T[], margin: number, sameGroup: (a: T) => unknown = () => 0): { advice: T[]; note: string | null } {
   if (advice.length < 2) return { advice, note: null }
   const top = advice[0].score
-  const close = advice.filter((a) => top - a.score <= margin)
+  // Close to the first card on either side, and in its group: a player who can wait sits behind one who
+  // will not last however close his score, and a tiebreak must not undo that (2026-10-08 mock: Maluach,
+  // 93% back next turn, jumped Jalen Green, who would be gone).
+  const close = advice.filter((a) => Math.abs(top - a.score) <= margin && sameGroup(a) === sameGroup(advice[0]))
   if (close.length < 2) return { advice, note: null }
   const known = close.filter((a) => a.playoff != null)
   const most = Math.max(...known.map((a) => a.playoff!))

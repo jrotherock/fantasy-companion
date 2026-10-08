@@ -267,6 +267,14 @@ test('the playoff tiebreak never repeats or drops a card when the cards are not 
   assert.equal(names[0], 'Bane', 'more playoff games breaks the tie')
 })
 
+test('the playoff tiebreak never lifts a player who can wait over one who will not last', () => {
+  const a = (name: string, score: number, playoff: number, canWait: boolean) => ({ name, score, playoff, canWait })
+  // The 2026-10-08 mock, round 12: Green will be gone; Maluach scores higher but is 93% back next turn.
+  const cards = [a('Green', 5.407, 10, false), a('Maluach', 5.48, 11, true), a('VanVleet', 5.481, 10, true)]
+  assert.equal(playoffTiebreak(cards, 0.02, (x) => x.canWait).advice[0].name, 'Green')
+  assert.equal(playoffTiebreak([a('Up', 5.0, 9, false), a('Above', 5.015, 12, false)], 0.02).advice[0].name, 'Above', 'close on either side, same group')
+})
+
 test('compare: a player off the cards is scored on the cards\' own scale, with a verdict in words', () => {
   const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
   const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
