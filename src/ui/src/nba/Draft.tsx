@@ -375,7 +375,7 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
       <div className="nb-tiednote nb-dim">
         {t.players.length} players within 0.06 categories a week of the app’s pick — the simulations cannot separate them.{' '}
         {t.with ? <>Whoever will not be back first, then by fit with <b>{t.with}</b>.</> : 'In the cards’ order: no roster yet to fit.'} <b>★</b> is the app’s own pick.
-        <span className="nb-tiedkey"> <span className="nb-chip nb-chip-fill">+</span> he adds · <span className="nb-chip nb-chip-cost">−</span> he costs · tap a card for its numbers on Your build</span>
+        <span className="nb-tiedkey"> <span className="nb-chip nb-chip-fill">+</span> fills a gap{t.with && t.with !== 'your roster' ? ` next to ${t.with.split(' ').at(-1)}` : ''} · <span className="nb-chip">plain</span> a strength you already have · <span className="nb-chip nb-chip-cost">−</span> he costs · tap a card for its numbers on Your build</span>
       </div>
       <div className="nb-tied">
         {t.players.map((x, i) => (
@@ -389,7 +389,9 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
             <span className="sub">{x.team} · {x.positions.join(', ')}<span className="nb-dim"> · {x.behind < 0.0005 ? 'top score' : `−${x.behind.toFixed(3)}`}</span></span>
             {x.appPick && view.takeNow[0]?.tiebreak && <div className="nb-tiedwhy">The app’s pick on a playoff tiebreak: {view.takeNow[0].playoff} games in your playoff weeks</div>}
             <div className="nb-tiedfit">
-              {x.adds.map((c) => <span key={c} className="nb-chip nb-chip-fill">+{c === 'to' ? 'low TO' : LABEL[c]}</span>)}
+              {x.adds.map((c) => x.fills.includes(c)
+                ? <span key={c} className="nb-chip nb-chip-fill">+{c === 'to' ? 'low TO' : LABEL[c]}</span>
+                : <span key={c} className="nb-chip">{c === 'to' ? 'low TO' : LABEL[c]}</span>)}
               {x.costs.map((c) => <span key={c} className="nb-chip nb-chip-cost">−{c === 'to' ? 'high TO' : LABEL[c]}</span>)}
             </div>
             <div className={`nb-fate ${x.canWait ? 'nb-wait' : 'nb-gone'}`}>
