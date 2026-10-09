@@ -373,3 +373,30 @@ test('a near-tie shows the whole group, ordered by fit, the app\'s pick marked; 
   h.picks = harker.adpOrder.slice(0, 26).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
   assert.equal(buildView(harker, h, new Map()).tied, null)
 })
+
+test('a scarce note marks a close category a card fills with one or no comparable helpers left; never in points or on a pair', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
+  let notes = 0
+  for (const [slot, picks] of [[5, 15], [5, 35], [3, 22], [1, 39], [1, 60]] as const) {
+    const d = emptyDraft('t'); d.slot = slot
+    d.picks = hoops.adpOrder.slice(0, picks).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
+    const v = buildView(hoops, d, new Map())
+    const pair = v.clock.myNext != null && (slot === 1 && (picks + 1) % 20 === 0)
+    for (const a of [...v.takeNow, ...(v.tied?.players ?? [])]) {
+      if (!a.scarce) continue
+      notes++
+      assert.ok(!pair, 'never on the first of a back-to-back pair')
+      assert.ok(a.scarce.left <= 1 && a.scarce.names.length === a.scarce.left)
+      const card = v.advice.find((x) => x.id === a.id)!
+      assert.ok(card.fits.includes(a.scarce.cat) && card.contrib![a.scarce.cat] >= 1)
+    }
+  }
+  assert.ok(notes > 0, 'it says something somewhere in these turns')
+  const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)
+  const h = { ...emptyDraft('t'), slot: 5 }
+  h.picks = harker.adpOrder.slice(0, 26).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
+  assert.ok(buildView(harker, h, new Map()).takeNow.every((a) => !a.scarce))
+})

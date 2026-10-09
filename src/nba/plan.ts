@@ -445,6 +445,19 @@ export interface BoardRow {
   mine: boolean
 }
 
+/**
+ * A close category a card fills that will be hard to fill later: how many comparable helpers are likely still
+ * there at my next pick, and who. Information only — the score, the star and the queue do not use it.
+ */
+export interface Scarce { cat: Cat; left: number; names: string[]; next: number }
+/**
+ * Comparable: at least 70% of his value in that category, among the 40 best by value likely there at my next
+ * pick. A note when one or none are left, for real help (1+) only, never on the first of a back-to-back pair.
+ * Replayed over three Hoops mocks (2026-10-09): 8 of 33 turns, among them Clingan's rebounds at pick 61 with
+ * none left at 80, Daniels's steals, Harden's and Giddey's assists, Curry's and Knueppel's threes.
+ */
+const SCARCE_MIN = 1, SCARCE_SHARE = 0.7, SCARCE_FEW = 1, SCARCE_POOL = 40
+
 export interface TiedPlayer {
   id: string
   name: string
@@ -460,6 +473,7 @@ export interface TiedPlayer {
   costs: Cat[]
   survives: number
   canWait: boolean
+  scarce: Scarce | null
   /** Which group of the order he is in: likely gone by my next turn, a coin flip, or likely back. */
   urgency: 0 | 1 | 2
   /** Back to back: who the cards would take with the pick straight after. */
@@ -560,7 +574,9 @@ export interface DraftView {
     /** Which of my close categories he would cost me: the costs that matter this draft. */
     hurts: Cat[]
     /** On the cards only: my weekly win chance in each category with him added, for previewing on the build tiles. */
-    preview?: Record<Cat, number> })[]
+    preview?: Record<Cat, number>
+    /** On the cards only: a close category he fills that few others likely there at my next pick can (scarceFor). */
+    scarce?: Scarce | null })[]
   /**
    * The three cards: the best players to take with this pick. A player the
    * room will very likely leave until my next turn is not an option for this
@@ -977,6 +993,29 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     .filter((a) => !a.canWait && !takeNow.some((t) => t.id === a.id) && lastCard.score - a.score <= closeMargin)
     .slice(0, 3).map((a) => ({ id: a.id, name: a.name, behind: lastCard.score - a.score }))
 
+  // ── Scarce: a close category a card fills that few will be left to fill at my next pick ──
+  let scarceFor: (a: DraftView['advice'][number]) => Scarce | null = () => null
+  if (prep.cats && myNext != null && nextAfter != null && nextAfter !== myNext + 1) {
+    const value = buildValues(prep, [])
+    const pool = prep.cats.rows
+      .filter((r) => !taken.has(r.id) && tags.get(r.id) !== 'never' && survives(prep.adp(r.id), nextAfter, prep.league.adpSpread, myNext) >= 0.5)
+      .sort((a, b) => value.get(a.id)!.rank - value.get(b.id)!.rank).slice(0, SCARCE_POOL)
+      .map((r) => ({ id: r.id, c: contribution(r) }))
+    scarceFor = (a) => {
+      let best: Scarce | null = null, most = 0
+      for (const cat of a.fits ?? []) {
+        const his = a.contrib?.[cat] ?? 0
+        if (his < SCARCE_MIN || his <= most) continue
+        const like = pool.filter((r) => r.id !== a.id && r.c[cat] >= SCARCE_SHARE * his)
+        if (like.length > SCARCE_FEW) continue
+        best = { cat, left: like.length, names: like.map((r) => p(r.id).name), next: nextAfter }
+        most = his
+      }
+      return best
+    }
+    takeNow = takeNow.map((a) => ({ ...a, scarce: scarceFor(a) }))
+  }
+
   // ── The tied group ──
   let tied: DraftView['tied'] = null
   const head = takeNow[0]
@@ -1002,7 +1041,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
         players: shown
           .map(({ a, fit }) => ({
             id: a.id, name: a.name, team: a.team, positions: a.positions, behind: best - a.score, appPick: a.id === head.id,
-            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName,
+            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName, scarce: scarceFor(a),
             preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base), there: a.there, tag: a.tag,
           })),
       }

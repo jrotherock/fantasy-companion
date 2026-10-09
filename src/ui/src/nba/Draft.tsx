@@ -298,7 +298,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
       )}
       {view.tied ? <Tied view={view} act={act} pins={pins} pin={pin} second={second} previewId={previewId} setPreviewId={setPreviewId} /> : <div className="threeup">
         {cards.map((a, i) => (
-          <div key={a.id} className={`vc ${i === 0 ? 'sel' : ''}${previewId === a.id ? ' nb-previewing' : ''}`}
+          <div key={a.id} className={`vc ${i === 0 ? 'sel' : ''}${previewId === a.id ? ' nb-previewing' : ''}${a.scarce ? ' nb-scarcecard' : ''}`}
             onMouseEnter={() => a.preview && setPreviewId(a.id)} onMouseLeave={() => setPreviewId(null)}
             // A tap on a phone toggles the preview; the Mark drafted button stops its own click.
             onClick={() => a.preview && setPreviewId(previewId === a.id ? null : a.id)}>
@@ -327,6 +327,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
                 ].filter(Boolean).flatMap((el, i) => (i ? [<span key={`d${i}`}> · </span>, el] : [el]))}
               </div>
             )}
+            {a.scarce && <ScarceLine s={a.scarce} />}
             <div className={`nb-fate ${a.there != null || a.canWait ? 'nb-wait' : 'nb-gone'}`}>
               {a.there != null ? `${pct(a.there)} there at pick ${view.clock.myNext}` : a.thenName ? null : a.canWait ? `${pct(a.survives)} back next turn — can wait` : `${pct(1 - a.survives)} gone by your next turn`}
               {a.thenName && <span className="nb-pair">{a.there != null ? ' · ' : ''}then {a.thenName} at pick {second}</span>}
@@ -360,6 +361,16 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
   )
 }
 
+/** A close category this card fills that few others will be left to fill by my next pick. Information only. */
+function ScarceLine({ s }: { s: NonNullable<DraftView['advice'][number]['scarce']> }) {
+  const cat = s.cat === 'to' ? 'low TO' : LABEL[s.cat]
+  return (
+    <div className="nb-scarce" title={s.names.length ? `Likely still there at ${s.next} with as much ${cat}: ${s.names.join(', ')}` : `No one with as much ${cat} is likely still there at ${s.next}`}>
+      Scarce: {cat} — {s.left === 0 ? 'no one' : `only ${s.names[0] ?? '1'}`} like him likely there at {s.next}
+    </div>
+  )
+}
+
 /**
  * A near-tie shown whole: every player within the simulations' noise of the top card, ordered by how he fits
  * the roster so far, those likely back next turn last. The app's own pick is marked; the choice is yours.
@@ -369,7 +380,7 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
   // Three rows at most: three across on a wide screen holds all eight; on a phone, one across, three shown and the rest behind a tap.
   const [more, setMore] = useState(false)
   // The app's own pick always shows, wherever fit puts him.
-  const hidden = t.players.filter((x, i) => i >= 3 && !x.appPick).length
+  const hidden = t.players.filter((x, i) => i >= 3 && !x.appPick && !x.scarce).length
   return (
     <div>
       <div className="nb-tiednote nb-dim">
@@ -380,7 +391,7 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
       <div className="nb-tied">
         {t.players.map((x, i) => (
           <Fragment key={x.id}>
-          <div className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''} ${i >= 3 && !x.appPick && !more ? 'nb-tiedmore' : ''}${previewId === x.id ? ' nb-previewing' : ''}`}
+          <div className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''} ${i >= 3 && !x.appPick && !x.scarce && !more ? 'nb-tiedmore' : ''}${previewId === x.id ? ' nb-previewing' : ''}${x.scarce ? ' nb-scarcecard' : ''}`}
             // Looking at a card shows its numbers on the build tiles: a hover, or a tap on a phone.
             onMouseEnter={() => setPreviewId(x.id)} onMouseLeave={() => setPreviewId(null)}
             onClick={() => setPreviewId(previewId === x.id ? null : x.id)}>
@@ -394,6 +405,7 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
                 : <span key={c} className="nb-chip">{c === 'to' ? 'low TO' : LABEL[c]}</span>)}
               {x.costs.map((c) => <span key={c} className="nb-chip nb-chip-cost">−{c === 'to' ? 'high TO' : LABEL[c]}</span>)}
             </div>
+            {x.scarce && <ScarceLine s={x.scarce} />}
             <div className={`nb-fate ${x.canWait ? 'nb-wait' : 'nb-gone'}`}>
               {x.thenName ? <span className="nb-pair">then {x.thenName} at pick {second}</span>
                 : x.there != null ? `${pct(x.there)} there at pick ${view.clock.myNext}`
