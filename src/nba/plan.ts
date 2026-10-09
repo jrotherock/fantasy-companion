@@ -475,6 +475,9 @@ export interface TiedPlayer {
  * slots 1–10 after each plausible first pick: at 0.05 slots 3 and 4 almost never grouped; 0.06 groups most turns.
  */
 export const TIE_GROUP = 0.06
+/** How urgent a pick is: 0 likely gone by my next turn (75%+), 1 a coin flip, 2 likely back (can wait). */
+export const urgencyOf = (canWait: boolean, survives: number): 0 | 1 | 2 => (canWait ? 2 : survives <= 0.25 ? 0 : 1)
+
 /** Two rows of three at most; fewer than three is what the three cards already show. */
 const TIE_MAX = 6, TIE_MIN = 3
 
@@ -956,7 +959,9 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     // No fit tiebreak: in 400 simulated Hoops drafts, breaking near-ties toward my weak
     // categories cost 0.46 points of all-play (±0.14), and toward my strong ones 0.62.
     // The advice's own score already weighs fit where it matters (scripts/nba-strategy-sim.ts).
-    const tb = playoffTiebreak(takeNow, margin, (a) => a.canWait)
+    // Only among the equally urgent: likely gone, a coin flip, or likely back (2026-10-08 mock, pick 101:
+    // Maluach, a coin flip to be back, took the star from Quickley, 89% gone, on one playoff game).
+    const tb = playoffTiebreak(takeNow, margin, (a) => urgencyOf(a.canWait, a.survives))
     takeNow = tb.advice
     playoffNote = tb.note
   }
@@ -983,7 +988,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     // Only the choices for this pick: those likely back next turn are the plan line's, not this one's (mocks
     // 2026-10-08: eight of them crowded out the app's own pick). Likely gone (75%+) first, then coin flips; fit
     // orders each. The app's pick is always in.
-    const urgency = (a: { canWait: boolean; survives: number }): 0 | 1 | 2 => (waits(a) ? 2 : pairTurn || a.survives <= 0.25 ? 0 : 1)
+    const urgency = (a: { canWait: boolean; survives: number }): 0 | 1 | 2 => (pairTurn ? 0 : urgencyOf(a.canWait, a.survives))
     const group = advice.filter((a) => !waits(a) && Math.abs(head.score - a.score) <= TIE_GROUP)
     if (group.length >= TIE_MIN) {
       const best = Math.max(...group.map((a) => a.score))
@@ -1022,7 +1027,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       const wait = (id: string) => nextAfter != null && (nextAfter === myNext + 1 || survives(prep.adp(id), nextAfter, prep.league.adpSpread, myNext) >= 0.6)
       const first3 = [...ranked.filter((a) => !wait(a.id)), ...ranked.filter((a) => wait(a.id))].slice(0, 3)
       const margin = prep.cats ? 0.02 : Math.abs(first3[0]?.score ?? 0) * 0.01
-      return first3.length ? playoffTiebreak(first3.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), margin, (a) => wait(a.id)).advice : []
+      const back = (id: string) => nextAfter == null ? 0 : survives(prep.adp(id), nextAfter, prep.league.adpSpread, myNext)
+      return first3.length ? playoffTiebreak(first3.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), margin, (a) => urgencyOf(wait(a.id), back(a.id))).advice : []
     })()
     const top = order[0] ?? ranked[0]
     const ids = [...new Set([top?.id, top?.then, ...order.map((a) => a.id), ...ranked.map((a) => a.id)].filter(Boolean) as string[])].slice(0, 3)

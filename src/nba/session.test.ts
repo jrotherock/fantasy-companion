@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { addManual, emptyDraft, ingestYahoo, undoManual } from './session.js'
 import { NameIndex } from './join.js'
 import { draftOrder, parseDraftResults, parseTeams } from './yahooDraft.js'
-import { buildView, checkScoring, compareView, playoffTiebreak, prepare } from './plan.js'
+import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf } from './plan.js'
 import { adpFor } from './draft.js'
 
 const index = new NameIndex([
@@ -273,6 +273,13 @@ test('the playoff tiebreak never lifts a player who can wait over one who will n
   const cards = [a('Green', 5.407, 10, false), a('Maluach', 5.48, 11, true), a('VanVleet', 5.481, 10, true)]
   assert.equal(playoffTiebreak(cards, 0.02, (x) => x.canWait).advice[0].name, 'Green')
   assert.equal(playoffTiebreak([a('Up', 5.0, 9, false), a('Above', 5.015, 12, false)], 0.02).advice[0].name, 'Above', 'close on either side, same group')
+})
+
+test('the playoff tiebreak never lifts a coin flip over a player who will be gone', () => {
+  // The 2026-10-08 slot-1 mock, pick 101: Quickley 89% gone, Maluach 55% back, 0.013 apart, Maluach one more playoff game.
+  const a = (name: string, score: number, playoff: number, survives: number) => ({ name, score, playoff, canWait: false, survives })
+  const cards = [a('Quickley', 5.0, 10, 0.11), a('Maluach', 4.987, 11, 0.55), a('Turner', 4.983, 10, 0.17)]
+  assert.equal(playoffTiebreak(cards, 0.02, (x) => urgencyOf(x.canWait, x.survives)).advice[0].name, 'Quickley')
 })
 
 test('compare: a player off the cards is scored on the cards\' own scale, with a verdict in words', () => {
