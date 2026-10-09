@@ -446,6 +446,40 @@ export interface BoardRow {
 }
 
 /**
+ * Games over the last three seasons, for a player who has missed a lot of them, and the games the cards already
+ * count him for. Information beside the pick, not in it: the games are priced in (a projection blended with the
+ * record, missed games filled at the waiver line), and in replays a 25-game season cost a build about the same
+ * whoever else was on it (Davis −0.17 with Wembanyama and White, −0.18 on a guard roster, 2026-10-09), so the
+ * tag says how often, not how safe. Shown under 60% of games over the seasons on record or under 45 last season,
+ * with two seasons on record at least (a rookie's short first season is a role, not an injury): 34 of the 185
+ * players drafted in Hoops (2026-10-09), Curry, Davis, Tatum and Kyrie among them.
+ */
+export interface InjuryHistory { seasons: { season: number; gp: number }[]; counted: number }
+const INJURY_SHARE = 0.6, MOST_OF_SEASON = 45
+
+const lastSeasons = new WeakMap<Prepared, number>()
+function lastSeasonOf(prep: Prepared): number {
+  if (!lastSeasons.has(prep)) lastSeasons.set(prep, Math.max(0, ...[...prep.players.values()].flatMap((p) => (p.history ?? []).map((h) => h.season))))
+  return lastSeasons.get(prep)!
+}
+
+export function injuryHistoryOf(prep: Prepared, id: string): InjuryHistory | null {
+  const p = prep.players.get(id)
+  if (!p?.history || p.history.length < 2) return null
+  const last = Math.max(...p.history.map((h) => h.season), 0)
+  // The last finished season is the latest anyone has on record, not the calendar's (January is mid-season).
+  const now = lastSeasonOf(prep)
+  // The last three finished seasons, a missed one as zero once he has a season before it.
+  const years = [now - 2, now - 1, now].filter((y) => y >= Math.min(...p.history.map((h) => h.season)))
+  const seasons = years.map((season) => ({ season, gp: p.history.find((h) => h.season === season)?.gp ?? 0 }))
+  const share = p.durability?.gpShare ?? 1
+  const lastGp = seasons.at(-1)?.gp ?? 82
+  if (!(share < INJURY_SHARE || (last >= now - 1 && lastGp < MOST_OF_SEASON))) return null
+  const counted = prep.cats?.byId.get(id)?.games.gp ?? prep.points?.byId.get(id)?.games.gp ?? 0
+  return { seasons, counted: Math.round(counted) }
+}
+
+/**
  * A close category a card fills that will be hard to fill later: how many comparable helpers are likely still
  * there at my next pick, and who. Information only — the score, the star and the queue do not use it.
  */
@@ -474,6 +508,7 @@ export interface TiedPlayer {
   survives: number
   canWait: boolean
   scarce: Scarce | null
+  injuryHistory: InjuryHistory | null
   /** Which group of the order he is in: likely gone by my next turn, a coin flip, or likely back. */
   urgency: 0 | 1 | 2
   /** Back to back: who the cards would take with the pick straight after. */
@@ -579,7 +614,9 @@ export interface DraftView {
     /** On the cards only: my weekly win chance in each category with him added, for previewing on the build tiles. */
     preview?: Record<Cat, number>
     /** On the cards only: a close category he fills that few others likely there at my next pick can (scarceFor). */
-    scarce?: Scarce | null })[]
+    scarce?: Scarce | null
+    /** A player who has missed a lot of games: his last seasons and the games the cards already count him for. */
+    injuryHistory: InjuryHistory | null })[]
   /**
    * The three cards: the best players to take with this pick. A player the
    * room will very likely leave until my next turn is not an option for this
@@ -827,6 +864,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       gp: (prep.cats?.byId.get(a.id)?.games.gp ?? prep.points?.byId.get(a.id)?.games.gp) ?? 0,
       playoff: prep.playoff(a.id),
       returnNote: prep.returnNote(a.id),
+      injuryHistory: injuryHistoryOf(prep, a.id),
       bestBuild: bestBuildOf(prep, a.id),
       fits: prep.cats ? fitsOf(contribution(prep.cats.byId.get(a.id)!)) : [],
       stacks: prep.cats ? stacksOf(contribution(prep.cats.byId.get(a.id)!)) : [],
@@ -1050,7 +1088,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
         players: shown
           .map(({ a, fit }) => ({
             id: a.id, name: a.name, team: a.team, positions: a.positions, behind: best - a.score, appPick: a.id === head.id,
-            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName, scarce: scarceFor(a),
+            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName, scarce: scarceFor(a), injuryHistory: a.injuryHistory,
             preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base), there: a.there, tag: a.tag,
           })),
       }

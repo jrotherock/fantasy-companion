@@ -323,3 +323,4 @@ div.nb-cat { cursor: default; }
 /* The verdict: who to take and the one fact that might change your mind, above the cards. */
 .nb-verdict { font-size: var(--t-md); line-height: 1.45; margin: 0.15rem 0 0.45rem; }
 .nb-verdict .nb-dim { font-size: var(--t-sm); }
+.nb-tag.nb-injhist { color: var(--muted); border-color: var(--line); font-weight: 400; }

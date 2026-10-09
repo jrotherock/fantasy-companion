@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { addManual, emptyDraft, ingestYahoo, undoManual } from './session.js'
 import { NameIndex } from './join.js'
 import { draftOrder, parseDraftResults, parseTeams } from './yahooDraft.js'
-import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf } from './plan.js'
+import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf } from './plan.js'
 import { adpFor } from './draft.js'
 
 const index = new NameIndex([
@@ -408,4 +408,18 @@ test('a scarce note marks a close category a card fills with one or no comparabl
   const h = { ...emptyDraft('t'), slot: 5 }
   h.picks = harker.adpOrder.slice(0, 26).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
   assert.ok(buildView(harker, h, new Map()).takeNow.every((a) => !a.scarce))
+})
+
+test('an injury history tag shows a player who has missed a lot of games, with the games the cards count him for', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
+  const id = (n: string) => players.find((p: any) => p.name === n).id
+  const davis = injuryHistoryOf(hoops, id('Anthony Davis'))!
+  assert.deepEqual(davis.seasons.map((s) => s.gp), players.find((p: any) => p.name === 'Anthony Davis').history.slice(-3).map((h: any) => h.gp))
+  assert.equal(davis.counted, Math.round(hoops.cats!.byId.get(id('Anthony Davis'))!.games.gp))
+  assert.equal(injuryHistoryOf(hoops, id('Derrick White')), null, 'a durable player has no tag')
+  const rookie = players.find((p: any) => p.history?.length === 1)
+  if (rookie) assert.equal(injuryHistoryOf(hoops, rookie.id), null, 'one season is a role, not a history')
 })

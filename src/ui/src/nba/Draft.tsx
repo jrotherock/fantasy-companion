@@ -302,7 +302,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
             onClick={() => a.preview && setPreviewId(previewId === a.id ? null : a.id)}>
             <span className="rk">{i + 1}{i === 0 && onClock ? ' · TAKE' : ''}</span>
             <span className="nm">{a.name}{a.tag === 'like' && <span className="nb-tag nb-like">like</span>}{a.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
-            <span className="sub">{a.team} · {a.positions.join(', ')}</span>
+            <span className="sub">{a.team} · {a.positions.join(', ')}{a.injuryHistory && <InjuryTag h={a.injuryHistory} />}</span>
             <div className="nb-reason">
               {reasons(a.contrib, locks)}
               {a.fpg != null && <span>{a.fpg.toFixed(1)} fp/g</span>}
@@ -409,6 +409,12 @@ function Verdict({ view, second }: { view: DraftView; second: number }) {
   )
 }
 
+/** He has missed a lot of games: his last seasons, and that the cards already count him for fewer. */
+function InjuryTag({ h }: { h: NonNullable<DraftView['advice'][number]['injuryHistory']> }) {
+  const games = h.seasons.map((s) => s.gp).join(', ')
+  return <span className="nb-tag nb-injhist" title={`Games, last ${h.seasons.length} seasons: ${games}. Already priced in: the cards count him for ${h.counted} games, with the rest filled from waivers.`}>inj {h.seasons.map((s) => s.gp).join('·')} → {h.counted}g</span>
+}
+
 /** A close category this card fills that few others will be left to fill by my next pick. Information only. */
 function ScarceLine({ s }: { s: NonNullable<DraftView['advice'][number]['scarce']> }) {
   const cat = s.cat === 'to' ? 'low TO' : LABEL[s.cat]
@@ -444,7 +450,7 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
             onClick={() => setPreviewId(previewId === x.id ? null : x.id)}>
             <span className="nm">{x.appPick && <span className="nb-apppick" title="The app's own pick">★ </span>}{x.name}
               {x.tag === 'like' && <span className="nb-tag nb-like">like</span>}{x.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
-            <span className="sub" title={x.behind < 0.0005 ? 'The best score in the group' : `${x.behind.toFixed(3)} categories a week behind the best: noise`}>{x.team} · {x.positions.join(', ')}</span>
+            <span className="sub" title={x.behind < 0.0005 ? 'The best score in the group' : `${x.behind.toFixed(3)} categories a week behind the best: noise`}>{x.team} · {x.positions.join(', ')}{x.injuryHistory && <InjuryTag h={x.injuryHistory} />}</span>
             {x.appPick && view.takeNow[0]?.tiebreak && <span className="nb-tiedwhy" title={`The app's pick on a playoff tiebreak: ${view.takeNow[0].playoff} games in your playoff weeks`}>{view.takeNow[0].playoff} PO g</span>}
             <div className="nb-tiedfit">
               {x.adds.map((c) => x.fills.includes(c) || x.scarce?.cat === c
