@@ -283,10 +283,8 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
     <div>
       <div className="vhead">
         <span className="vlabel">{onClock ? 'TAKE' : `LIKELY THERE AT YOUR PICK ${view.clock.myNext}`}</span>
-        {view.tied ? <span className="conf close">near-tie · any of these</span>
-          : onClock && <span className={`conf ${close ? 'close' : 'clear'}`}>{close ? 'close call' : 'clear pick'}</span>}
-        {cards[0].tiebreak && <span className="conf close">playoff tiebreak</span>}
       </div>
+      <Verdict view={view} second={second} />
       {stale ? (
         <div className="nb-queue nb-queue-stale">
           <span className="vlabel">QUEUE CHANGED</span> Put <b>{cards[0].name}</b> first in Yahoo — your queue would take {stale}
@@ -328,10 +326,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
               </div>
             )}
             {a.scarce && <ScarceLine s={a.scarce} />}
-            <div className={`nb-fate ${a.there != null || a.canWait ? 'nb-wait' : 'nb-gone'}`}>
-              {a.there != null ? `${pct(a.there)} there at pick ${view.clock.myNext}` : a.thenName ? null : a.canWait ? `${pct(a.survives)} back next turn — can wait` : `${pct(1 - a.survives)} gone by your next turn`}
-              {a.thenName && <span className="nb-pair">{a.there != null ? ' · ' : ''}then {a.thenName} at pick {second}</span>}
-            </div>
+            <Fate view={view} survives={a.survives} canWait={a.canWait} there={a.there} thenName={a.thenName} second={second} />
             <div className="nb-cardbtns">
               <button className={`btn ${i === 0 && onClock ? 'primary' : ''}`} onClick={(e) => { e.stopPropagation(); act('pick', { playerId: a.id }) }}>Mark drafted</button>
               <button className={`btn nb-cmp ${pins.includes(a.id) ? 'on' : ''}`} title="Compare side by side" onClick={(e) => { e.stopPropagation(); pin(a.id) }}>{pins.includes(a.id) ? 'Comparing' : 'Compare'}</button>
@@ -361,6 +356,59 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
   )
 }
 
+/**
+ * Gone or back by my next pick, in one color rule: amber when he is more likely gone than not (take him now
+ * or lose him), blue when more likely back. Back to back, the pair; off the clock, the chance he is there.
+ */
+function Fate({ view, survives, canWait, there, thenName, second }: { view: DraftView; survives: number; canWait: boolean; there: number | null; thenName: string | null; second: number }) {
+  const next = view.ahead[0]?.overall
+  const at = next != null ? ` at ${next}` : ' next turn'
+  if (thenName) return <div className="nb-fate nb-wait"><span className="nb-pair">{there != null ? `${pct(there)} there at pick ${view.clock.myNext} · ` : ''}then {thenName} at pick {second}</span></div>
+  if (there != null) return <div className={`nb-fate ${there >= 0.5 ? 'nb-wait' : 'nb-gone'}`}>{pct(there)} there at pick {view.clock.myNext}</div>
+  return survives >= 0.5 || canWait
+    ? <div className="nb-fate nb-wait">{pct(survives)} back{at}{canWait ? ' — can wait' : ''}</div>
+    : <div className="nb-fate nb-gone">{pct(1 - survives)} gone by{next != null ? ` ${next}` : ' your next turn'}</div>
+}
+
+
+/**
+ * One line above the cards: who to take, how sure, and the one thing that might change your mind — a scarce
+ * category first, then better scores that will be back, the playoff tiebreak, the avoid list, the pair.
+ */
+function Verdict({ view, second }: { view: DraftView; second: number }) {
+  const cards = view.takeNow
+  const star = cards[0]
+  if (!star) return null
+  const onClock = view.clock.onClock
+  const next = view.ahead[0]?.overall
+  const tied = view.tied
+  const others = tied ? tied.players.filter((x) => !x.appPick) : cards.slice(1)
+  const waiting = !tied && !star.thenName && cards.every((a) => a.canWait)
+  // A close call is with someone as urgent as the pick: one who will be back is not a rival for this turn.
+  const margin = view.league.scoring === 'categories' ? 0.02 : Math.abs(star.score) * 0.01
+  const rival = cards.slice(1).find((a) => a.canWait === star.canWait && Math.abs(star.score - a.score) < margin)
+  const better = !tied ? cards.filter((a) => a.id !== star.id && a.canWait && !star.canWait && a.score > star.score) : []
+  const status = tied ? `or any of these ${others.length}, they're even`
+    : waiting ? 'nothing you need is about to go'
+    : better.length ? `${better.map((a) => lastName(a.name)).join(' and ')} score${better.length === 1 ? 's' : ''} a bit higher but will likely be back${next != null ? ` at ${next}` : ''}`
+    : rival ? `close call with ${rival.name}` : 'clear pick'
+  const scarceText = (sc: NonNullable<DraftView['advice'][number]['scarce']>) =>
+    `${sc.cat === 'to' ? 'low TO' : LABEL[sc.cat]} is scarce: ${sc.left === 0 ? 'no one' : 'only 1'} like him at ${sc.next}`
+  const scarceOther = (tied ? tied.players : cards).find((x) => x.id !== star.id && x.scarce)
+  const fact = star.scarce ? `His ${scarceText(star.scarce)}.`
+    : scarceOther?.scarce ? `${lastName(scarceOther.name)}'s ${scarceText(scarceOther.scarce)}.`
+    : star.tiebreak ? `Playoff tiebreak: ${star.playoff} games in your playoff weeks.`
+    : star.avoided ? 'On your avoid list, and still ahead.'
+    : star.thenName ? `Then ${star.thenName} at pick ${second}.`
+    : waiting ? `All ${cards.length} will likely be back${next != null ? ` at ${next}` : ''}.`
+    : null
+  return (
+    <div className="nb-verdict">
+      <b>{onClock ? 'Take' : 'Plan on'} {star.name}</b> — {status}.{fact && <span className="nb-dim"> {fact}</span>}
+    </div>
+  )
+}
+
 /** A close category this card fills that few others will be left to fill by my next pick. Information only. */
 function ScarceLine({ s }: { s: NonNullable<DraftView['advice'][number]['scarce']> }) {
   const cat = s.cat === 'to' ? 'low TO' : LABEL[s.cat]
@@ -384,8 +432,7 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
   return (
     <div>
       <div className="nb-tiednote nb-dim">
-        {t.players.length} players who will not last, within 0.06 categories a week of the app’s pick — the simulations cannot separate them; those likely back are in the plan below.{' '}
-        {t.with ? <>Surest gone first, then by fit with <b>{t.with}</b>.</> : 'In the cards’ order: no roster yet to fit.'} <b>★</b> is the app’s own pick.
+        Within 0.06 categories a week of each other: the simulations cannot separate them. <b>★</b> first, then surest gone{t.with ? <>, then by fit with <b>{t.with}</b></> : ''}; those likely back are in the plan below.
         <span className="nb-tiedkey"> <span className="nb-chip nb-chip-fill">+</span> fills a gap{t.with && t.with !== 'your roster' ? ` next to ${t.with.split(' ').at(-1)}` : ''} · <span className="nb-chip">plain</span> a strength you already have · <span className="nb-chip nb-chip-cost">−</span> he costs · tap a card for its numbers on Your build</span>
       </div>
       <div className="nb-tied">
@@ -397,21 +444,16 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
             onClick={() => setPreviewId(previewId === x.id ? null : x.id)}>
             <span className="nm">{x.appPick && <span className="nb-apppick" title="The app's own pick">★ </span>}{x.name}
               {x.tag === 'like' && <span className="nb-tag nb-like">like</span>}{x.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
-            <span className="sub">{x.team} · {x.positions.join(', ')}<span className="nb-dim"> · {x.behind < 0.0005 ? 'top score' : `−${x.behind.toFixed(3)}`}</span></span>
+            <span className="sub" title={x.behind < 0.0005 ? 'The best score in the group' : `${x.behind.toFixed(3)} categories a week behind the best: noise`}>{x.team} · {x.positions.join(', ')}</span>
             {x.appPick && view.takeNow[0]?.tiebreak && <span className="nb-tiedwhy" title={`The app's pick on a playoff tiebreak: ${view.takeNow[0].playoff} games in your playoff weeks`}>{view.takeNow[0].playoff} PO g</span>}
             <div className="nb-tiedfit">
-              {x.adds.map((c) => x.fills.includes(c)
+              {x.adds.map((c) => x.fills.includes(c) || x.scarce?.cat === c
                 ? <span key={c} className="nb-chip nb-chip-fill">+{c === 'to' ? 'low TO' : LABEL[c]}</span>
                 : <span key={c} className="nb-chip">{c === 'to' ? 'low TO' : LABEL[c]}</span>)}
               {x.costs.map((c) => <span key={c} className="nb-chip nb-chip-cost">−{c === 'to' ? 'high TO' : LABEL[c]}</span>)}
             </div>
             {x.scarce && <ScarceLine s={x.scarce} />}
-            <div className={`nb-fate ${x.canWait ? 'nb-wait' : 'nb-gone'}`}>
-              {x.thenName ? <span className="nb-pair">then {x.thenName} at pick {second}</span>
-                : x.there != null ? `${pct(x.there)} there at pick ${view.clock.myNext}`
-                : x.urgency === 2 ? `Likely back: ${pct(x.survives)} next turn — better taken then`
-                : x.urgency === 1 ? `Coin flip: ${pct(x.survives)} back next turn` : `${pct(1 - x.survives)} gone by your next turn`}
-            </div>
+            <Fate view={view} survives={x.survives} canWait={x.canWait} there={x.there} thenName={x.thenName} second={second} />
             <div className="nb-cardbtns">
               <button className={`btn ${x.appPick && view.clock.onClock ? 'primary' : ''}`} onClick={(e) => { e.stopPropagation(); act('pick', { playerId: x.id }) }}>Mark drafted</button>
               <button className={`btn nb-cmp ${pins.includes(x.id) ? 'on' : ''}`} title="Compare side by side" onClick={(e) => { e.stopPropagation(); pin(x.id) }}>{pins.includes(x.id) ? 'Comparing' : 'Compare'}</button>

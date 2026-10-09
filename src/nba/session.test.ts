@@ -282,6 +282,15 @@ test('the playoff tiebreak never lifts a coin flip over a player who will be gon
   assert.equal(playoffTiebreak(cards, 0.02, (x) => urgencyOf(x.canWait, x.survives)).advice[0].name, 'Quickley')
 })
 
+test('the playoff tiebreak never lifts a player much likelier to be back than the card he passes', () => {
+  // The 2026-10-08 slot-9 mock, pick 52: Garland 29% back and the better score; Lillard 53% back, one more playoff game.
+  const a = (name: string, score: number, playoff: number, survives: number) => ({ name, score, playoff, canWait: false, survives })
+  const cards = [a('Garland', 4.452, 10, 0.29), a('Lillard', 4.433, 11, 0.53), a('Herro', 4.44, 9, 0.53)]
+  const urgent = (x: { canWait: boolean; survives: number }) => urgencyOf(x.canWait, x.survives)
+  assert.equal(playoffTiebreak(cards, 0.02, urgent, (x) => x.survives).advice[0].name, 'Garland')
+  assert.equal(playoffTiebreak([a('Garland', 4.452, 10, 0.29), a('Twin', 4.44, 11, 0.35)], 0.02, urgent, (x) => x.survives).advice[0].name, 'Twin', 'within 10 points it still breaks the tie')
+})
+
 test('compare: a player off the cards is scored on the cards\' own scale, with a verdict in words', () => {
   const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
   const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues

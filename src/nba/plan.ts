@@ -489,6 +489,9 @@ export interface TiedPlayer {
  * slots 1–10 after each plausible first pick: at 0.05 slots 3 and 4 almost never grouped; 0.06 groups most turns.
  */
 export const TIE_GROUP = 0.06
+/** How much likelier to be back than the first card a player may be and still win the playoff tiebreak. */
+export const TIEBREAK_BACK = 0.1
+
 /** How urgent a pick is: 0 likely gone by my next turn (75%+), 1 a coin flip, 2 likely back (can wait). */
 export const urgencyOf = (canWait: boolean, survives: number): 0 | 1 | 2 => (canWait ? 2 : survives <= 0.25 ? 0 : 1)
 
@@ -977,7 +980,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     // The advice's own score already weighs fit where it matters (scripts/nba-strategy-sim.ts).
     // Only among the equally urgent: likely gone, a coin flip, or likely back (2026-10-08 mock, pick 101:
     // Maluach, a coin flip to be back, took the star from Quickley, 89% gone, on one playoff game).
-    const tb = playoffTiebreak(takeNow, margin, (a) => urgencyOf(a.canWait, a.survives))
+    const tb = playoffTiebreak(takeNow, margin, (a) => urgencyOf(a.canWait, a.survives), (a) => (a.canWait ? 1 : a.survives))
     takeNow = tb.advice
     playoffNote = tb.note
   }
@@ -1032,10 +1035,16 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     if (group.length >= TIE_MIN) {
       const best = Math.max(...group.map((a) => a.score))
       const roster = CATS.reduce((o, c) => ({ ...o, [c]: mine.reduce((n, id) => n + contribution(prep.cats!.byId.get(id)!)[c], 0) }), {} as Record<Cat, number>)
-      const ordered = group.map((a) => ({ a, fit: tiedFit(a.contrib!, roster, d.locks) }))
-        .sort((x, y) => urgency(x.a) - urgency(y.a) || (mine.length ? y.fit.score - x.fit.score : y.a.score - x.a.score))
-      const shown = ordered.slice(0, TIE_MAX)
-      if (!shown.some((x) => x.a.id === head.id)) shown[TIE_MAX - 1] = ordered.find((x) => x.a.id === head.id)!
+      // Who is in: those more likely gone than not, closest to the app's pick first, then those more likely back
+      // (2026-10-09 replays: ordering by fit and cutting dropped Garland, the second-best score and a scarce assist
+      // source; closest-only dropped Knueppel and Anunoby, sure to be gone, for two players 57% back). Then the
+      // pick first, so the eye never hunts for the star; the rest by urgency, then fit.
+      const gap = (a: { score: number }) => Math.abs(head.score - a.score)
+      const likelyBack = (a: { survives: number }) => !pairTurn && a.survives >= 0.5
+      const closest = [...group].sort((x, y) => Number(likelyBack(x)) - Number(likelyBack(y)) || gap(x) - gap(y)).slice(0, TIE_MAX)
+      if (!closest.some((a) => a.id === head.id)) closest[TIE_MAX - 1] = head
+      const shown = closest.map((a) => ({ a, fit: tiedFit(a.contrib!, roster, d.locks) }))
+        .sort((x, y) => Number(y.a.id === head.id) - Number(x.a.id === head.id) || urgency(x.a) - urgency(y.a) || (mine.length ? y.fit.score - x.fit.score : y.a.score - x.a.score))
       tied = {
         with: !mine.length ? null : mine.length === 1 ? p(mine[0]).name : 'your roster',
         players: shown
@@ -1067,7 +1076,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       const first3 = [...ranked.filter((a) => !wait(a.id)), ...ranked.filter((a) => wait(a.id))].slice(0, 3)
       const margin = prep.cats ? 0.02 : Math.abs(first3[0]?.score ?? 0) * 0.01
       const back = (id: string) => nextAfter == null ? 0 : survives(prep.adp(id), nextAfter, prep.league.adpSpread, myNext)
-      return first3.length ? playoffTiebreak(first3.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), margin, (a) => urgencyOf(wait(a.id), back(a.id))).advice : []
+      return first3.length ? playoffTiebreak(first3.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), margin, (a) => urgencyOf(wait(a.id), back(a.id)), (a) => (wait(a.id) ? 1 : back(a.id))).advice : []
     })()
     const top = order[0] ?? ranked[0]
     const ids = [...new Set([top?.id, top?.then, ...order.map((a) => a.id), ...ranked.map((a) => a.id)].filter(Boolean) as string[])].slice(0, 3)
@@ -1413,13 +1422,17 @@ export const CLOSE_LOW = 0.35
 export const CLOSE_HIGH = 0.65
 
 
-export function playoffTiebreak<T extends { name: string; score: number; playoff: number | null; tiebreak?: boolean }>(advice: T[], margin: number, sameGroup: (a: T) => unknown = () => 0): { advice: T[]; note: string | null } {
+export function playoffTiebreak<T extends { name: string; score: number; playoff: number | null; tiebreak?: boolean }>(advice: T[], margin: number, sameGroup: (a: T) => unknown = () => 0, back?: (a: T) => number): { advice: T[]; note: string | null } {
   if (advice.length < 2) return { advice, note: null }
   const top = advice[0].score
   // Close to the first card on either side, and in its group: a player who can wait sits behind one who
   // will not last however close his score, and a tiebreak must not undo that (2026-10-08 mock: Maluach,
   // 93% back next turn, jumped Jalen Green, who would be gone).
-  const close = advice.filter((a) => Math.abs(top - a.score) <= margin && sameGroup(a) === sameGroup(advice[0]))
+  const close = advice.filter((a) => Math.abs(top - a.score) <= margin && sameGroup(a) === sameGroup(advice[0]) &&
+    // Nor lift a player much likelier to be back than the first card: a coin flip runs from 25% to 60%, too wide
+    // to call 29% and 53% equally urgent (2026-10-09 mock, pick 52: Lillard, 53% back, took the star from Garland,
+    // 29% back and the better score, on one playoff game).
+    (!back || back(a) <= back(advice[0]) + TIEBREAK_BACK))
   if (close.length < 2) return { advice, note: null }
   const known = close.filter((a) => a.playoff != null)
   const most = Math.max(...known.map((a) => a.playoff!))
