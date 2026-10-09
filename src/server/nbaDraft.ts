@@ -111,7 +111,7 @@ async function tryApi(m: MockEntry) {
   let ok = false
   // With no Yahoo connection there is nothing to try: the extension reads it.
   if (yahooApi.connected() && !yahooApi.replaying()) try {
-    await yahooApi.call(`league/${load().leagues.find((l) => l.id === m.id)!.leagueKey}/draftresults`)
+    await yahooApi.call(`league/${load().leagues.find((l) => l.id === m.id)!.leagueKey}/draftresults`, { by: 'nba-mock-probe' })
     ok = true
   } catch { ok = false }
   const list = readMocks().map((x) => (x.id === m.id ? { ...x, apiOk: ok } : x))

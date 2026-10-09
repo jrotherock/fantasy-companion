@@ -63,13 +63,13 @@ async function step(leagueId: string, key: string): Promise<number> {
     // A mock drafts from the moment it is found, and has no meta worth asking for.
     if (leagueId.startsWith('nba-mock-')) w.status = w.status ?? 'draft'
     else if (w.status !== 'draft' || Date.now() - w.statusAt > 2 * 60_000) {
-      w.status = draftStatus(await yahooApi.call(`league/${key}`))
+      w.status = draftStatus(await yahooApi.call(`league/${key}`, { by: 'nba-draft' }))
       w.statusAt = Date.now()
     }
     if (w.status === 'postdraft' && w.teamsAt) return Infinity
     // Seats change only when the commissioner sets or reshuffles them; every few minutes is plenty.
     if (!w.teamsAt || Date.now() - w.teamsAt > 5 * 60_000) {
-      w.teams = parseTeams(await yahooApi.call(`league/${key}/teams`))
+      w.teams = parseTeams(await yahooApi.call(`league/${key}/teams`, { by: 'nba-draft' }))
       w.teamsAt = Date.now()
     }
     const order = draftOrder(w.teams)
@@ -79,12 +79,12 @@ async function step(leagueId: string, key: string): Promise<number> {
       return order.length ? ORDER_SET : HOUR
     }
 
-    const picks = parseDraftResults(await yahooApi.call(`league/${key}/draftresults`))
+    const picks = parseDraftResults(await yahooApi.call(`league/${key}/draftresults`, { by: 'nba-draft' }))
     if (picks.length !== w.picks) { w.picks = picks.length; w.changedAt = Date.now() }
     const unknown = picks.map((p) => p.playerKey).filter((k) => !playerByYahooId(k.split('.').pop()!) && !w.names.has(k))
     for (let i = 0; i < unknown.length; i += 25) {
       const batch = unknown.slice(i, i + 25)
-      for (const [k, v] of parsePlayerNames(await yahooApi.call(`league/${key}/players;player_keys=${batch.join(',')}`))) w.names.set(k, v)
+      for (const [k, v] of parsePlayerNames(await yahooApi.call(`league/${key}/players;player_keys=${batch.join(',')}`, { by: 'nba-draft' }))) w.names.set(k, v)
     }
     const teamName = new Map(w.teams.map((t) => [t.key, t.name]))
     const teams = w.teams.length || 1

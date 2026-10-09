@@ -44,15 +44,15 @@ export function opponentReport(leagueId: string): OpponentReport | null {
 }
 
 async function season(leagueKey: string, label: string): Promise<{ season?: HistSeason & { leagueKey: string }; skip?: string }> {
-  const teams = parseTeams(await yahooApi.call(`league/${leagueKey}/teams`))
+  const teams = parseTeams(await yahooApi.call(`league/${leagueKey}/teams`, { by: 'nba-history' }))
   if (!teams.some((t) => t.mine)) return { skip: 'you had no team in it' }
   const manager = new Map(teams.map((t) => [t.key, t.manager]))
-  const picks = parseDraftResults(await yahooApi.call(`league/${leagueKey}/draftresults`))
+  const picks = parseDraftResults(await yahooApi.call(`league/${leagueKey}/draftresults`, { by: 'nba-history' }))
   if (!picks.length) return { skip: 'no draft results' }
   const info = new Map<string, { positions: string[]; adp: number | null }>()
   const keys = picks.map((p) => p.playerKey)
   for (let i = 0; i < keys.length; i += 25) {
-    for (const [k, v] of parseDraftPlayers(await yahooApi.call(`league/${leagueKey}/players;player_keys=${keys.slice(i, i + 25).join(',')}/draft_analysis`))) info.set(k, v)
+    for (const [k, v] of parseDraftPlayers(await yahooApi.call(`league/${leagueKey}/players;player_keys=${keys.slice(i, i + 25).join(',')}/draft_analysis`, { by: 'nba-history' }))) info.set(k, v)
   }
   return {
     season: {
@@ -73,7 +73,7 @@ export async function fetchHistory(leagueId: string, currentKey: string, extra: 
     let key: string | null = currentKey
     let first = true
     while (key) {
-      const node: { meta: Record<string, any> } | undefined = leagueNodes(await yahooApi.call(`league/${key}`))[0]
+      const node: { meta: Record<string, any> } | undefined = leagueNodes(await yahooApi.call(`league/${key}`, { by: 'nba-history' }))[0]
       if (!node) break
       if (!first) targets.set(String(node.meta.season), key)
       first = false
@@ -82,7 +82,7 @@ export async function fetchHistory(leagueId: string, currentKey: string, extra: 
     // Older seasons from the config, which need that year's game key.
     const missing = extra.filter((e) => !targets.has(e.season))
     if (missing.length) {
-      const games = parseGameKeys(await yahooApi.call(`games;game_codes=nba;seasons=${missing.map((e) => e.season).join(',')}`))
+      const games = parseGameKeys(await yahooApi.call(`games;game_codes=nba;seasons=${missing.map((e) => e.season).join(',')}`, { by: 'nba-history' }))
       for (const e of missing) if (games.has(e.season)) targets.set(e.season, `${games.get(e.season)}.l.${e.leagueId}`)
     }
     const out: StoredHistory = { leagueId, fetchedAt: Date.now(), seasons: [], skipped: [] }

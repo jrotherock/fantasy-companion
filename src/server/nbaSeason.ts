@@ -246,22 +246,22 @@ async function readLeague(l: SeasonLeague & { myTeamId: string | null }, force =
     }
   }
   try {
-    await run('settings', async () => { s.settings = parseSeasonSettings(await yahooApi.call(`league/${key}/settings`)) })
-    await run('weeks', async () => { s.weeks = parseGameWeeks(await yahooApi.call(`game/${gameKey}/game_weeks`)) })
-    await run('rosters', async () => { s.rosters = parseLeagueRosters(await yahooApi.call(`league/${key}/teams/roster`)) })
+    await run('settings', async () => { s.settings = parseSeasonSettings(await yahooApi.call(`league/${key}/settings`, { by: 'nba-season' })) })
+    await run('weeks', async () => { s.weeks = parseGameWeeks(await yahooApi.call(`game/${gameKey}/game_weeks`, { by: 'nba-season' })) })
+    await run('rosters', async () => { s.rosters = parseLeagueRosters(await yahooApi.call(`league/${key}/teams/roster`, { by: 'nba-season' })) })
     const mine = s.rosters.find((r) => r.team.mine)?.team ?? s.rosters.find((r) => r.team.id === l.myTeamId)?.team
     if (s.rosters.some((r) => r.players.length) && mine) {
-      await run('today', async () => { s.mineToday = parseRosterDay(await yahooApi.call(`team/${mine.key}/roster;date=${today}/players`)) })
-      await run('scoreboard', async () => { s.scoreboard = parseNbaScoreboard(await yahooApi.call(`league/${key}/scoreboard`)) })
-      await run('standings', async () => { s.standings = parseStandings(leagueBody(await yahooApi.call(`league/${key}/standings`))) })
-      await run('waivers', async () => { s.waivers = parsePlayers(await yahooApi.call(`league/${key}/players;status=W;count=25`)).map((p) => p.yahooId) })
-      await run('transactions', async () => { s.transactions = parseTransactions(leagueBody(await yahooApi.call(`league/${key}/transactions;types=add,drop,trade;count=25`))) })
+      await run('today', async () => { s.mineToday = parseRosterDay(await yahooApi.call(`team/${mine.key}/roster;date=${today}/players`, { by: 'nba-season' })) })
+      await run('scoreboard', async () => { s.scoreboard = parseNbaScoreboard(await yahooApi.call(`league/${key}/scoreboard`, { by: 'nba-season' })) })
+      await run('standings', async () => { s.standings = parseStandings(leagueBody(await yahooApi.call(`league/${key}/standings`, { by: 'nba-season' }))) })
+      await run('waivers', async () => { s.waivers = parsePlayers(await yahooApi.call(`league/${key}/players;status=W;count=25`, { by: 'nba-season' })).map((p) => p.yahooId) })
+      await run('transactions', async () => { s.transactions = parseTransactions(leagueBody(await yahooApi.call(`league/${key}/transactions;types=add,drop,trade;count=25`, { by: 'nba-season' }))) })
       await run('past', async () => {
         const current = weekOf(s.weeks, today)?.[0] ?? 0
         // Finished weeks are read once each.
         for (let w = 1; w < current; w++) {
           if (s.past[w]?.length && s.past[w].every((m) => m.status === 'postevent')) continue
-          s.past[w] = parseNbaScoreboard(await yahooApi.call(`league/${key}/scoreboard;week=${w}`))
+          s.past[w] = parseNbaScoreboard(await yahooApi.call(`league/${key}/scoreboard;week=${w}`, { by: 'nba-season' }))
         }
       })
     }
