@@ -67,7 +67,7 @@ const players: NbaPlayer[] = (() => {
     return { ...p, projection: { ...p.projection, gp: gamesAfterReturn(p, av, teamDates, '2026-10-05').gp, gpSource: 'injury' as const } }
   })
 })()
-const league = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues.find((l: any) => l.id === 'nba-hoops')
+const league = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues.find((l: any) => l.id === (arg('league') ?? 'nba-hoops'))
 const noiseR = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r as Record<Cat, number>
 const rounds = rosterSpots(league.roster)
 const byId = new Map(players.map((p) => [p.id, p]))
@@ -404,6 +404,9 @@ if (MODE === 'centers') {
   strategies['3 C by my pick 11'] = cMin(3, 11)
   strategies['3 C by my pick 12'] = cMin(3, 12)
   strategies['3 C by my pick 13'] = cMin(3, 13)
+  // `--keep "pick 6"`: only the app and the rules naming that, to confirm one result on fresh rooms.
+  const keep = arg('keep')
+  if (keep) for (const k of Object.keys(strategies)) if (k !== 'the app (recommender)' && !k.includes(keep)) delete strategies[k]
 }
 
 if (MODE === 'pool') {
