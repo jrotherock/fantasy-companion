@@ -285,65 +285,77 @@ function Today({ v }: { v: SeasonView }) {
   if (!l) return <div className="ckempty">{v.startsOn ? `No games yet: the season starts ${dateWord(v.startsOn)}${v.week?.opponent ? `, week 1 against ${v.week.opponent.name}` : ''}.` : "Today's lineup has not been read yet."}</div>
   const first = l.moves.map((m) => m.by).filter(Boolean).sort()[0] ?? null
   const order = (s: string | null) => ['PG', 'SG', 'G', 'SF', 'PF', 'F', 'C', 'Util', 'BN', 'IL', 'IL+'].indexOf(s ?? 'BN')
-  const rows = [...l.rows].sort((a, b) => order(a.slot) - order(b.slot))
+  const sorted = [...l.rows].sort((a, b) => order(a.slot) - order(b.slot))
+  const out = (r: typeof sorted[number]) => r.slot === 'IL' || r.slot === 'IL+' || r.status === 'out' || r.status === 'injured'
+  const tonight = sorted.filter((r) => r.game && !out(r))
+  const noGame = sorted.filter((r) => !r.game && !out(r))
+  const hurt = sorted.filter(out)
   const gamesToday = l.rows.some((r) => r.game)
+  const actions = l.moves.length + l.ilMoves.length
   return (
     <>
-      <div className={`nl-verdict ${l.ok ? 'ok' : 'fix'}`}>
-        {l.ok
-          ? gamesToday ? 'Lineup is right for tonight' : v.startsOn ? `The season starts ${dateWord(v.startsOn)}${v.week?.opponent ? ` — week 1 against ${v.week.opponent.name}` : ''}` : 'No games for your players today'
-          : `${l.moves.length} change${l.moves.length === 1 ? '' : 's'} to make${first ? ` — first by ${time(first)}` : ''}`}
-        {l.lostStarts > 0 && <span className="nl-sub"> · {l.lostStarts} start{l.lostStarts === 1 ? '' : 's'} lost as it stands</span>}
+      {/* One block for everything to do before tip: the verdict, the moves, IL, and tonight in a line. */}
+      <div className={`nl-act ${actions ? 'fix' : 'ok'}`}>
+        <div className="nl-acth">
+          {actions
+            ? `${actions} thing${actions === 1 ? '' : 's'} to do${first ? ` — first by ${time(first)}` : ''}`
+            : gamesToday ? 'Lineup is right for tonight' : v.startsOn ? `The season starts ${dateWord(v.startsOn)}${v.week?.opponent ? ` — week 1 against ${v.week.opponent.name}` : ''}` : 'No games for your players today'}
+        </div>
+        {gamesToday && (
+          <div className="nl-acts">
+            <b>{l.playing}</b> of yours play tonight · {l.emptyTonight > 0 ? <><b>{l.emptyTonight}</b> empty spot{l.emptyTonight === 1 ? '' : 's'}</> : 'every spot filled'}
+            {l.firstLock && <> · first lock <b>{time(l.firstLock)}</b></>}
+            {l.lostStarts > 0 && <> · <span className="nl-cost">{l.lostStarts} start{l.lostStarts === 1 ? '' : 's'} lost as it stands</span></>}
+          </div>
+        )}
+        {actions > 0 && (
+          <ul className="nl-moves">
+            {l.moves.map((m) => (
+              <li key={m.start}><b>Start {name(m.start)}</b>{m.bench && <> for <b>{name(m.bench)}</b></>}<span className="nl-why">{m.why}{m.by ? ` · by ${time(m.by)}` : ''}</span></li>
+            ))}
+            {l.ilMoves.map((m) => (
+              <li key={m.id}><b className="nl-amber">{m.action === 'to-il' ? `Move ${m.name} to IL` : `Take ${m.name} off IL`}</b><span className="nl-why">{m.why}</span></li>
+            ))}
+          </ul>
+        )}
       </div>
-      {gamesToday && (
-        <p className="nl-line">
-          Tonight: <b>{l.playing}</b> of yours play{l.emptyTonight > 0 ? <> · <b>{l.emptyTonight}</b> empty spot{l.emptyTonight === 1 ? '' : 's'} (a free agent who plays tonight would fill {l.emptyTonight === 1 ? 'it' : 'them'})</> : ' · every spot filled'}
-          {l.firstLock && <> · first lock <b>{time(l.firstLock)}</b></>}
-        </p>
-      )}
-      {l.moves.length > 0 && (
-        <ul className="nl-moves">
-          {l.moves.map((m) => (
-            <li key={m.start}>
-              <b>Start {name(m.start)}</b>{m.bench && <> for <b>{name(m.bench)}</b></>}
-              <span className="nl-why">{m.why}{m.by ? ` · by ${time(m.by)}` : ''}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {l.ilMoves.length > 0 && (
-        <ul className="nl-moves nl-ilmoves">
-          {l.ilMoves.map((m) => (
-            <li key={m.id}>
-              <b>{m.action === 'to-il' ? `Move ${m.name} to IL` : `Take ${m.name} off IL`}</b>
-              <span className="nl-why">{m.why}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {gamesToday
+        ? <>
+            <RosterGroup title="Playing tonight" rows={tonight} showLine />
+            <RosterGroup title="No game today" rows={noGame} />
+          </>
+        : <RosterGroup title="Next games" rows={[...tonight, ...noGame]} />}
+      {hurt.length > 0 && <RosterGroup title="Out or on IL" rows={hurt} />}
+      <p className="nl-note">Yahoo locks each player at his game's tip. Tonight's line is his projection; once his game starts it shows what he has done, read from Yahoo about every ten minutes. "Wk" is his games left in the matchup week.</p>
+    </>
+  )
+}
+
+/** A group of today's roster: slot, player and tag, the game (or the next one), tonight's line, games left this week. */
+function RosterGroup({ title, rows, showLine }: { title: string; rows: NonNullable<SeasonView['lineup']>['rows']; showLine?: boolean }) {
+  if (!rows.length) return null
+  return (
+    <>
+      <div className="nl-subh nl-grouph">{title} <span className="nl-dim">· {rows.length}</span></div>
       <table className="nl-table nl-today">
-        <thead><tr>
-          <th className="l nl-slotc">Slot</th><th className="l">Player</th>
-          <th className="l nl-gamec">{gamesToday ? 'Tonight' : 'Next game'}</th>
-          {gamesToday && <th className="l" title="Tonight's projected line: points, rebounds, assists, threes, steals, blocks">Tonight's line</th>}
-          <th className="nl-wkc" title="Games left in this matchup week">Wk</th>
-        </tr></thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.id} className={!r.game ? 'nl-idle' : ''}>
+            <tr key={r.id}>
               <td className="l nl-slot">{r.slot ?? '—'}</td>
-              <td className="l">{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>
-                {r.status !== 'healthy' && <InjuryTag r={r} />}</td>
+              <td className="l">{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>{r.status !== 'healthy' && <InjuryTag r={r} />}</td>
               <td className="l nl-dim nl-gamec">{r.game
-                ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · {r.game.started ? <span className="nl-locked">locked</span> : <>locks {time(r.game.tip)}</>}</>
+                ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · {r.game.started ? <span className="nl-locked">{r.live ? 'playing / played' : 'locked'}</span> : <>locks {time(r.game.tip)}</>}</>
                 : r.next ? `${dateWord(r.next.date)} ${r.next.home ? 'v' : '@'} ${r.next.vs}` : '—'}</td>
-              {gamesToday && <td className="l nl-line-cell">{r.tonight ? lineOf(r.tonight) : ''}</td>}
-              <td className="nl-wkc">{r.weekGames ?? ''}</td>
+              {showLine && (
+                <td className="l nl-line-cell">
+                  {r.live ? <><b>{lineOf(r.live)}</b>{r.tonight && <div className="nl-dim nl-proj">proj {lineOf(r.tonight)}</div>}</> : r.tonight ? <span className="nl-dim">proj {lineOf(r.tonight)}</span> : ''}
+                </td>
+              )}
+              <td className="nl-wkc" title="Games left in this matchup week">{r.weekGames ?? ''}<span className="nl-dim nl-wkl"> wk</span></td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="nl-note">Yahoo locks each player at his game's tip. Tonight's line is his projection for the game. "Wk" is his games left in the matchup week: a bench player with more games than a starter is worth the spot. A tag's card has the chance he plays.</p>
     </>
   )
 }
@@ -604,13 +616,28 @@ const dateWord = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(un
 
 const WHOSE: Record<string, string> = { mine: 'Your players', opponent: 'This week’s opponent', free: 'Free agents', other: 'Elsewhere' }
 
+/**
+ * News: first where my players stand now (every one with a designation, the reason and a way to the news), then what
+ * changed in the last few days, grouped by whose player it is: mine, this week's opponent's, free agents, the rest.
+ */
 function News({ v }: { v: SeasonView }) {
-  if (!v.news.length) return <div className="ckempty">Nothing new.</div>
+  const flagged = (v.lineup?.rows ?? []).filter((r) => r.status !== 'healthy')
   const groups = ['mine', 'opponent', 'free', 'other'].map((w) => [w, v.news.filter((n) => n.whose === w)] as const).filter(([, xs]) => xs.length)
   return (
     <>
+      <Section title="Your players now" hint={flagged.length ? `${flagged.length} with a designation` : 'all available'}>
+        {!flagged.length && <div className="nl-none">Nobody on your roster carries an injury designation.</div>}
+        {flagged.map((r) => (
+          <div key={r.id} className="nl-news worse">
+            <div className="nl-newsh">{r.name} <InjuryTag r={r} /></div>
+            <div className="nl-dim">{r.note ?? `Listed ${r.status}; no reason published.`}{r.next ? ` · next game ${dateWord(r.next.date)}` : r.game ? ' · plays today' : ''}{' · '}
+              <a href={`https://www.google.com/search?q=${encodeURIComponent(`${r.name} injury news`)}&tbm=nws`} target="_blank" rel="noreferrer">news ›</a></div>
+          </div>
+        ))}
+      </Section>
+      {!groups.length && <p className="nl-note">No changes in the last few days. News lists designation changes as they happen, minutes trends once games are played, and openings when a rotation player is out.</p>}
       {groups.map(([w, xs]) => (
-        <Section key={w} title={WHOSE[w]}>
+        <Section key={w} title={`${WHOSE[w]}: what changed`}>
           {xs.map((n) => (
             <div key={n.key} className={`nl-news ${n.kind}`}>
               <div className="nl-newsh">{n.headline}</div>

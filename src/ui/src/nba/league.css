@@ -179,3 +179,13 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-preview { font-size: 0.9rem; margin: 0.3rem 0 0.5rem; }
 .nl-amber { color: var(--amber); }
 .nl-green { color: var(--green); }
+
+/* Today: one action block, then the roster in groups. */
+.nl-act { border: 1px solid var(--line); border-left: 3px solid var(--green); border-radius: 4px; padding: 0.55rem 0.75rem; margin: 0.4rem 0 0.8rem; }
+.nl-act.fix { border-left-color: var(--amber); }
+.nl-acth { font-family: var(--cond); font-weight: 600; font-size: 1.15rem; }
+.nl-acts { font-size: 0.86rem; margin-top: 0.25rem; }
+.nl-act .nl-moves { margin-top: 0.4rem; }
+.nl-grouph { margin-top: 0.9rem; font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.05em; text-transform: uppercase; }
+.nl-today .nl-proj { font-size: 0.72rem; }
+.nl-wkl { font-size: 0.7rem; }

@@ -239,6 +239,8 @@ export interface LineupRow {
   weekGames: number | null
   /** Tonight's projected line when he has a game (Sleeper's day projection, else his per-game). */
   tonight: Box | null
+  /** What he has actually done today, from Yahoo, once his game is under way; null before. */
+  live: Box | null
   play: number
 }
 
@@ -290,6 +292,7 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): Line
       next: g ? null : nextGame(schedule, p.team, today),
       weekGames: null,
       tonight: g ? (ctx.outlook(id, today)?.box ?? null) : null,
+      live: (y as { box?: Box | null }).box ?? null,
       note: [y.injury, ctx.returnOf(id).text].filter(Boolean).join(' — ') || null,
       game: g ? { ...g, started } : null, play: g ? ctx.play(id, today) : 0,
     })

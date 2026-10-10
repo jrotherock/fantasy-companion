@@ -45,6 +45,8 @@ const SINGLE: Record<string, keyof Box> = { '10': 'tpm', '12': 'pts', '15': 'reb
 export function boxOf(stats: unknown): Box | null {
   const rows = (Array.isArray(stats) ? stats : list(stats)).map((s: any) => s?.stat).filter(Boolean)
   if (!rows.length) return null
+  // A day's line before his game: every value '-' (or '-/-'). No line yet, not a line of zeros.
+  if (rows.every((s: any) => /^-(\/-)?$/.test(String(s.value ?? '').trim()))) return null
   const b = emptyBox()
   for (const s of rows) {
     const id = String(s.stat_id), v = String(s.value ?? '')

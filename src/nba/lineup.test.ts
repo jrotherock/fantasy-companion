@@ -86,3 +86,12 @@ test('the add plan: an upgrade that does not cost the week first, streams rolled
   assert.deepEqual(plan.steps.map((s) => s.add), ['Sheppard', 'Sexton', 'Late'], 'the costly upgrade is left out; the overlapping stream too')
   assert.equal(plan.steps[2].drop, 'Sexton', 'the second stream replaces the first')
 })
+
+test("a day's stats before his game read as no line, not a line of zeros; after it, the box", async () => {
+  const { boxOf } = await import('./yahooSeason.js')
+  const dash = ['9004003', '5', '9007006', '8', '10', '12', '15', '16', '17', '18', '19'].map((id) => ({ stat: { stat_id: id, value: id.startsWith('900') ? '-/-' : '-' } }))
+  assert.equal(boxOf(dash), null)
+  const played = dash.map((s) => ({ stat: { stat_id: s.stat.stat_id, value: s.stat.stat_id === '9004003' ? '8/15' : s.stat.stat_id === '12' ? '22' : s.stat.value.includes('/') ? '2/2' : '1' } }))
+  const b = boxOf(played)!
+  assert.equal(b.fgm, 8); assert.equal(b.fga, 15); assert.equal(b.pts, 22)
+})

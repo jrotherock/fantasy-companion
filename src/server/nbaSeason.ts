@@ -251,7 +251,7 @@ async function readLeague(l: SeasonLeague & { myTeamId: string | null }, force =
     await run('rosters', async () => { s.rosters = parseLeagueRosters(await yahooApi.call(`league/${key}/teams/roster`, { by: 'nba-season' })) })
     const mine = s.rosters.find((r) => r.team.mine)?.team ?? s.rosters.find((r) => r.team.id === l.myTeamId)?.team
     if (s.rosters.some((r) => r.players.length) && mine) {
-      await run('today', async () => { s.mineToday = parseRosterDay(await yahooApi.call(`team/${mine.key}/roster;date=${today}/players`, { by: 'nba-season' })) })
+      await run('today', async () => { s.mineToday = parseRosterDay(await yahooApi.call(`team/${mine.key}/roster;date=${today}/players/stats;type=date;date=${today}`, { by: 'nba-season' })) })
       await run('scoreboard', async () => { s.scoreboard = parseNbaScoreboard(await yahooApi.call(`league/${key}/scoreboard`, { by: 'nba-season' })) })
       await run('standings', async () => { s.standings = parseStandings(leagueBody(await yahooApi.call(`league/${key}/standings`, { by: 'nba-season' }))) })
       await run('waivers', async () => { s.waivers = parsePlayers(await yahooApi.call(`league/${key}/players;status=W;count=25`, { by: 'nba-season' })).map((p) => p.yahooId) })
