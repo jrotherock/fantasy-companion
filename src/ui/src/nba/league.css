@@ -170,3 +170,7 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-dlopp { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
 .nl-dlopp.ahead { color: var(--amber); }
 @media (max-width: 600px) { .nl-dlrow { grid-template-columns: 2.4rem auto 1fr; } .nl-dlnum, .nl-dlopp { display: none; } .nl-dlbar i { width: 0.65rem; height: 0.65rem; } }
+.nl-today .nl-line-cell { font-family: var(--mono); font-size: 0.78rem; white-space: nowrap; color: var(--ink); }
+.nl-locked { color: var(--muted); font-style: italic; }
+.nl-ilmoves li b { color: var(--amber); }
+@media (max-width: 600px) { .nl-today .nl-line-cell { white-space: normal; } }

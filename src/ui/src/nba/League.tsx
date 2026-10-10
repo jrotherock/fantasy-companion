@@ -286,14 +286,21 @@ function Today({ v }: { v: SeasonView }) {
   const first = l.moves.map((m) => m.by).filter(Boolean).sort()[0] ?? null
   const order = (s: string | null) => ['PG', 'SG', 'G', 'SF', 'PF', 'F', 'C', 'Util', 'BN', 'IL', 'IL+'].indexOf(s ?? 'BN')
   const rows = [...l.rows].sort((a, b) => order(a.slot) - order(b.slot))
+  const gamesToday = l.rows.some((r) => r.game)
   return (
     <>
       <div className={`nl-verdict ${l.ok ? 'ok' : 'fix'}`}>
         {l.ok
-          ? 'Lineup is right for today'
+          ? gamesToday ? 'Lineup is right for tonight' : 'No games for your players today'
           : `${l.moves.length} change${l.moves.length === 1 ? '' : 's'} to make${first ? ` — first by ${time(first)}` : ''}`}
         {l.lostStarts > 0 && <span className="nl-sub"> · {l.lostStarts} start{l.lostStarts === 1 ? '' : 's'} lost as it stands</span>}
       </div>
+      {gamesToday && (
+        <p className="nl-line">
+          Tonight: <b>{l.playing}</b> of yours play{l.emptyTonight > 0 ? <> · <b>{l.emptyTonight}</b> empty spot{l.emptyTonight === 1 ? '' : 's'} (a free agent who plays tonight would fill {l.emptyTonight === 1 ? 'it' : 'them'})</> : ' · every spot filled'}
+          {l.firstLock && <> · first lock <b>{time(l.firstLock)}</b></>}
+        </p>
+      )}
       {l.moves.length > 0 && (
         <ul className="nl-moves">
           {l.moves.map((m) => (
@@ -304,27 +311,47 @@ function Today({ v }: { v: SeasonView }) {
           ))}
         </ul>
       )}
+      {l.ilMoves.length > 0 && (
+        <ul className="nl-moves nl-ilmoves">
+          {l.ilMoves.map((m) => (
+            <li key={m.id}>
+              <b>{m.action === 'to-il' ? `Move ${m.name} to IL` : `Take ${m.name} off IL`}</b>
+              <span className="nl-why">{m.why}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <table className="nl-table nl-today">
-        <thead><tr><th className="l nl-slotc">Slot</th><th className="l">Player</th><th className="l nl-gamec">{l.rows.some((r) => r.game) ? 'Today' : 'Next game'}</th><th className="nl-wkc" title="Games left in this matchup week">Wk</th></tr></thead>
+        <thead><tr>
+          <th className="l nl-slotc">Slot</th><th className="l">Player</th>
+          <th className="l nl-gamec">{gamesToday ? 'Tonight' : 'Next game'}</th>
+          {gamesToday && <th className="l" title="Tonight's projected line: points, rebounds, assists, threes, steals, blocks">Tonight's line</th>}
+          <th className="nl-wkc" title="Games left in this matchup week">Wk</th>
+        </tr></thead>
         <tbody>
           {rows.map((r) => (
-            <Fragment key={r.id}>
-              <tr className={!r.game ? 'nl-idle' : ''}>
-                <td className="l nl-slot">{r.slot ?? '—'}</td>
-                <td className="l">{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>
-                  {r.status !== 'healthy' && <InjuryTag r={r} />}</td>
-                <td className="l nl-dim nl-gamec">{r.game
-                  ? `${r.game.home ? 'v' : '@'} ${r.game.vs} ${r.game.started ? '· under way' : time(r.game.tip)}`
-                  : r.next ? `${dateWord(r.next.date)} ${r.next.home ? 'v' : '@'} ${r.next.vs}` : '—'}</td>
-                <td className="nl-wkc">{r.weekGames ?? ''}</td>
-              </tr>
-            </Fragment>
+            <tr key={r.id} className={!r.game ? 'nl-idle' : ''}>
+              <td className="l nl-slot">{r.slot ?? '—'}</td>
+              <td className="l">{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>
+                {r.status !== 'healthy' && <InjuryTag r={r} />}</td>
+              <td className="l nl-dim nl-gamec">{r.game
+                ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · {r.game.started ? <span className="nl-locked">locked</span> : <>locks {time(r.game.tip)}</>}</>
+                : r.next ? `${dateWord(r.next.date)} ${r.next.home ? 'v' : '@'} ${r.next.vs}` : '—'}</td>
+              {gamesToday && <td className="l nl-line-cell">{r.tonight ? lineOf(r.tonight) : ''}</td>}
+              <td className="nl-wkc">{r.weekGames ?? ''}</td>
+            </tr>
           ))}
         </tbody>
       </table>
-      <p className="nl-note">Yahoo locks each player at his game's tip. "Wk" is his games left in this matchup week: a bench player with more games than a starter is worth the seat, and a short week is where a stream helps. A tag's card has the chance he plays.</p>
+      <p className="nl-note">Yahoo locks each player at his game's tip. Tonight's line is his projection for the game. "Wk" is his games left in the matchup week: a bench player with more games than a starter is worth the spot. A tag's card has the chance he plays.</p>
     </>
   )
+}
+
+/** A projected game in one short line: 18p 5r 6a 2t 1.2s 0.4b. */
+function lineOf(b: { pts: number; reb: number; ast: number; tpm: number; stl: number; blk: number }): string {
+  const n = (x: number) => (x >= 3 ? Math.round(x).toString() : x.toFixed(1))
+  return `${n(b.pts)}p ${n(b.reb)}r ${n(b.ast)}a ${n(b.tpm)}·3 ${n(b.stl)}s ${n(b.blk)}b`
 }
 
 // ── Week ──

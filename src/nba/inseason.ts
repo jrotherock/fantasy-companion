@@ -237,6 +237,8 @@ export interface LineupRow {
   next: { date: string; vs: string; home: boolean } | null
   /** His team's games left in this matchup week (week 1 before the season), today included. */
   weekGames: number | null
+  /** Tonight's projected line when he has a game (Sleeper's day projection, else his per-game). */
+  tonight: Box | null
   play: number
 }
 
@@ -256,6 +258,12 @@ export interface LineupCheck {
   date: string
   rows: LineupRow[]
   moves: LineupMove[]
+  /** Tonight: my players with a game, the starting spots none of them can fill, and the first lock still to come. */
+  playing: number
+  emptyTonight: number
+  firstLock: string | null
+  /** IL moves: an out player who could free a roster spot, or a healthy one still sitting on IL. */
+  ilMoves: { id: string; name: string; action: 'to-il' | 'off-il'; why: string }[]
   /** Starts that would be lost tonight as the lineup stands. */
   lostStarts: number
   ok: boolean
@@ -281,6 +289,7 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): Line
       code: y.status || CODE[ctx.designation(id)] || null,
       next: g ? null : nextGame(schedule, p.team, today),
       weekGames: null,
+      tonight: g ? (ctx.outlook(id, today)?.box ?? null) : null,
       note: [y.injury, ctx.returnOf(id).text].filter(Boolean).join(' — ') || null,
       game: g ? { ...g, started } : null, play: g ? ctx.play(id, today) : 0,
     })
@@ -317,7 +326,21 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): Line
   })
   // The move that locks first comes first.
   moves.sort((a, b) => (a.by ?? '9').localeCompare(b.by ?? '9'))
-  return { date: today, rows, moves, lostStarts, ok: moves.length === 0 }
+  const playing = rows.filter((r) => r.slot !== 'IL' && r.slot !== 'IL+' && r.game && r.play > 0).length
+  const seatedTonight = lockedIn.length + best.size
+  const emptyTonight = Math.max(0, seats.length - seatedTonight)
+  const firstLock = rows.filter((r) => r.game && !r.game.started && r.game.tip).map((r) => r.game!.tip!).sort()[0] ?? null
+  // IL: Yahoo's slots for injured players. An out player off IL is a roster spot spent; a healthy one on it cannot play.
+  const ilCap = (ctx.league.roster as Record<string, number>).IL ?? 0
+  const onIl = rows.filter((r) => r.slot === 'IL' || r.slot === 'IL+')
+  const ilMoves: LineupCheck['ilMoves'] = []
+  let ilFree = Math.max(0, ilCap - onIl.length)
+  for (const r of rows) {
+    const out = r.status === 'out' || r.status === 'injured'
+    if ((r.slot === 'IL' || r.slot === 'IL+') && !out) ilMoves.push({ id: r.id, name: r.name, action: 'off-il', why: `${r.status === 'healthy' ? 'Healthy' : `Listed ${r.status}`} but on IL: he cannot play from there, and Yahoo blocks adds while he sits on it` })
+    else if (r.slot !== 'IL' && r.slot !== 'IL+' && out && ilFree > 0) { ilFree--; ilMoves.push({ id: r.id, name: r.name, action: 'to-il', why: `${r.code ?? 'Out'}${r.note ? ` — ${r.note}` : ''}: an IL spot frees his roster spot for an add` }) }
+  }
+  return { date: today, rows, moves, lostStarts, ok: moves.length === 0, playing, emptyTonight, firstLock, ilMoves }
 }
 
 // ── The week ────────────────────────────────────────────────────────────────
