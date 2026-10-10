@@ -237,7 +237,7 @@ export interface LineupRow {
   next: { date: string; vs: string; home: boolean } | null
   /** His team's games left in this matchup week (week 1 before the season), today included. */
   weekGames: number | null
-  /** Tonight's projected line when he has a game (Sleeper's day projection, else his per-game). */
+  /** The projected line for tonight's game, or with no game today his next one (Sleeper's day projection, else his per-game). */
   tonight: Box | null
   /** What he has actually done today, from Yahoo, once his game is under way; null before. */
   live: Box | null
@@ -287,12 +287,13 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): Line
     const g = gameToday(schedule, p.team, today)
     const started = !!g?.tip && Date.parse(g.tip) <= now
     const final = !!g?.tip && Date.parse(g.tip) + 2.75 * 3_600_000 <= now
+    const next = g ? null : nextGame(schedule, p.team, today)
     rows.push({
       id, name: p.name, slot: y.slot, positions: seatPositions(y.eligible), status: ctx.designation(id),
       code: y.status || CODE[ctx.designation(id)] || null,
-      next: g ? null : nextGame(schedule, p.team, today),
+      next,
       weekGames: null,
-      tonight: g ? (ctx.outlook(id, today)?.box ?? null) : null,
+      tonight: g ? (ctx.outlook(id, today)?.box ?? null) : next ? (ctx.outlook(id, next.date)?.box ?? null) : null,
       live: (y as { box?: Box | null }).box ?? null,
       note: [y.injury, ctx.returnOf(id).text].filter(Boolean).join(' — ') || null,
       game: g ? { ...g, started, final } : null, play: g ? ctx.play(id, today) : 0,

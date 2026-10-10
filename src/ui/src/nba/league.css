@@ -132,15 +132,26 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-note-inline { font-size: 0.75rem; }
 
 /* Today: a tight slot column, the player taking the room, the game and the chance narrow on the right. */
-.nl-today .nl-slotc { width: 3.5rem; font-family: var(--mono); color: var(--muted); }
-.nl-today .nl-gamec { width: 9.5rem; white-space: nowrap; }
-.nl-table.nl-today { width: 100%; }
+.nl-today .nl-slotc { font-family: var(--mono); color: var(--muted); }
+.nl-today .nl-gamec { white-space: nowrap; }
+.nl-table.nl-today { width: 100%; table-layout: fixed; }
+.nl-today .nl-c-slot { width: 3.5rem; }
+.nl-today .nl-c-player { width: 32%; }
+.nl-today .nl-c-game { width: 10.5rem; }
+.nl-today .nl-c-wk { width: 3.5rem; }
 .nl-today td, .nl-today th { padding-left: 0.6rem; padding-right: 0.6rem; }
-.nl-today .nl-wkc { width: 3.5rem; text-align: center; white-space: nowrap; }
+.nl-today .nl-wkc { text-align: center; white-space: nowrap; }
 .nl-today .nl-pos { font-size: 0.75rem; }
 .nl-today button.nl-stat { background: none; cursor: pointer; font: inherit; font-family: var(--mono); font-size: 10px; }
 .nl-today .nl-noterow td { font-size: 0.8rem; color: var(--muted); border-bottom: 1px solid rgba(42, 52, 65, 0.6); padding-top: 0; }
-@media (max-width: 600px) { .nl-today .nl-gamec { width: auto; white-space: normal; } .nl-today .nl-pos { display: none; } }
+.nl-today .nl-line-m { display: none; }
+@media (max-width: 600px) {
+  .nl-table.nl-today { table-layout: auto; }
+  .nl-today .nl-gamec { white-space: normal; width: 6rem; }
+  .nl-today .nl-pos, .nl-today .nl-lineh, .nl-today .nl-line-cell { display: none; }
+  .nl-today .nl-line-m { display: block; font-family: var(--mono); font-size: 0.72rem; margin-top: 0.15rem; }
+  .nl-today .nl-slotc { width: 2.6rem; }
+}
 .nl-day.open { border-color: var(--green); }
 .nl-day.behind .nl-dayv { color: var(--amber); }
 .nl-why2 { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }

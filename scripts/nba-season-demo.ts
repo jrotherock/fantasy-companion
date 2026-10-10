@@ -35,7 +35,9 @@ const weeks = Array.from({ length: 24 }, (_, i) => {
   const s = new Date(Date.UTC(2026, 9, 19 + 7 * i)), e = new Date(Date.UTC(2026, 9, 25 + 7 * i))
   return [i + 1, i === 0 ? '2026-10-20' : s.toISOString().slice(0, 10), e.toISOString().slice(0, 10)] as [number, string, string]
 })
-const current = weeks.find(([, s, e]) => s <= today && today <= e)!
+// Before the season (a day before week 1), week 1 is the one coming.
+const current = weeks.find(([, s, e]) => s <= today && today <= e) ?? weeks[0]
+const preseason = today < weeks[0][1]
 
 const pool = players.filter((p) => p.yahoo && p.projection && p.team).sort((a, b) => (a.yahoo!.adp ?? 999) - (b.yahoo!.adp ?? 999))
 const rosters: NbaPlayer[][] = Array.from({ length: teams }, () => [])
@@ -97,8 +99,8 @@ const matchup = (w: number, days: number, status: string): NbaMatchup[] => pairs
 
 const past: Record<number, NbaMatchup[]> = {}
 for (let w = 1; w < current[0]; w++) past[w] = matchup(w, 7, 'postevent')
-const daysIn = Math.round((Date.parse(today) - Date.parse(current[1])) / 86400000)
-const scoreboard = matchup(current[0], daysIn, 'midevent')
+const daysIn = Math.max(0, Math.round((Date.parse(today) - Date.parse(current[1])) / 86400000))
+const scoreboard = matchup(current[0], daysIn, preseason ? 'preevent' : 'midevent')
 
 const standings = rosters.map((_, i) => {
   let w = 0, l = 0
