@@ -372,6 +372,31 @@ if (MODE === 'center') {
   }
 }
 
+if (MODE === 'r2') {
+  // After the --first pick: the advice in round 2, against a forward (or a big) there instead — the best
+  // by value no further down than the advice's own reach (the top dozen) — and the advice from then on.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  const seatsOf = (id: string) => seatPositions(posOf(id))
+  const kinds: Record<string, (id: string) => boolean> = {
+    'a forward (SF/PF)': (id) => seatsOf(id).some((x) => x === 'SF' || x === 'PF') && !seatsOf(id).includes('C'),
+    'a big (C)': (id) => seatsOf(id).includes('C'),
+    'any non-guard': (id) => seatsOf(id).some((x) => x === 'SF' || x === 'PF' || x === 'C'),
+  }
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  for (const [label, is] of Object.entries(kinds)) {
+    strategies[`round 2: ${label}`] = (avail, mine, overall, slot) => {
+      if (mine.length === 1) {
+        const ok = avail.filter((id) => canTake(mine)(id))
+        const top = new Set([...ok].sort((a, b) => value.get(b)! - value.get(a)!).slice(0, 12))
+        const pick = ok.filter((id) => is(id) && top.has(id)).sort((a, b) => value.get(b)! - value.get(a)!)[0]
+        if (pick) return pick
+      }
+      return appPick(avail, mine, overall, slot, 'none', [], H)
+    }
+  }
+}
+
 if (MODE === 'spread') {
   // The app assuming football's spread, against the app assuming the spread measured in Hoops' drafts.
   for (const k of Object.keys(strategies)) delete strategies[k]
