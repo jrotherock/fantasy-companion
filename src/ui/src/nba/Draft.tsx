@@ -285,6 +285,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
         <span className="vlabel">{onClock ? 'TAKE' : `LIKELY THERE AT YOUR PICK ${view.clock.myNext}`}</span>
       </div>
       <Verdict view={view} second={second} />
+      <PuntTipLine view={view} act={act} />
       {stale ? (
         <div className="nb-queue nb-queue-stale">
           <span className="vlabel">QUEUE CHANGED</span> Put <b>{cards[0].name}</b> first in Yahoo — your queue would take {stale}
@@ -375,6 +376,33 @@ function Fate({ view, survives, canWait, there, thenName, second }: { view: Draf
  * One line above the cards: who to take, how sure, and the one thing that might change your mind — a scarce
  * category first, then better scores that will be back, the playoff tiebreak, the avoid list, the pair.
  */
+/**
+ * After a first pick where one punt tested well in the simulations, offer it once, with a lock.
+ * Shown from the 2nd pick to the 4th while nothing is locked; "Not now" hides it for this draft.
+ */
+function PuntTipLine({ view, act }: { view: DraftView; act: Act }) {
+  const tip = view.build?.puntTip ?? null
+  const key = `nb-punttip-${view.league.id}`
+  const [hidden, setHidden] = useState(() => { try { return localStorage.getItem(key) === '1' } catch { return false } })
+  if (!tip || hidden) return null
+  const last = tip.player.split(' ').slice(-1)[0]
+  const cat = LABEL[tip.cat]
+  const hide = () => { try { localStorage.setItem(key, '1') } catch {} setHidden(true) }
+  return (
+    <div className={`nb-punttip ${tip.even ? 'even' : ''}`}>
+      <span className="vlabel">{tip.even ? 'ANOTHER WAY' : 'PUNT TIP'}</span>{' '}
+      {tip.even
+        ? <>After {last}, punting <b>{cat}</b> tested even with these cards in simulated drafts: a different team, not a better one.</>
+        : <>After {last}, punting <b>{cat}</b> won about <b>{tip.gain.toFixed(1)}</b> more weeks in 100 than these cards in simulated drafts.</>}
+      {' '}Lock it now and the cards rebuild around it.
+      <span className="nb-punttip-act">
+        <button className="btn primary" onClick={() => act('locks', { locks: [tip.cat] })}>Lock {cat}</button>
+        <button className="nb-link" onClick={hide}>Not now</button>
+      </span>
+    </div>
+  )
+}
+
 function Verdict({ view, second }: { view: DraftView; second: number }) {
   const cards = view.takeNow
   const star = cards[0]
@@ -708,8 +736,9 @@ function Build({ view, act, preview }: { view: DraftView; act: Act; preview: { n
           <h4>Locking a punt — usually don't</h4>
           <ul>
             <li>From your {b.buildFrom}th pick the advice leans away from categories you are unlikely to win on its own, and keeps the lean soft: if later picks make one winnable again, it counts again.</li>
-            <li>A lock gives the category up for good. In 400 simulated Hoops drafts every lock lost to not locking — locking the weakest at pick 4 by 1.5 points of weekly win chance, at pick 2 by 2.6, two categories at pick 4 by 3.6, and locking straight after a punt-built pick like Giannis by 3.4. Later locks cost less; none gained.</li>
-            <li>Lock only to say something the app cannot know — that you will not chase a category whatever happens. Click a tile or a build chip to lock; click again to unlock.</li>
+            <li>A lock gives the category up for good. In simulated Hoops drafts, locking whatever is weakest lost to not locking: at pick 4 by 1.5 points of weekly win chance, at pick 2 by 2.6, two categories at pick 4 by 3.6.</li>
+            <li>The exception is the right punt for your first pick, locked from your 2nd: Edwards then AST (+4.6), Maxey, Dončić or Tatum then FG% (+1.6 to +2.5). Wembanyama then AST tied. The take area offers these when they apply. Punting 3PM, BLK, STL or FT lost after every first pick.</li>
+            <li>Otherwise lock only to say something the app cannot know — that you will not chase a category whatever happens. Click a tile or a build chip to lock; click again to unlock.</li>
           </ul>
           <h4>Direction</h4>Where your picks so far point, and the top three builds with the categories each should win a week. Before pick {b.buildFrom} it is a lean; when builds are within about 0.15 it says so, and the best player is the right pick.
         </div>

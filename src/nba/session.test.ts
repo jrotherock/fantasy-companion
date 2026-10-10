@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { addManual, emptyDraft, ingestYahoo, undoManual } from './session.js'
 import { NameIndex } from './join.js'
 import { draftOrder, parseDraftResults, parseTeams } from './yahooDraft.js'
-import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf } from './plan.js'
+import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf, puntTipFor } from './plan.js'
 import { adpFor } from './draft.js'
 
 const index = new NameIndex([
@@ -95,6 +95,28 @@ test('the screen keeps never-list players on the board and out of the advice, an
   const pv = buildView(harker, { ...emptyDraft('nba-harker'), slot: 3 }, new Map())
   assert.equal(pv.build, null, 'a points league has no build')
   assert.equal(pv.paths.length, 1)
+})
+
+test('the punt tip follows the first pick, from the 2nd pick to the 4th, and never over a lock', () => {
+  const edwards = puntTipFor('Anthony Edwards', 1, [])
+  assert.equal(edwards?.cat, 'ast')
+  assert.equal(edwards?.even, false)
+  assert.equal(puntTipFor('Victor Wembanyama', 2, [])?.even, true, 'a tie is offered as a tie')
+  assert.equal(puntTipFor('Tyrese Maxey', 3, [])?.cat, 'fg')
+  assert.equal(puntTipFor('Tyrese Maxey', 4, []), null, 'gone from the 4th pick on')
+  assert.equal(puntTipFor('Tyrese Maxey', 1, ['reb']), null, 'not over a lock')
+  assert.equal(puntTipFor('Nikola Jokić', 1, []), null, 'no tip where the cards already win')
+  assert.equal(puntTipFor(null, 0, []), null)
+
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
+  const ant = players.find((p: any) => p.name === 'Anthony Edwards').id
+  const d = emptyDraft('nba-hoops')
+  d.slot = 7
+  d.picks = Array.from({ length: 7 }, (_, i) => ({ overall: i + 1, playerId: i === 6 ? ant : players.filter((p: any) => p.id !== ant && p.yahoo)[i].id, name: '', source: 'manual' as const }))
+  assert.equal(buildView(hoops, d, new Map()).build?.puntTip?.cat, 'ast')
 })
 
 test('a league scoring anything the models cannot value fails loudly', () => {

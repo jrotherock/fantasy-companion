@@ -604,6 +604,8 @@ export interface DraftView {
     strong: Cat[]
     locks: Cat[]
     expected: number | null
+    /** A single punt that tested well after my first pick, offered until my 4th pick while nothing is locked. */
+    puntTip: PuntTip | null
   }
   advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; context: PlayerContext | null;
     /** Tagged avoid: his score carries the handicap (handicapAvoided). */
@@ -812,6 +814,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       strong: read.stage === 'open' || !win ? [] : CATS.filter((c) => win[c] >= 0.65),
       locks: d.locks,
       expected: read.stage === 'open' ? null : expectedCats(s, mine.length, prep.cats.base),
+      puntTip: puntTipFor(mine.length ? p(mine[0]).name : null, mine.length, d.locks),
     }
   }
 
@@ -1337,6 +1340,32 @@ export function takeBy(prep: Prepared, slot: number, tags: Map<string, PrefTag>,
     if (k < groups.length && groups[k].players.length < perPick) groups[k].players.push(row(id, r, mine[k]))
   }
   return { slot, teams, gone, picks: groups }
+}
+
+export interface PuntTip { player: string; cat: Cat; gain: number; err: number; even: boolean }
+
+/**
+ * Single punts that tested well after a given first pick, locked from the second pick
+ * (scripts/nba-strategy-sim.ts --mode punt1 --raw --reserve: Hoops, all ten slots, 150
+ * drafts on each of two fresh sets of rooms, 2026-10-10). Gain is points of weekly win
+ * chance against the cards as they are, averaged over the two sets, ± 2 standard errors.
+ * Only the ones that won on both sets, and Wembanyama's AST punt, which tied (a different
+ * shape, not a better one; the user asked to be shown it). After every other first pick
+ * no single punt beat the cards, and 3PTM, BLK, STL and FT punts lost after all of them.
+ */
+export const PUNT_AFTER: Record<string, { cat: Cat; gain: number; err: number }> = {
+  'Anthony Edwards': { cat: 'ast', gain: 4.6, err: 1.1 },
+  'Tyrese Maxey': { cat: 'fg', gain: 2.5, err: 1.1 },
+  'Luka Dončić': { cat: 'fg', gain: 2.3, err: 1.0 },
+  'Jayson Tatum': { cat: 'fg', gain: 1.6, err: 1.1 },
+  'Victor Wembanyama': { cat: 'ast', gain: 0.4, err: 1.0 },
+}
+
+/** The tip for my first pick: from my 2nd pick until my 4th, and only while nothing is locked. */
+export function puntTipFor(first: string | null, picks: number, locks: Cat[]): PuntTip | null {
+  const t = first ? PUNT_AFTER[first] : undefined
+  if (!t || picks < 1 || picks >= BUILD_FROM || locks.length) return null
+  return { player: first!, ...t, even: t.gain < t.err }
 }
 
 /**
