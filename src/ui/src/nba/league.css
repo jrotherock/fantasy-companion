@@ -159,7 +159,7 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 
 /* Days left: a row a day, the lineup spots as a bar. */
 .nl-dl { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.5rem 0; }
-.nl-dlrow { display: grid; grid-template-columns: 2.6rem auto 2.8rem 1fr auto; align-items: center; gap: 0.6rem; font-size: 0.85rem; }
+.nl-dlrow { display: grid; grid-template-columns: 2.6rem auto 2.8rem 15rem auto; justify-content: start; align-items: center; gap: 0.6rem; font-size: 0.85rem; }
 .nl-dlday { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
 .nl-dlbar { display: inline-flex; gap: 3px; }
 .nl-dlbar i { width: 0.8rem; height: 0.8rem; border-radius: 2px; border: 1px solid var(--line); }
