@@ -279,7 +279,17 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
   const order = { upgrade: 0, stash: 1, stream: 2 } as const
   const ranked = [...best.values()].sort((a, b) => order[a.kind] - order[b.kind] || (a.kind !== 'stream' ? b.seasonGain - a.seasonGain : b.weekGain - a.weekGain))
   // Streams beyond what the budget allows this week are still listed, but marked by the screen.
-  return ranked.slice(0, opts.limit ?? 8)
+  // Open means a seat HE can fill: with the swap made, is he in that day's lineup? A guard on a day only F is open
+  // is not (2026-10-10: the first version counted any open seat).
+  const shown = ranked.slice(0, opts.limit ?? 8)
+  for (const p of shown) {
+    if (!p.playDays.length) continue
+    const roster = [...myIds.filter((x) => x.id !== p.drop), { id: p.add, eligible: p.positions }]
+    const wk = sideOutlook(ctx, null, roster, seats, allDays).week
+    const seated = new Map(allDays.map((d, i) => [d, (wk.days[i]?.starting ?? []).includes(p.add)]))
+    p.playDays = p.playDays.map((d) => ({ date: d.date, open: seated.get(d.date) ?? false }))
+  }
+  return shown
 }
 
 function scoreWithAddFrom(ctx: Context, mySide: Parameters<typeof sideOutlook>[1], rest: { id: string; eligible: string[] }[],
