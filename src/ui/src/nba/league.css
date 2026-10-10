@@ -129,3 +129,12 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-steps { font-size: 0.8rem; margin-top: 0.2rem; padding: 0.25rem 0.5rem; border-left: 2px solid var(--amber); }
 .nl-pre { margin: 0.4rem 0 0.6rem; padding: 0.4rem 0.6rem; border: 1px solid var(--line); border-radius: 4px; font-size: 0.85rem; }
 .nl-note-inline { font-size: 0.75rem; }
+
+/* Today: a tight slot column, the player taking the room, the game and the chance narrow on the right. */
+.nl-today .nl-slotc, .nl-today .nl-slot { width: 3.2rem; }
+.nl-today .nl-gamec { width: 9.5rem; white-space: nowrap; }
+.nl-today .nl-playc { width: 3.2rem; }
+.nl-today .nl-pos { font-size: 0.75rem; }
+.nl-today button.nl-stat { background: none; cursor: pointer; font: inherit; font-family: var(--mono); font-size: 10px; }
+.nl-today .nl-noterow td { font-size: 0.8rem; color: var(--muted); border-bottom: 1px solid rgba(42, 52, 65, 0.6); padding-top: 0; }
+@media (max-width: 600px) { .nl-today .nl-gamec { width: auto; white-space: normal; } .nl-today .nl-pos { display: none; } }

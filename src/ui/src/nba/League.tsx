@@ -8,7 +8,7 @@
  *
  * The server works everything out (src/nba/seasonView.ts); this only draws it.
  */
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { SeasonView } from '../../../nba/seasonView'
 import type { CatRace } from '../../../nba/matchup'
 import type { Cat } from '../../../nba/value'
@@ -261,6 +261,7 @@ const ordinal = (n: number) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['
 // ── Today ──
 
 function Today({ v }: { v: SeasonView }) {
+  const [openNote, setOpenNote] = useState<string | null>(null)
   const l = v.lineup
   const name = (id: string | null) => (id ? v.players[id]?.name ?? id : '')
   if (!l) return <div className="ckempty">{v.startsOn ? `No games yet: the season starts ${dateWord(v.startsOn)}${v.week?.opponent ? `, week 1 against ${v.week.opponent.name}` : ''}.` : "Today's lineup has not been read yet."}</div>
@@ -285,18 +286,26 @@ function Today({ v }: { v: SeasonView }) {
           ))}
         </ul>
       )}
-      <table className="nl-table">
-        <thead><tr><th>Slot</th><th className="l">Player</th><th className="l">Today</th><th>Plays</th></tr></thead>
+      <table className="nl-table nl-today">
+        <thead><tr><th className="l nl-slotc">Slot</th><th className="l">Player</th><th className="l nl-gamec">{l.rows.some((r) => r.game) ? 'Today' : 'Next game'}</th><th className="nl-playc">Plays</th></tr></thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.id} className={!r.game ? 'nl-idle' : ''}>
-              <td className="nl-slot">{r.slot ?? '—'}</td>
-              <td className="l">{r.name} <span className="nl-dim">{r.positions.join('/')}</span>
-                {r.status !== 'healthy' && <span className={`nl-stat ${r.status}`} title={r.note ?? r.status}>{r.code ?? r.status}</span>}
-                {r.note && <span className="nl-dim nl-note-inline" title={r.note}> {r.note.length > 48 ? r.note.slice(0, 46) + '…' : r.note}</span>}</td>
-              <td className="l nl-dim">{r.game ? `${r.game.home ? 'v' : '@'} ${r.game.vs} ${r.game.started ? '· under way' : time(r.game.tip)}` : 'no game'}</td>
-              <td>{r.game ? pct(r.play) : ''}</td>
-            </tr>
+            <Fragment key={r.id}>
+              <tr className={!r.game ? 'nl-idle' : ''}>
+                <td className="l nl-slot">{r.slot ?? '—'}</td>
+                <td className="l">{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>
+                  {r.status !== 'healthy' && (
+                    // The reason sits behind the tag: a hover on a computer, a tap on a phone.
+                    <button className={`nl-stat ${r.status}`} title={r.note ?? r.status} aria-expanded={openNote === r.id}
+                      onClick={() => setOpenNote(openNote === r.id ? null : r.id)}>{r.code ?? r.status}</button>
+                  )}</td>
+                <td className="l nl-dim nl-gamec">{r.game
+                  ? `${r.game.home ? 'v' : '@'} ${r.game.vs} ${r.game.started ? '· under way' : time(r.game.tip)}`
+                  : r.next ? `${dateWord(r.next.date)} ${r.next.home ? 'v' : '@'} ${r.next.vs}` : '—'}</td>
+                <td className="nl-playc">{r.game ? pct(r.play) : ''}</td>
+              </tr>
+              {openNote === r.id && <tr className="nl-noterow"><td /><td colSpan={3} className="l">{r.note ?? `Listed ${r.status}; no reason given.`}</td></tr>}
+            </Fragment>
           ))}
         </tbody>
       </table>

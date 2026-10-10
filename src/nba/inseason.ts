@@ -205,6 +205,13 @@ export function playingOn(schedule: Game[], date: string, today: string, now: nu
 }
 
 /** Today's game for a team: opponent and tip, where there is one. */
+/** His team's next game after a date: what the day screen shows when there is none today. */
+export function nextGame(schedule: Game[], team: string | null, after: string): { date: string; vs: string; home: boolean } | null {
+  let best: Game | null = null
+  for (const x of schedule) if (x.date > after && (x.home === team || x.away === team) && (!best || x.date < best.date)) best = x
+  return best ? { date: best.date, vs: best.home === team ? best.away : best.home, home: best.home === team } : null
+}
+
 export function gameToday(schedule: Game[], team: string | null, date: string): { vs: string; home: boolean; tip: string | null } | null {
   const g = schedule.find((x) => x.date === date && (x.home === team || x.away === team))
   return g ? { vs: g.home === team ? g.away : g.home, home: g.home === team, tip: g.tip ?? null } : null
@@ -223,6 +230,8 @@ export interface LineupRow {
   code: string | null
   /** Why, where known: Yahoo's injury note and CBS's return text. */
   note: string | null
+  /** No game today: his next one. */
+  next: { date: string; vs: string; home: boolean } | null
   play: number
 }
 
@@ -234,6 +243,9 @@ export interface LineupMove {
   /** When the move stops being possible: the tip of the game it is about. */
   by: string | null
 }
+
+/** The short code for a designation Yahoo did not send one for, as the football screens show them. */
+const CODE: Partial<Record<Designation, string>> = { probable: 'P', questionable: 'Q', doubtful: 'D', out: 'O', injured: 'INJ', suspended: 'SUSP', inactive: 'NA' }
 
 export interface LineupCheck {
   date: string
@@ -261,7 +273,8 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): Line
     const started = !!g?.tip && Date.parse(g.tip) <= now
     rows.push({
       id, name: p.name, slot: y.slot, positions: seatPositions(y.eligible), status: ctx.designation(id),
-      code: y.status || null,
+      code: y.status || CODE[ctx.designation(id)] || null,
+      next: g ? null : nextGame(schedule, p.team, today),
       note: [y.injury, ctx.returnOf(id).text].filter(Boolean).join(' — ') || null,
       game: g ? { ...g, started } : null, play: g ? ctx.play(id, today) : 0,
     })
