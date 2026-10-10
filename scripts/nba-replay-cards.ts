@@ -39,10 +39,11 @@ for (let overall = 1; overall <= draft.picks.length; overall++) {
   console.log(`\nR${round} #${overall} — took ${took}; app's pick ${app?.name ?? '—'}${app?.tiebreak ? ` (playoff tiebreak, ${app.playoff} PO g)` : ''}`)
   if (v.tied) {
     console.log(`  NEAR-TIE (${v.tied.players.length}), fit with ${v.tied.with ?? '—'}:`)
-    for (const x of v.tied.players) console.log(`   ${x.appPick ? '★' : ' '} ${x.name.padEnd(24)} ${x.behind < 0.0005 ? 'top score' : '−' + x.behind.toFixed(3)}  ${x.thenName ? 'then ' + x.thenName : x.urgency === 0 ? pct(1 - x.survives) + ' gone' : 'coin flip ' + pct(x.survives) + ' back'}  ${x.adds.map((c) => (x.fills.includes(c) ? '+' : '') + c).join(' ')} ${x.costs.map((c) => '−' + c).join(' ')}`)
+    const inj = (h: any) => (h ? ` [inj ${h.seasons.map((s: any) => s.gp).join('·')} → ${h.counted}g]` : '')
+    for (const x of v.tied.players) console.log(`   ${x.appPick ? '★' : ' '} ${(x.name + inj(x.injuryHistory)).padEnd(24)} ${x.behind < 0.0005 ? 'top score' : '−' + x.behind.toFixed(3)}  ${x.thenName ? 'then ' + x.thenName : x.urgency === 0 ? pct(1 - x.survives) + ' gone' : 'coin flip ' + pct(x.survives) + ' back'}  ${x.adds.map((c) => (x.fills.includes(c) ? '+' : '') + c).join(' ')} ${x.costs.map((c) => '−' + c).join(' ')}`)
     if (!v.tied.players.some((x) => x.appPick)) console.log('   !! no star')
   } else {
-    console.log(`  cards: ${v.takeNow.map((a, i) => `${i ? '' : '★'}${a.name} ${a.score.toFixed(3)}${a.canWait ? ' (can wait)' : ''}`).join(' · ')}`)
+    console.log(`  cards: ${v.takeNow.map((a, i) => `${i ? '' : '★'}${a.name}${a.injuryHistory ? ` [inj ${a.injuryHistory.seasons.map((s) => s.gp).join('·')} → ${a.injuryHistory.counted}g]` : ''} ${a.score.toFixed(3)}${a.canWait ? ' (can wait)' : ''}`).join(' · ')}`)
   }
   if (v.canWait.length) console.log(`  plan: ${app?.name} now → ${v.canWait.map((w) => `${w.name} ${pct(w.survives)}`).join(', ')}`)
 }

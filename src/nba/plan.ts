@@ -524,6 +524,9 @@ export interface TiedPlayer {
  * slots 1–10 after each plausible first pick: at 0.05 slots 3 and 4 almost never grouped; 0.06 groups most turns.
  */
 export const TIE_GROUP = 0.06
+/** Card scores this close are the same score: the gap is rounding, not the model. */
+const TIE_EXACT = 0.0005
+
 /** How much likelier to be back than the first card a player may be and still win the playoff tiebreak. */
 export const TIEBREAK_BACK = 0.1
 
@@ -1008,8 +1011,12 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     consistent: opponents ? Object.entries(opponents.validation).filter(([, v]) => v.consistent).map(([k]) => k) : [],
   }
 
-  const urgent = advice.filter((a) => !a.canWait)
-  let takeNow = [...urgent, ...advice.filter((a) => a.canWait)].slice(0, 3)
+  // On a dead heat the one less likely to be back goes first (2026-10-09 mock, pick 24: Harden, 36% back, and
+  // Curry, sure to be gone, scored the same and Harden got the star by list order).
+  const heat = (a: { score: number; survives: number }, b: { score: number; survives: number }) =>
+    Math.abs(a.score - b.score) < TIE_EXACT ? a.survives - b.survives : b.score - a.score
+  const urgent = advice.filter((a) => !a.canWait).sort(heat)
+  let takeNow = [...urgent, ...advice.filter((a) => a.canWait).sort(heat)].slice(0, 3)
   // The tiebreak orders the cards, never the players you are told can wait.
   if (takeNow.length) {
     const margin = prep.cats ? 0.02 : Math.abs(takeNow[0].score) * 0.01
