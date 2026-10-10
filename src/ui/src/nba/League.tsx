@@ -324,15 +324,32 @@ function Today({ v }: { v: SeasonView }) {
             <RosterGroup title="Playing tonight" rows={tonight} />
             <RosterGroup title="No game today" rows={noGame} />
           </>
-        : <RosterGroup title={v.startsOn ? 'Your roster' : 'Next games'} rows={[...tonight, ...noGame]} wkLabel={v.startsOn ? 'Wk 1' : undefined} />}
-      {hurt.length > 0 && <RosterGroup title="Out or on IL" rows={hurt} />}
-      <p className="nl-note">Yahoo locks each player at his game's tip. The line is his projection for tonight, or for his next game; once his game starts it shows what he has done, read from Yahoo about every ten minutes. "Wk" is his games left in the matchup week.</p>
+        : <RosterGroup title={v.startsOn ? 'Your roster' : 'Next games'} rows={[...tonight, ...noGame]} preseason={!!v.startsOn} />}
+      {hurt.length > 0 && <RosterGroup title="Out or on IL" rows={hurt} preseason={!!v.startsOn} />}
+      <p className="nl-note">Yahoo locks each player at his game's tip. The categories are his projection for tonight, or for his next game; once his game starts they show what he has done (FG and FT as made/attempted), read from Yahoo about every ten minutes, with the projection underneath. "Games" is how many games his team plays in the matchup week from today on.</p>
     </>
   )
 }
 
 /** A group of today's roster: slot, player and tag, the game (or the next one), tonight's line, games left this week. */
-function RosterGroup({ title, rows, wkLabel }: { title: string; rows: NonNullable<SeasonView['lineup']>['rows']; wkLabel?: string }) {
+/** Today's category columns, in Yahoo's order. */
+const TCOLS: { key: string; label: string; cell: (b: Box, whole: boolean) => string }[] = [
+  { key: 'fg', label: 'FG%', cell: (b, whole) => (whole ? `${b.fgm}/${b.fga}` : rate(b.fgm, b.fga)) },
+  { key: 'ft', label: 'FT%', cell: (b, whole) => (whole ? `${b.ftm}/${b.fta}` : rate(b.ftm, b.fta)) },
+  { key: 'tpm', label: '3PTM', cell: (b, whole) => one(b.tpm, whole) },
+  { key: 'pts', label: 'PTS', cell: (b) => Math.round(b.pts).toString() },
+  { key: 'reb', label: 'REB', cell: (b, whole) => one(b.reb, whole) },
+  { key: 'ast', label: 'AST', cell: (b, whole) => one(b.ast, whole) },
+  { key: 'stl', label: 'ST', cell: (b, whole) => one(b.stl, whole) },
+  { key: 'blk', label: 'BLK', cell: (b, whole) => one(b.blk, whole) },
+  { key: 'to', label: 'TO', cell: (b, whole) => one(b.to, whole) },
+]
+const one = (x: number, whole: boolean) => (whole ? Math.round(x).toString() : x.toFixed(1))
+const rate = (m: number, a: number) => (a > 0 ? (m / a).toFixed(3).replace(/^0/, '') : '—')
+type Box = NonNullable<NonNullable<SeasonView['lineup']>['rows'][number]['tonight']>
+
+/** A group of today's roster: slot, player and tag, the game (or the next one), his line by category, games in the week. */
+function RosterGroup({ title, rows, preseason }: { title: string; rows: NonNullable<SeasonView['lineup']>['rows']; preseason?: boolean }) {
   if (!rows.length) return null
   const tonight = rows.some((r) => r.game)
   // Every group has the same columns at the same widths, so they line up down the page.
@@ -340,14 +357,18 @@ function RosterGroup({ title, rows, wkLabel }: { title: string; rows: NonNullabl
     <>
       <div className="nl-subh nl-grouph">{title} <span className="nl-dim">· {rows.length}</span></div>
       <table className="nl-table nl-today">
-        <colgroup><col className="nl-c-slot" /><col className="nl-c-player" /><col className="nl-c-game" /><col /><col className="nl-c-wk" /></colgroup>
+        <colgroup>
+          <col className="nl-c-slot" /><col className="nl-c-player" /><col className="nl-c-game" />
+          {TCOLS.map((c) => <col key={c.key} className="nl-c-cat" />)}
+          <col className="nl-c-wk" />
+        </colgroup>
         <thead>
           <tr>
             <th className="l">Slot</th>
             <th className="l">Player</th>
             <th className="l">{tonight ? 'Tonight' : 'Next game'}</th>
-            <th className="l nl-lineh">{tonight ? 'Line' : 'Projected'}</th>
-            <th className="nl-wkc" title="Games left in this matchup week">{wkLabel ?? 'Wk'}</th>
+            {TCOLS.map((c) => <th key={c.key} className="nl-catc">{c.label}</th>)}
+            <th className="nl-wkc" title={preseason ? 'Games his team plays in week 1' : 'Games his team has left in this matchup week, today included'}>Games<div className="nl-thsub">{preseason ? 'in wk 1' : 'left in wk'}</div></th>
           </tr>
         </thead>
         <tbody>
@@ -358,7 +379,13 @@ function RosterGroup({ title, rows, wkLabel }: { title: string; rows: NonNullabl
               <td className="l nl-dim nl-gamec">{r.game
                 ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · {r.game.started ? <span className={`nl-locked ${!r.game.final && r.live ? 'on' : ''}`}>{r.game.final ? 'final' : r.live ? 'live' : 'locked'}</span> : <>locks {time(r.game.tip)}</>}</>
                 : r.next ? `${dateWord(r.next.date)} ${r.next.home ? 'v' : '@'} ${r.next.vs}` : '—'}</td>
-              <td className="l nl-line-cell"><RowLine r={r} /></td>
+              {TCOLS.map((c) => (
+                <td key={c.key} className="nl-catc">
+                  {r.live
+                    ? <><b>{c.cell(r.live, true)}</b>{r.tonight && <div className="nl-dim nl-proj">{c.cell(r.tonight, false)}</div>}</>
+                    : r.tonight ? <span className="nl-dim">{c.cell(r.tonight, false)}</span> : ''}
+                </td>
+              ))}
               <td className="nl-wkc">{r.weekGames ?? ''}</td>
             </tr>
           ))}
@@ -368,7 +395,7 @@ function RosterGroup({ title, rows, wkLabel }: { title: string; rows: NonNullabl
   )
 }
 
-/** The line cell: what he has done once his game is on, over his projection; else the projection. On a phone it sits under his name. */
+/** On a phone, where the category columns do not fit: the line under his name. */
 function RowLine({ r }: { r: NonNullable<SeasonView['lineup']>['rows'][number] }) {
   if (r.live) return <><b>{lineOf(r.live, true)}</b>{r.tonight && <div className="nl-dim nl-proj">proj {lineOf(r.tonight)}</div>}</>
   return r.tonight ? <span className="nl-dim">{lineOf(r.tonight)}</span> : null

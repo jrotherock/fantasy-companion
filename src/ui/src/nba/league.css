@@ -136,9 +136,12 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-today .nl-gamec { white-space: nowrap; }
 .nl-table.nl-today { width: 100%; table-layout: fixed; }
 .nl-today .nl-c-slot { width: 3.5rem; }
-.nl-today .nl-c-player { width: 32%; }
-.nl-today .nl-c-game { width: 10.5rem; }
-.nl-today .nl-c-wk { width: 3.5rem; }
+.nl-today .nl-c-player { width: 15rem; }
+.nl-today .nl-catc { text-align: right; font-family: var(--mono); font-size: 0.78rem; white-space: nowrap; padding-left: 0.3rem; padding-right: 0.3rem; }
+.nl-today th.nl-catc { font-family: inherit; font-size: inherit; }
+.nl-today .nl-thsub { font-size: 0.65rem; color: var(--muted); font-weight: normal; text-transform: none; letter-spacing: 0; }
+.nl-today .nl-c-game { width: 9.5rem; }
+.nl-today .nl-c-wk { width: 4.8rem; }
 .nl-today td, .nl-today th { padding-left: 0.6rem; padding-right: 0.6rem; }
 .nl-today .nl-wkc { text-align: center; white-space: nowrap; }
 .nl-today .nl-pos { font-size: 0.75rem; }
@@ -148,7 +151,7 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 @media (max-width: 600px) {
   .nl-table.nl-today { table-layout: auto; }
   .nl-today .nl-gamec { white-space: normal; width: 6rem; }
-  .nl-today .nl-pos, .nl-today .nl-lineh, .nl-today .nl-line-cell { display: none; }
+  .nl-today .nl-pos, .nl-today .nl-catc, .nl-today .nl-c-cat { display: none; }
   .nl-today .nl-line-m { display: block; font-family: var(--mono); font-size: 0.72rem; margin-top: 0.15rem; }
   .nl-today .nl-slotc { width: 2.6rem; }
 }
