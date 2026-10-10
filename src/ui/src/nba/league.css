@@ -155,3 +155,4 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-wkp .nl-inplay { background: color-mix(in srgb, var(--amber) 9%, transparent); }
 .nl-wkp th.nl-inplay { color: var(--amber); }
 .nl-wkp tr.nl-total td { border-top: 1px solid var(--line); font-weight: 600; }
+.nl-wkp th.nl-dimh { color: var(--muted); }

@@ -335,7 +335,7 @@ export interface WeekView {
   startsLeft: { mine: number; theirs: number }
   idleGames: number
   /** Each of my players this week: games, expected starts, and what those starts should produce. */
-  players: { id: string; name: string; games: number; starts: number; box: Box }[]
+  players: { id: string; name: string; games: number; starts: number; mpg: number | null; box: Box }[]
   /** Per day: my starters, theirs, my players with a game but no seat, and my seats nobody fills (a stream's room). */
   days: { date: string; mine: number; theirs: number; idle: number; open: number }[]
   playoffs: boolean
@@ -391,7 +391,8 @@ export function buildWeek(ctx: Context, snap: Snapshot, myTeamId: string): WeekV
     players: rosterIds(ctx, rosterOf(myTeamId)).map(({ id }) => {
       const pm = a.week.perMan.get(id) ?? { games: 0, starts: 0 }
       const pg = ctx.perGame(id)
-      return { id, name: ctx.byId.get(id)?.name ?? id, games: pm.games, starts: pm.starts, box: addBox(emptyBox(), pg, pm.starts) }
+      const p = ctx.byId.get(id)
+      return { id, name: p?.name ?? id, games: pm.games, starts: pm.starts, mpg: p?.projection?.perGame.min ?? null, box: addBox(emptyBox(), pg, pm.starts) }
     }).sort((x, y) => y.starts - x.starts),
     idleGames: a.week.wasted,
     days: days.map((d, i) => ({

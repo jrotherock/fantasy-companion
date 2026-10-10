@@ -336,9 +336,24 @@ function fmt(cat: Cat, x: number) {
 }
 
 type WBox = SeasonView['week'] extends infer W ? W extends { players: { box: infer B }[] } ? B : never : never
-const WEEK_CATS: Cat[] = ['fg', 'ft', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to']
 const emptyBoxUI = (): WBox => ({ fgm: 0, fga: 0, ftm: 0, fta: 0, tpm: 0, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0 }) as WBox
 const addBoxUI = (a: WBox, b: WBox): WBox => Object.fromEntries(Object.keys(a).map((k) => [k, (a as any)[k] + (b as any)[k]])) as WBox
+/** Yahoo's column order: MPG, FGM/A, FG%, FTM/A, FT%, 3PTM, PTS, REB, AST, ST, BLK, TO. */
+const num = (x: number) => (x >= 10 ? Math.round(x).toString() : x.toFixed(1))
+const YCOLS: { key: string; label: string; cat: Cat | null; dim?: boolean; cell: (b: WBox) => string }[] = [
+  { key: 'fgma', label: 'FGM/A', cat: null, dim: true, cell: (b) => `${num(b.fgm)}/${num(b.fga)}` },
+  { key: 'fg', label: 'FG%', cat: 'fg', cell: (b) => boxCell(b, 'fg') },
+  { key: 'ftma', label: 'FTM/A', cat: null, dim: true, cell: (b) => `${num(b.ftm)}/${num(b.fta)}` },
+  { key: 'ft', label: 'FT%', cat: 'ft', cell: (b) => boxCell(b, 'ft') },
+  { key: 'tpm', label: '3PTM', cat: 'tpm', cell: (b) => boxCell(b, 'tpm') },
+  { key: 'pts', label: 'PTS', cat: 'pts', cell: (b) => boxCell(b, 'pts') },
+  { key: 'reb', label: 'REB', cat: 'reb', cell: (b) => boxCell(b, 'reb') },
+  { key: 'ast', label: 'AST', cat: 'ast', cell: (b) => boxCell(b, 'ast') },
+  { key: 'stl', label: 'ST', cat: 'stl', cell: (b) => boxCell(b, 'stl') },
+  { key: 'blk', label: 'BLK', cat: 'blk', cell: (b) => boxCell(b, 'blk') },
+  { key: 'to', label: 'TO', cat: 'to', cell: (b) => boxCell(b, 'to') },
+]
+
 /** A week's box in one category: the percentages as made over attempted, the rest rounded. */
 function boxCell(b: WBox, c: Cat): string {
   if (c === 'fg') return b.fga ? (b.fgm / b.fga).toFixed(3).replace(/^0/, '') : '—'
@@ -389,17 +404,17 @@ function Week({ v }: { v: SeasonView }) {
         <Section title="Your players this week" hint="expected starts and what they produce">
           <div className="nl-scroll">
             <table className="nl-table nl-wkp">
-              <thead><tr><th className="l">Player</th><th title="Expected starts this week (games he plays with a seat)">St</th>
-                {WEEK_CATS.map((c) => <th key={c} className={swingCats.has(c) ? 'nl-inplay' : ''} title={swingCats.has(c) ? 'In play this week' : undefined}>{LABEL[c]}</th>)}</tr></thead>
+              <thead><tr><th className="l">Player</th><th title="Expected starts this week (games he plays with a seat)">St</th><th title="Projected minutes a game">MPG</th>
+                {YCOLS.map((c) => <th key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dimh' : ''} title={c.cat && swingCats.has(c.cat) ? 'In play this week' : undefined}>{c.label}</th>)}</tr></thead>
               <tbody>
                 {w.players.map((p) => (
                   <tr key={p.id} className={p.starts < 0.5 ? 'nl-idle' : ''}>
-                    <td className="l">{p.name}</td><td>{p.starts.toFixed(1)}</td>
-                    {WEEK_CATS.map((c) => <td key={c} className={swingCats.has(c) ? 'nl-inplay' : ''}>{boxCell(p.box, c)}</td>)}
+                    <td className="l">{p.name}</td><td>{p.starts.toFixed(1)}</td><td>{p.mpg != null ? p.mpg.toFixed(0) : '—'}</td>
+                    {YCOLS.map((c) => <td key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dim' : ''}>{c.cell(p.box)}</td>)}
                   </tr>
                 ))}
-                <tr className="nl-total"><td className="l">Your week</td><td>{w.players.reduce((a, p) => a + p.starts, 0).toFixed(0)}</td>
-                  {WEEK_CATS.map((c) => <td key={c} className={swingCats.has(c) ? 'nl-inplay' : ''}>{boxCell(w.players.reduce((a, p) => addBoxUI(a, p.box), emptyBoxUI()), c)}</td>)}</tr>
+                <tr className="nl-total"><td className="l">Your week</td><td>{w.players.reduce((a, p) => a + p.starts, 0).toFixed(0)}</td><td />
+                  {YCOLS.map((c) => { const t = w.players.reduce((a, p) => addBoxUI(a, p.box), emptyBoxUI()); return <td key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dim' : ''}>{c.cell(t)}</td> })}</tr>
               </tbody>
             </table>
           </div>
