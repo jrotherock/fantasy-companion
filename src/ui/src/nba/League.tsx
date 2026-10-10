@@ -461,6 +461,16 @@ function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: 
         <span className={weekCost ? 'nl-cost' : ''}>This week: win {pct(p.winBefore)} → {pct(p.winAfter)} ({wk(p.weekGain)}){weekCost ? ' — costs this week' : ''}</span>
         {over && <span> · beyond your pace</span>}
       </div>
+      {cats && p.seasonCats.length > 0 && p.kind !== 'stream' && (
+        <div className="nl-pickd nl-why2" title={`Per game, against ${p.dropName ?? 'the player dropped'}, in the categories you are competing in`}>
+          Season, vs {p.dropName}: {p.seasonCats.map((c) => <span key={c.cat} className={`nl-catchip ${c.diff > 0 ? 'up' : 'down'}`}>{c.diff > 0 ? '+' : '−'}{LABEL[c.cat]}</span>)}
+        </div>
+      )}
+      {cats && p.weekCats.length > 0 && (
+        <div className="nl-pickd nl-why2" title="This week's chance to win each category, before and after the move">
+          This week: {p.weekCats.map((c) => <span key={c.cat} className={`nl-catchip ${c.after > c.before ? 'up' : 'down'}`}>{LABEL[c.cat]} {pct(c.before)}→{pct(c.after)}</span>)}
+        </div>
+      )}
       {p.steps && <div className="nl-steps">{p.steps}</div>}
       {p.alternatives.length > 0 && (
         <div className="nl-pickd nl-dim">Or drop: {p.alternatives.map((a, i) => <span key={a.drop}>{i ? ' · ' : ''}{a.dropName} <span title="this week's win chance after the move">(week {pct(a.winAfter)}, season +{Math.round(a.seasonGain)})</span></span>)}</div>

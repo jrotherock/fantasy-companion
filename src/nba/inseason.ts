@@ -155,6 +155,9 @@ export class Context {
     return p ? perGameBox(p) : emptyBox()
   }
 
+  /** His per-game value in each category (categories leagues), for saying why a move helps. */
+  zOf(id: string): Record<Cat, number> | null { return this.z.get(id) ?? null }
+
   /** One number per game: summed z over the categories in play, or fantasy points. */
   worth(id: string, punts: Cat[] = []): number {
     if (this.league.scoring === 'points') return fpOf(this.perGame(id), this.league.points ?? {})

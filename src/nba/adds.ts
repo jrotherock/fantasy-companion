@@ -16,7 +16,7 @@
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
 import { rosterIds, sideOutlook, weekOf, type Context, type Snapshot } from './inseason.js'
-import type { Cat } from './value.js'
+import { CATS, type Cat } from './value.js'
 import { addBox } from './yahooSeason.js'
 import { designation } from './outlook.js'
 
@@ -86,6 +86,9 @@ export interface Pickup {
   startsThisWeek: number
   waiver: boolean
   why: string
+  /** Why, by category: where he beats the dropped player per game (the season), and the week's races it moves most. */
+  seasonCats: { cat: Cat; diff: number }[]
+  weekCats: { cat: Cat; before: number; after: number }[]
   /** Other players he could replace, best first: the drop is the user's call. */
   alternatives: { drop: string; dropName: string; weekGain: number; winAfter: number; seasonGain: number }[]
   /** A stash: an injured player Yahoo will not let onto IL straight from the wire, so the steps. */
@@ -166,12 +169,12 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
   const allDays = start && end ? daysFrom(start, end, today) : []
   const opp = theirs ? sideOutlook(ctx, theirs, oppIds, seats, allDays).side : null
 
-  const score = (ids: { id: string; eligible: string[] }[]) => {
+  const score = (ids: { id: string; eligible: string[] }[]): { gain: number; win: number; races?: { cat: Cat; win: number }[] } => {
     if (!opp) return { gain: 0, win: 0.5 }
     const a = sideOutlook(ctx, mySide, ids, seats, allDays).side
     if (ctx.league.scoring === 'categories') {
       const o = categoryWeek(a, opp)
-      return { gain: o.expected, win: o.win }
+      return { gain: o.expected, win: o.win, races: o.races.map((r) => ({ cat: r.cat, win: r.win + r.tie / 2 })) }
     }
     const o = pointsWeek(a, opp, ctx.league.points ?? {}, { mine: mySide?.points ?? null, theirs: theirs?.points ?? null })
     return { gain: o.mine - o.theirs, win: o.win }
@@ -202,6 +205,19 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
   const forWeek = [...pool].sort((a, b) => worth(b.id) * weekGames(b.id) - worth(a.id) * weekGames(a.id)).slice(0, 25)
   const cands = [...new Map([...forSeason, ...forWeek].map((p) => [p.id, p])).values()]
 
+  // Per category, per game: his z less the dropped player's, in the categories in play; and the week's races that move.
+  const whyCats = (add: string, drop: string, after?: { cat: Cat; win: number }[]) => {
+    const za = ctx.zOf(add), zd = ctx.zOf(drop)
+    const seasonCats = za && zd
+      ? CATS.filter((k) => !punts.includes(k)).map((k) => ({ cat: k, diff: za[k] - zd[k] })).filter((x) => Math.abs(x.diff) >= 0.3).sort((a, b) => b.diff - a.diff)
+      : []
+    const weekCats = after && base.races
+      ? after.map((r) => ({ cat: r.cat, before: base.races!.find((x) => x.cat === r.cat)?.win ?? 0.5, after: r.win }))
+        .filter((x) => Math.abs(x.after - x.before) >= 0.03).sort((a, b) => Math.abs(b.after - b.before) - Math.abs(a.after - a.before)).slice(0, 4)
+      : []
+    return { seasonCats, weekCats }
+  }
+
   const out: Pickup[] = []
   for (const c of cands) {
     for (const d of drops) {
@@ -226,6 +242,7 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
         drop: d.id, dropName: ctx.byId.get(d.id)?.name ?? d.id,
         kind: stash ? 'stash' : upgrade ? 'upgrade' : 'stream',
         alternatives: [],
+        ...whyCats(c.id, d.id, after.races),
         steps: stash
           ? `${waiverIds.has(c.id) ? 'Claim' : 'Add'} him dropping ${ctx.byId.get(d.id)?.name}, move him to IL once he is yours (Yahoo will not add straight to IL), then use the freed spot for another add.${back ? ` Back about ${back}.` : ''}`
           : null,
@@ -267,10 +284,10 @@ function scoreWithAddFrom(ctx: Context, mySide: Parameters<typeof sideOutlook>[1
   const side = { now: a1.now, rest: addBox(a1.rest, a2.rest), restVar: addBox(a1.restVar, a2.restVar) }
   if (ctx.league.scoring === 'categories') {
     const o = categoryWeek(side, opp)
-    return { gain: o.expected, win: o.win }
+    return { gain: o.expected, win: o.win, races: o.races.map((r) => ({ cat: r.cat, win: r.win + r.tie / 2 })) }
   }
   const o = pointsWeek(side, opp, ctx.league.points ?? {}, { mine: mySide?.points ?? null, theirs: theirs?.points ?? null })
-  return { gain: o.mine - o.theirs, win: o.win }
+  return { gain: o.mine - o.theirs, win: o.win, races: undefined as { cat: Cat; win: number }[] | undefined }
 }
 
 function schedulePlays(ctx: Context, date: string, team: string): boolean {

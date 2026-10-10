@@ -37,7 +37,7 @@
 .nl-table tr.nl-idle td { color: var(--muted); }
 .nl-table tr.nl-mine td { background: color-mix(in srgb, var(--amber) 10%, transparent); }
 .nl-slot { font-family: var(--mono); color: var(--muted); text-align: left !important; width: 3rem; }
-.nl-edgeh { font-size: 10px !important; padding: 0.3rem 0.1rem !important; }
+.nl-edgeh { font-size: 10px !important; padding: 0.3rem 0.1rem !important; text-align: center !important; }
 .nl-edge { font-size: var(--t-xs); padding: 0.3rem 0.1rem !important; text-align: center !important; }
 .nl-stat { display: inline-block; margin-left: 0.4rem; font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 0.3rem; border-radius: 3px; border: 1px solid var(--line); color: var(--amber); }
 .nl-stat.out, .nl-stat.injured, .nl-stat.suspended, .nl-stat.inactive, .nl-stat.doubtful { color: var(--red); }
@@ -99,6 +99,7 @@
 .nl-room { display: flex; align-items: center; gap: 0.6rem; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--amber);
   border-radius: 5px; padding: 0.6rem 0.8rem; margin-bottom: 0.8rem; color: var(--ink) !important; text-decoration: none; font-size: var(--t-md); }
 .nl-room .ckchev { margin-left: auto; }
+.nl-room > span:nth-child(2) { flex: 1; text-align: left; min-width: 0; }
 .nl-roomk { font-family: var(--cond); font-weight: 600; font-size: 1.25rem; white-space: nowrap; }
 .nl-mock { display: flex; align-items: baseline; gap: 0.3rem; font-size: var(--t-sm); padding: 0.3rem 0; border-bottom: 1px solid var(--line); }
 .nl-mock .cksp { flex: 1; }
@@ -140,3 +141,7 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 @media (max-width: 600px) { .nl-today .nl-gamec { width: auto; white-space: normal; } .nl-today .nl-pos { display: none; } }
 .nl-day.open { border-color: var(--green); }
 .nl-day.behind .nl-dayv { color: var(--amber); }
+.nl-why2 { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
+.nl-catchip { font-family: var(--mono); font-size: 10.5px; padding: 0 0.3rem; border-radius: 3px; border: 1px solid var(--line); }
+.nl-catchip.up { color: var(--green); border-color: color-mix(in srgb, var(--green) 50%, var(--line)); }
+.nl-catchip.down { color: var(--red); border-color: color-mix(in srgb, var(--red) 50%, var(--line)); }
