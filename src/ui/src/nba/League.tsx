@@ -291,7 +291,7 @@ function Today({ v }: { v: SeasonView }) {
     <>
       <div className={`nl-verdict ${l.ok ? 'ok' : 'fix'}`}>
         {l.ok
-          ? gamesToday ? 'Lineup is right for tonight' : 'No games for your players today'
+          ? gamesToday ? 'Lineup is right for tonight' : v.startsOn ? `The season starts ${dateWord(v.startsOn)}${v.week?.opponent ? ` — week 1 against ${v.week.opponent.name}` : ''}` : 'No games for your players today'
           : `${l.moves.length} change${l.moves.length === 1 ? '' : 's'} to make${first ? ` — first by ${time(first)}` : ''}`}
         {l.lostStarts > 0 && <span className="nl-sub"> · {l.lostStarts} start{l.lostStarts === 1 ? '' : 's'} lost as it stands</span>}
       </div>
