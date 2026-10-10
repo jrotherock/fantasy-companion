@@ -3,6 +3,7 @@
  * shows for it. Assembled from the parts in inseason.ts, adds.ts, news.ts and
  * extras.ts; nothing here reads the network.
  */
+import type { Weights } from './matchup.js'
 import type { Cat } from './value.js'
 import { CATS } from './value.js'
 import { startingSeats } from './week.js'
@@ -14,7 +15,7 @@ import { allPlay, playoffPlan, power, tradeIdeas, type AllPlay, type PlayoffPlan
 export interface PlayerRef { name: string; team: string | null; positions: string[] }
 
 export interface SeasonView {
-  league: { id: string; label: string; scoring: 'points' | 'categories'; teams: number }
+  league: { id: string; label: string; scoring: 'points' | 'categories'; teams: number; /** A points league's weights, for the fantasy points on its screens. */ points: Weights | null }
   at: number
   today: string
   phase: 'before-draft' | 'season'
@@ -55,7 +56,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   const me = myTeamOf(snap, league.myTeamId)
   const drafted = snap.rosters.some((r) => r.players.length > 0)
   const base: SeasonView = {
-    league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams },
+    league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
     lineup: null, week: null, budget: null, pickups: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
     standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null,

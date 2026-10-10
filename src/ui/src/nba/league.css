@@ -142,16 +142,20 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-today .nl-thsub { font-size: 0.65rem; color: var(--muted); font-weight: normal; text-transform: none; letter-spacing: 0; }
 .nl-today .nl-c-game { width: 9.5rem; }
 .nl-today .nl-c-wk { width: 4.8rem; }
+.nl-today .nl-c-fp { width: 3.8rem; }
+.nl-today td.nl-fpc { color: var(--ink); font-weight: 600; padding-right: 0.8rem; }
+.nl-today td.nl-fpc .nl-proj { font-weight: normal; }
 .nl-today td, .nl-today th { padding-left: 0.6rem; padding-right: 0.6rem; }
 .nl-today .nl-wkc { text-align: center; white-space: nowrap; }
 .nl-today .nl-pos { font-size: 0.75rem; }
 .nl-today button.nl-stat { background: none; cursor: pointer; font: inherit; font-family: var(--mono); font-size: 10px; }
 .nl-today .nl-noterow td { font-size: 0.8rem; color: var(--muted); border-bottom: 1px solid rgba(42, 52, 65, 0.6); padding-top: 0; }
 .nl-today .nl-line-m { display: none; }
-@media (max-width: 600px) {
+/* Nine category columns need about 1100px of window; narrower, the line goes under the name. */
+@media (max-width: 1100px) {
   .nl-table.nl-today { table-layout: auto; }
   .nl-today .nl-gamec { white-space: normal; width: 6rem; }
-  .nl-today .nl-pos, .nl-today .nl-catc, .nl-today .nl-c-cat { display: none; }
+  .nl-today .nl-pos, .nl-today .nl-catc:not(.nl-fpc), .nl-today .nl-c-cat { display: none; }
   .nl-today .nl-line-m { display: block; font-family: var(--mono); font-size: 0.72rem; margin-top: 0.15rem; }
   .nl-today .nl-slotc { width: 2.6rem; }
 }

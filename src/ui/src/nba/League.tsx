@@ -321,11 +321,11 @@ function Today({ v }: { v: SeasonView }) {
       </div>
       {gamesToday
         ? <>
-            <RosterGroup title="Playing tonight" rows={tonight} />
-            <RosterGroup title="No game today" rows={noGame} />
+            <RosterGroup title="Playing tonight" rows={tonight} points={v.league.points} />
+            <RosterGroup title="No game today" rows={noGame} points={v.league.points} />
           </>
-        : <RosterGroup title={v.startsOn ? 'Your roster' : 'Next games'} rows={[...tonight, ...noGame]} preseason={!!v.startsOn} />}
-      {hurt.length > 0 && <RosterGroup title="Out or on IL" rows={hurt} preseason={!!v.startsOn} />}
+        : <RosterGroup title={v.startsOn ? 'Your roster' : 'Next games'} rows={[...tonight, ...noGame]} preseason={!!v.startsOn} points={v.league.points} />}
+      {hurt.length > 0 && <RosterGroup title="Out or on IL" rows={hurt} preseason={!!v.startsOn} points={v.league.points} />}
       <p className="nl-note">Yahoo locks each player at his game's tip. The categories are his projection for tonight, or for his next game; once his game starts they show what he has done (FG and FT as made/attempted), read from Yahoo about every ten minutes, with the projection underneath. "Games" is how many games his team plays in the matchup week from today on.</p>
     </>
   )
@@ -347,9 +347,12 @@ const TCOLS: { key: string; label: string; cell: (b: Box, whole: boolean) => str
 const one = (x: number, whole: boolean) => (whole ? Math.round(x).toString() : x.toFixed(1))
 const rate = (m: number, a: number) => (a > 0 ? (m / a).toFixed(3).replace(/^0/, '') : '—')
 type Box = NonNullable<NonNullable<SeasonView['lineup']>['rows'][number]['tonight']>
+/** Fantasy points from a line at a points league's weights. */
+const fpOf = (b: Box, w: NonNullable<SeasonView['league']['points']>) =>
+  (w.pts ?? 0) * b.pts + (w.reb ?? 0) * b.reb + (w.ast ?? 0) * b.ast + (w.stl ?? 0) * b.stl + (w.blk ?? 0) * b.blk + (w.to ?? 0) * b.to + (w.tpm ?? 0) * b.tpm
 
 /** A group of today's roster: slot, player and tag, the game (or the next one), his line by category, games in the week. */
-function RosterGroup({ title, rows, preseason }: { title: string; rows: NonNullable<SeasonView['lineup']>['rows']; preseason?: boolean }) {
+function RosterGroup({ title, rows, preseason, points }: { title: string; rows: NonNullable<SeasonView['lineup']>['rows']; preseason?: boolean; points: SeasonView['league']['points'] }) {
   if (!rows.length) return null
   const tonight = rows.some((r) => r.game)
   // Every group has the same columns at the same widths, so they line up down the page.
@@ -359,6 +362,7 @@ function RosterGroup({ title, rows, preseason }: { title: string; rows: NonNulla
       <table className="nl-table nl-today">
         <colgroup>
           <col className="nl-c-slot" /><col className="nl-c-player" /><col className="nl-c-game" />
+          {points && <col className="nl-c-fp" />}
           {TCOLS.map((c) => <col key={c.key} className="nl-c-cat" />)}
           <col className="nl-c-wk" />
         </colgroup>
@@ -367,6 +371,7 @@ function RosterGroup({ title, rows, preseason }: { title: string; rows: NonNulla
             <th className="l">Slot</th>
             <th className="l">Player</th>
             <th className="l">{tonight ? 'Tonight' : 'Next game'}</th>
+            {points && <th className="nl-catc nl-fpc" title="Fantasy points at this league's scoring">FP</th>}
             {TCOLS.map((c) => <th key={c.key} className="nl-catc">{c.label}</th>)}
             <th className="nl-wkc" title={preseason ? 'Games his team plays in week 1' : 'Games his team has left in this matchup week, today included'}>Games<div className="nl-thsub">{preseason ? 'in wk 1' : 'left in wk'}</div></th>
           </tr>
@@ -379,6 +384,13 @@ function RosterGroup({ title, rows, preseason }: { title: string; rows: NonNulla
               <td className="l nl-dim nl-gamec">{r.game
                 ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · {r.game.started ? <span className={`nl-locked ${!r.game.final && r.live ? 'on' : ''}`}>{r.game.final ? 'final' : r.live ? 'live' : 'locked'}</span> : <>locks {time(r.game.tip)}</>}</>
                 : r.next ? `${dateWord(r.next.date)} ${r.next.home ? 'v' : '@'} ${r.next.vs}` : '—'}</td>
+              {points && (
+                <td className="nl-catc nl-fpc">
+                  {r.live
+                    ? <><b>{fpOf(r.live, points).toFixed(1)}</b>{r.tonight && <div className="nl-dim nl-proj">{fpOf(r.tonight, points).toFixed(1)}</div>}</>
+                    : r.tonight ? fpOf(r.tonight, points).toFixed(1) : ''}
+                </td>
+              )}
               {TCOLS.map((c) => (
                 <td key={c.key} className="nl-catc">
                   {r.live
