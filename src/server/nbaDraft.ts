@@ -433,7 +433,8 @@ function viewOf(s: Session): DraftView {
 function cadence(s: Session): number {
   const d = s.draft
   const total = (d.order.length || s.league.teams) * s.prep.rounds
-  if (d.picks.length >= total) return 900_000
+  // A finished draft has nothing new to read; a real league stays listed, rarely asked.
+  if (d.picks.length >= total) return 6 * 60 * 60_000
   // My turn close: the pick before mine is the one the cards are waiting on.
   if (d.picks.length && nearMyTurn(s)) return 3_000
   // A mock the API cannot read has only the extension, and bots pick at once.
@@ -461,8 +462,25 @@ export function draftNearMyTurn(leagueId: string): boolean {
   return !!s && s.draft.picks.length > 0 && nearMyTurn(s)
 }
 
-function leaguesForExtension() {
-  return load().leagues.filter((l) => !l.id.endsWith('-test')).map((l) => {
+/**
+ * The leagues the extension reads, from the open Yahoo tab, as the user's own browser. A mock is listed only
+ * while it could still be drafting: a day old at most, not finished, and not quiet for 20 minutes. Listing every
+ * mock ever made had the browser reading 30 results pages, two stuck mocks every 6 and 15 seconds, until Yahoo
+ * answered "Request denied" (2026-10-10).
+ */
+function extensionWants(l: NbaLeague, now = Date.now()): boolean {
+  if (l.id.endsWith('-test')) return false
+  if (!l.mock) return true
+  if (now - l.mock.createdAt > MOCK_LIFE) return false
+  const s = session(l.id)
+  if (!s) return true
+  if (draftDone(l.id)) return false
+  const moved = s.draft.lastPickAt ?? Math.max(0, ...s.draft.feed.map((f) => f.at ?? 0))
+  return !s.draft.picks.length || now - moved < 20 * 60_000
+}
+
+function leaguesForExtension(all = false) {
+  return load().leagues.filter((l) => (all ? !l.id.endsWith('-test') : extensionWants(l))).map((l) => {
     const s = session(l.id)!
     const yahooLeagueId = l.leagueKey.split('.').pop()!
     return {
@@ -485,7 +503,8 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
   const [, , what, id, action] = parts
 
   if (what === 'leagues' && req.method === 'GET') {
-    json(res, 200, leaguesForExtension())
+    // The extension reads the default list; the app's own pages ask for every mock with ?all=1.
+    json(res, 200, leaguesForExtension(url.searchParams.get('all') === '1'))
     return true
   }
 

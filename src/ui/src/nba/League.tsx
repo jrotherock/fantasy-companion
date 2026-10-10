@@ -166,7 +166,7 @@ function Prep({ leagueId }: { leagueId: string }) {
   const [err, setErr] = useState<string | null>(null)
   const base = leagueId.replace(/-test$/, '')
   const load = () => {
-    fetch('/api/nba/leagues').then((r) => r.json()).then(setAll).catch(() => setAll([]))
+    fetch('/api/nba/leagues?all=1').then((r) => r.json()).then(setAll).catch(() => setAll([]))
     fetch('/api/nba/tendencies').then((r) => r.json()).then(setLessons).catch(() => setLessons([]))
   }
   useEffect(load, [])
