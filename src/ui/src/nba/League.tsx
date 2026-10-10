@@ -260,8 +260,26 @@ const ordinal = (n: number) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['
 
 // ── Today ──
 
+/**
+ * A designation with what is known behind it, as football's screens show it: the code on the row, and on hover
+ * (or a tap, which focuses it) a card with the status, the note, the chance he plays and a way out to the news.
+ */
+const SEVERITY: Record<string, string> = { out: 'likely-out', injured: 'likely-out', suspended: 'likely-out', inactive: 'likely-out', doubtful: 'likely-out', questionable: 'coin-flip', probable: 'likely-plays' }
+function InjuryTag({ r }: { r: NonNullable<SeasonView['lineup']>['rows'][number] }) {
+  return (
+    <span className="ckinjwrap">
+      <span className={`ckinj ${SEVERITY[r.status] ?? 'coin-flip'}`} tabIndex={0} role="button" aria-label={`${r.status} — what is known`}>{r.code ?? r.status}</span>
+      <span className="ckinjcard">
+        <span className="ckics">{r.status[0].toUpperCase() + r.status.slice(1)}</span>
+        {r.game && <span className="ckicr">Plays {pct(r.play)}</span>}
+        {r.note ? <span className="ckicn">{r.note}</span> : <span className="ckicn dim">No note published</span>}
+        <a className="ckicl" href={`https://www.google.com/search?q=${encodeURIComponent(`${r.name} injury news`)}&tbm=nws`} target="_blank" rel="noreferrer noopener">Search the news ›</a>
+      </span>
+    </span>
+  )
+}
+
 function Today({ v }: { v: SeasonView }) {
-  const [openNote, setOpenNote] = useState<string | null>(null)
   const l = v.lineup
   const name = (id: string | null) => (id ? v.players[id]?.name ?? id : '')
   if (!l) return <div className="ckempty">{v.startsOn ? `No games yet: the season starts ${dateWord(v.startsOn)}${v.week?.opponent ? `, week 1 against ${v.week.opponent.name}` : ''}.` : "Today's lineup has not been read yet."}</div>
@@ -294,17 +312,12 @@ function Today({ v }: { v: SeasonView }) {
               <tr className={!r.game ? 'nl-idle' : ''}>
                 <td className="l nl-slot">{r.slot ?? '—'}</td>
                 <td className="l">{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>
-                  {r.status !== 'healthy' && (
-                    // The reason sits behind the tag: a hover on a computer, a tap on a phone.
-                    <button className={`nl-stat ${r.status}`} title={r.note ?? r.status} aria-expanded={openNote === r.id}
-                      onClick={() => setOpenNote(openNote === r.id ? null : r.id)}>{r.code ?? r.status}</button>
-                  )}</td>
+                  {r.status !== 'healthy' && <InjuryTag r={r} />}</td>
                 <td className="l nl-dim nl-gamec">{r.game
                   ? `${r.game.home ? 'v' : '@'} ${r.game.vs} ${r.game.started ? '· under way' : time(r.game.tip)}`
                   : r.next ? `${dateWord(r.next.date)} ${r.next.home ? 'v' : '@'} ${r.next.vs}` : '—'}</td>
                 <td className="nl-playc">{r.game ? pct(r.play) : ''}</td>
               </tr>
-              {openNote === r.id && <tr className="nl-noterow"><td /><td colSpan={3} className="l">{r.note ?? `Listed ${r.status}; no reason given.`}</td></tr>}
             </Fragment>
           ))}
         </tbody>
@@ -359,17 +372,30 @@ function Week({ v }: { v: SeasonView }) {
           ))}
         </div>
       )}
-      <Section title="Days left" hint="players starting each day: yours · theirs">
-        <p className="nl-note">For each day left in the week: how many of your players have a game and a seat in your lineup, then the same for your opponent. More starts means more stats that day. "Idle" is your players with a game but no open seat.</p>
+      <Section title="Days left" hint="starts each day: yours · theirs">
+        {(() => {
+          const behind = w.startsLeft.mine < w.startsLeft.theirs - 0.5
+          const open = w.days.filter((d) => d.open >= 2)
+          return (
+            <p className="nl-line">
+              {behind ? <>You have <b>{Math.round(w.startsLeft.theirs - w.startsLeft.mine)} fewer starts</b> than {w.opponent?.name ?? 'them'} left this week. </> : <>You have {Math.round(w.startsLeft.mine - w.startsLeft.theirs) >= 1 ? `${Math.round(w.startsLeft.mine - w.startsLeft.theirs)} more starts` : 'about as many starts'} as them. </>}
+              {open.length
+                ? <>Open seats on <b>{open.map((d) => day(d.date)).join(', ')}</b>: a pickup who plays those days adds starts, and the streams on Adds are picked that way.</>
+                : 'Your seats are full most days: a stream would mostly sit, so there is no reason to spend one on starts.'}
+            </p>
+          )
+        })()}
         <div className="nl-days">
           {w.days.map((d) => (
-            <div key={d.date} className="nl-day">
+            <div key={d.date} className={`nl-day${d.open >= 2 ? ' open' : ''}${d.mine < d.theirs ? ' behind' : ''}`}>
               <div className="nl-dayk">{day(d.date)}</div>
               <div className="nl-dayv">{d.mine}<span>·{d.theirs}</span></div>
+              {d.open > 0 && <div className="nl-dayi">{d.open} open</div>}
               {d.idle > 0 && <div className="nl-dayi">{d.idle} idle</div>}
             </div>
           ))}
         </div>
+        <p className="nl-note">Each day: how many of your players have a game and a seat, then your opponent's. "Open" is seats you cannot fill that day; "idle" is a player of yours with a game and no seat. More starts is more stats in the week.</p>
       </Section>
       <p className="nl-note">Each category is the week so far plus what both lineups are expected to do from here, seated day by day. A race at 35–65% is in play: that is where a stream helps.</p>
     </>

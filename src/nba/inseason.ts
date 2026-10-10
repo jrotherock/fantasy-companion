@@ -328,7 +328,8 @@ export interface WeekView {
   /** Expected starts left, each side, and my player-games with no seat. */
   startsLeft: { mine: number; theirs: number }
   idleGames: number
-  days: { date: string; mine: number; theirs: number; idle: number }[]
+  /** Per day: my starters, theirs, my players with a game but no seat, and my seats nobody fills (a stream's room). */
+  days: { date: string; mine: number; theirs: number; idle: number; open: number }[]
   playoffs: boolean
 }
 
@@ -385,6 +386,7 @@ export function buildWeek(ctx: Context, snap: Snapshot, myTeamId: string): WeekV
       mine: a.week.days[i]?.starting.length ?? 0,
       theirs: b.week.days[i]?.starting.length ?? 0,
       idle: a.week.days[i]?.idle.length ?? 0,
+      open: Math.max(0, startingSeats(ctx.league.roster).length - (a.week.days[i]?.starting.length ?? 0)),
     })),
     playoffs: !!m?.playoffs,
   }
