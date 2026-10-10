@@ -362,6 +362,45 @@ function boxCell(b: WBox, c: Cat): string {
   return x >= 10 ? Math.round(x).toString() : x.toFixed(1)
 }
 
+/**
+ * The week's remaining days as lineup spots: each day a bar of the league's starting spots, filled where one of my
+ * players has a game and a spot, empty where nobody of mine plays. Empty spots are where an added player's game counts,
+ * so the headline names the best days for that; the opponent's starters sit beside for the race in games played.
+ */
+function DaysLeft({ w }: { w: NonNullable<SeasonView['week']> }) {
+  const seats = Math.max(1, ...w.days.map((d) => d.mine + d.open))
+  const best = [...w.days].filter((d) => d.open >= 2).sort((a, b) => b.open - a.open).slice(0, 3).sort((a, b) => a.date.localeCompare(b.date))
+  const gap = Math.round(w.startsLeft.mine - w.startsLeft.theirs)
+  return (
+    <>
+      <p className="nl-line">
+        You start <b>{Math.round(w.startsLeft.mine)}</b> games the rest of this week, {w.opponent?.name ?? 'your opponent'} <b>{Math.round(w.startsLeft.theirs)}</b>
+        {gap < 0 ? ` (${-gap} fewer).` : gap > 0 ? ` (${gap} more).` : '.'}{' '}
+        {best.length
+          ? <>Best days to add a player: <b>{best.map((d) => day(d.date)).join(', ')}</b>, the days with the most empty spots.</>
+          : 'Your spots are nearly full every day: an added player would mostly sit.'}
+      </p>
+      <div className="nl-dl">
+        {w.days.map((d) => (
+          <div key={d.date} className="nl-dlrow">
+            <span className="nl-dlday">{day(d.date)}</span>
+            <span className="nl-dlbar" aria-label={`${d.mine} of ${seats} spots filled`}>
+              {Array.from({ length: seats }, (_, i) => <i key={i} className={i < d.mine ? 'on' : ''} />)}
+            </span>
+            <span className="nl-dlnum"><b>{d.mine}</b>/{seats}</span>
+            <span className="nl-dlnote">
+              {d.open > 0 ? <span className={d.open >= 2 ? 'nl-dlopen' : ''}>{d.open} empty</span> : <span className="nl-dim">full</span>}
+              {d.idle > 0 && <span className="nl-dim"> · {d.idle} of yours sit{d.idle === 1 ? 's' : ''} (no spot)</span>}
+            </span>
+            <span className={`nl-dlopp${d.theirs > d.mine ? ' ahead' : ''}`}>them {d.theirs}</span>
+          </div>
+        ))}
+      </div>
+      <p className="nl-note">Filled: your players with a game that day and a lineup spot. Empty: spots nobody of yours plays in — a player added who plays that day fills one, and his stats count.</p>
+    </>
+  )
+}
+
 function Week({ v }: { v: SeasonView }) {
   const w = v.week
   if (!w) return <div className="ckempty">No matchup this week.</div>
@@ -421,30 +460,8 @@ function Week({ v }: { v: SeasonView }) {
           <p className="nl-note">Expected starts times his per-game line. Highlighted columns are this week's categories in play (35–65%): the players strongest in them are the ones not to bench, and what a stream should bring.</p>
         </Section>
       )}
-      <Section title="Days left" hint="starts each day: yours · theirs">
-        {(() => {
-          const behind = w.startsLeft.mine < w.startsLeft.theirs - 0.5
-          const open = w.days.filter((d) => d.open >= 2)
-          return (
-            <p className="nl-line">
-              {behind ? <>You have <b>{Math.round(w.startsLeft.theirs - w.startsLeft.mine)} fewer starts</b> than {w.opponent?.name ?? 'them'} left this week. </> : <>You have {Math.round(w.startsLeft.mine - w.startsLeft.theirs) >= 1 ? `${Math.round(w.startsLeft.mine - w.startsLeft.theirs)} more starts` : 'about as many starts'} as them. </>}
-              {open.length
-                ? <>Open seats on <b>{open.map((d) => day(d.date)).join(', ')}</b>: a pickup who plays those days adds starts, and the streams on Adds are picked that way.</>
-                : 'Your seats are full most days: a stream would mostly sit, so there is no reason to spend one on starts.'}
-            </p>
-          )
-        })()}
-        <div className="nl-days">
-          {w.days.map((d) => (
-            <div key={d.date} className={`nl-day${d.open >= 2 ? ' open' : ''}${d.mine < d.theirs ? ' behind' : ''}`}>
-              <div className="nl-dayk">{day(d.date)}</div>
-              <div className="nl-dayv">{d.mine}<span>·{d.theirs}</span></div>
-              {d.open > 0 && <div className="nl-dayi">{d.open} open</div>}
-              {d.idle > 0 && <div className="nl-dayi">{d.idle} idle</div>}
-            </div>
-          ))}
-        </div>
-        <p className="nl-note">Each day: how many of your players have a game and a seat, then your opponent's. "Open" is seats you cannot fill that day; "idle" is a player of yours with a game and no seat. More starts is more stats in the week.</p>
+      <Section title="Days left" hint="your 10 lineup spots, day by day">
+        <DaysLeft w={w} />
       </Section>
       <p className="nl-note">Each category is the week so far plus what both lineups are expected to do from here, seated day by day. A race at 35–65% is in play: that is where a stream helps.</p>
     </>
@@ -521,9 +538,9 @@ function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: 
         </div>
       )}
       {p.playDays.length > 0 && (
-        <div className="nl-pickd nl-why2" title="The days he plays this week once added. Green: you have an open seat that day, so his game counts without benching anyone">
-          Plays: {p.playDays.map((d) => <span key={d.date} className={`nl-catchip ${d.open ? 'up' : 'flat'}`}>{day(d.date)}{d.open ? ' · open' : ''}</span>)}
-          <span className="nl-dim"> {p.playDays.filter((d) => d.open).length} of {p.playDays.length} into open seats</span>
+        <div className="nl-pickd nl-why2" title="The days he plays this week once added. ✓: you have an empty lineup spot he can fill that day, so his game counts without benching anyone">
+          Plays: {p.playDays.map((d) => <span key={d.date} className={`nl-catchip ${d.open ? 'up' : 'flat'}`}>{day(d.date)}{d.open ? ' ✓' : ''}</span>)}
+          <span className="nl-dim"> {p.playDays.filter((d) => d.open).length} of {p.playDays.length} games into empty spots</span>
         </div>
       )}
       {p.steps && <div className="nl-steps">{p.steps}</div>}

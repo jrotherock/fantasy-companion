@@ -156,3 +156,17 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-wkp th.nl-inplay { color: var(--amber); }
 .nl-wkp tr.nl-total td { border-top: 1px solid var(--line); font-weight: 600; }
 .nl-wkp th.nl-dimh { color: var(--muted); }
+
+/* Days left: a row a day, the lineup spots as a bar. */
+.nl-dl { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.5rem 0; }
+.nl-dlrow { display: grid; grid-template-columns: 2.6rem auto 2.8rem 1fr auto; align-items: center; gap: 0.6rem; font-size: 0.85rem; }
+.nl-dlday { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+.nl-dlbar { display: inline-flex; gap: 3px; }
+.nl-dlbar i { width: 0.8rem; height: 0.8rem; border-radius: 2px; border: 1px solid var(--line); }
+.nl-dlbar i.on { background: var(--green); border-color: var(--green); }
+.nl-dlnum { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+.nl-dlnum b { color: var(--ink); }
+.nl-dlopen { color: var(--green); }
+.nl-dlopp { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+.nl-dlopp.ahead { color: var(--amber); }
+@media (max-width: 600px) { .nl-dlrow { grid-template-columns: 2.4rem auto 1fr; } .nl-dlnum, .nl-dlopp { display: none; } .nl-dlbar i { width: 0.65rem; height: 0.65rem; } }
