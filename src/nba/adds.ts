@@ -251,7 +251,8 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
         kind: stash ? 'stash' : upgrade ? 'upgrade' : 'stream',
         alternatives: [],
         ...whyCats(c.id, d.id, after.races),
-        playDays: daysFor(c.id).filter((day) => { const t = ctx.byId.get(c.id)?.team; return !!t && schedulePlays(ctx, day, t) }).map((date) => ({ date, open: (openOn.get(date) ?? 0) > 0 })),
+        // Days his team plays and he is expected to: an injured stash plays none.
+        playDays: daysFor(c.id).filter((day) => { const t = ctx.byId.get(c.id)?.team; return !!t && schedulePlays(ctx, day, t) && ctx.play(c.id, day) > 0.5 }).map((date) => ({ date, open: (openOn.get(date) ?? 0) > 0 })),
         steps: stash
           ? `${waiverIds.has(c.id) ? 'Claim' : 'Add'} him dropping ${ctx.byId.get(d.id)?.name}, move him to IL once he is yours (Yahoo will not add straight to IL), then use the freed spot for another add.${back ? ` Back about ${back}.` : ''}`
           : null,
