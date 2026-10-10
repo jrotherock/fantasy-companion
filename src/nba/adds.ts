@@ -18,6 +18,7 @@ import { categoryWeek, pointsWeek } from './matchup.js'
 import { rosterIds, sideOutlook, weekOf, type Context, type Snapshot } from './inseason.js'
 import type { Cat } from './value.js'
 import { addBox } from './yahooSeason.js'
+import { designation } from './outlook.js'
 
 export interface Budget {
   /** Adds used and allowed this week; null where the league has no weekly cap. */
@@ -73,7 +74,7 @@ export interface Pickup {
   positions: string[]
   drop: string | null
   dropName: string | null
-  kind: 'upgrade' | 'stream'
+  kind: 'upgrade' | 'stream' | 'stash'
   /** Expected categories (or win chance, in points) this week, gained by the move. */
   weekGain: number
   /** The week's chance of winning, before and after. */
@@ -85,6 +86,43 @@ export interface Pickup {
   startsThisWeek: number
   waiver: boolean
   why: string
+  /** Other players he could replace, best first: the drop is the user's call. */
+  alternatives: { drop: string; dropName: string; weekGain: number; winAfter: number; seasonGain: number }[]
+  /** A stash: an injured player Yahoo will not let onto IL straight from the wire, so the steps. */
+  steps: string | null
+}
+
+/** How far out a return makes an injured player a stash rather than an add. */
+const STASH_DAYS = 10
+
+/**
+ * Seat groups a drop must not leave short: two C seats need a third center for the nights one sits (2026-10-10,
+ * public league: the list offered Siakam, one of three centers, for every pickup); guard and forward seats need
+ * only enough to fill them. A group short before the move only has to stay as deep as it was.
+ */
+const GROUPS: Record<string, string[]> = { C: ['C'], G: ['PG', 'SG'], F: ['SF', 'PF'] }
+function seatNeeds(seats: string[]): Record<string, number> {
+  const n: Record<string, number> = { C: 0, G: 0, F: 0 }
+  for (const s of seats) {
+    if (s === 'C') n.C++
+    else if (s === 'PG' || s === 'SG' || s === 'G') n.G++
+    else if (s === 'SF' || s === 'PF' || s === 'F') n.F++
+  }
+  return n
+}
+const eligibleIn = (group: string, eligible: string[]) => eligible.some((e) => GROUPS[group].includes(e))
+export function keepsSeatDepth(before: { eligible: string[] }[], after: { eligible: string[] }[], seats: string[]): boolean {
+  const need = seatNeeds(seats)
+  for (const g of Object.keys(GROUPS)) {
+    if (!need[g]) continue
+    const b = before.filter((x) => eligibleIn(g, x.eligible)).length
+    const a = after.filter((x) => eligibleIn(g, x.eligible)).length
+    // A spare only for centers, the seats nobody else can fill (two C seats a night); guards and forwards need only
+    // enough to fill theirs: a fourth forward for three forward seats sat about 1% of his games (2026-10-10 replay).
+    const want = g === 'C' ? need[g] + 1 : need[g]
+    if (a < Math.min(b, want)) return false
+  }
+  return true
 }
 
 /**
@@ -144,7 +182,16 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
   const drops = myIds
     .map((x) => ({ ...x, season: season(x.id) }))
     .sort((a, b) => a.season - b.season)
-    .slice(0, 3)
+    .slice(0, 5)
+  const ilSlots = ctx.league.roster.IL ?? 0
+  const ilOpen = Math.max(0, ilSlots - mine.players.filter((y) => y.slot === 'IL' || y.slot === 'IL+').length)
+  // Out for a while: worth a roster spot only by way of IL.
+  const longOut = (id: string) => {
+    const r = ctx.returnOf(id)
+    if (r.date) return r.date > addDays(today, STASH_DAYS)
+    const p = ctx.byId.get(id)
+    return ['out', 'injured'].includes(designation(p?.yahoo?.status, p?.injury?.status))
+  }
 
   // Candidates: the best for the season, and the best for this week's games.
   const weekGames = (id: string) => daysFor(id).filter((d) => {
@@ -161,6 +208,7 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
       const swapped = myIds.filter((x) => x.id !== d.id)
       // The dropped player still plays today; the add only from his first day.
       const add = { id: c.id, eligible: c.positions }
+      if (!keepsSeatDepth(myIds, [...swapped, add], seats)) continue
       const after = scoreWithAddFrom(ctx, mySide, swapped, d, add, seats, allDays, daysFor(c.id), opp, theirs)
       const seasonGain = season(c.id) - d.season
       const weekGain = after.gain - base.gain
@@ -170,13 +218,22 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
       if (!upgrade && !stream) continue
       const p = ctx.byId.get(c.id)!
       const starts = weekGames(c.id)
+      // Hurt for a while and an IL seat free: a stash, with the steps Yahoo needs.
+      const stash = upgrade && ilOpen > 0 && longOut(c.id)
+      const back = ctx.returnOf(c.id).date
       out.push({
         add: c.id, name: p.name, team: p.team, positions: p.positions,
         drop: d.id, dropName: ctx.byId.get(d.id)?.name ?? d.id,
-        kind: upgrade ? 'upgrade' : 'stream',
+        kind: stash ? 'stash' : upgrade ? 'upgrade' : 'stream',
+        alternatives: [],
+        steps: stash
+          ? `${waiverIds.has(c.id) ? 'Claim' : 'Add'} him dropping ${ctx.byId.get(d.id)?.name}, move him to IL once he is yours (Yahoo will not add straight to IL), then use the freed spot for another add.${back ? ` Back about ${back}.` : ''}`
+          : null,
         weekGain, winBefore: base.win, winAfter: after.win, seasonGain, startsThisWeek: starts,
         waiver: waiverIds.has(c.id),
-        why: upgrade
+        why: stash
+          ? `Out now; better than ${ctx.byId.get(d.id)?.name} once back, for the rest of the season`
+          : upgrade
           ? `Better than ${ctx.byId.get(d.id)?.name} for the rest of the season`
           : ctx.league.scoring === 'categories'
             ? `${starts} game${starts === 1 ? '' : 's'} this week: +${weekGain.toFixed(2)} categories expected`
@@ -184,15 +241,16 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
       })
     }
   }
-  // One line per player added: his best drop.
+  // One line per player added: his best drop, the other drops he beats as alternatives.
+  const rank = (x: Pickup) => (x.kind !== 'stream' ? 1000 + x.seasonGain : x.weekGain * 100 + x.seasonGain / 10)
   const best = new Map<string, Pickup>()
-  for (const p of out) {
-    const key = p.add
-    const cur = best.get(key)
-    const rank = (x: Pickup) => (x.kind === 'upgrade' ? 1000 + x.seasonGain : x.weekGain * 100 + x.seasonGain / 10)
-    if (!cur || rank(p) > rank(cur)) best.set(key, p)
+  for (const p of [...out].sort((a, b) => rank(b) - rank(a))) {
+    const cur = best.get(p.add)
+    if (!cur) { best.set(p.add, p); continue }
+    if (cur.alternatives.length < 3) cur.alternatives.push({ drop: p.drop!, dropName: p.dropName!, weekGain: p.weekGain, winAfter: p.winAfter, seasonGain: p.seasonGain })
   }
-  const ranked = [...best.values()].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'upgrade' ? -1 : 1) || (b.kind === 'upgrade' ? b.seasonGain - a.seasonGain : b.weekGain - a.weekGain))
+  const order = { upgrade: 0, stash: 1, stream: 2 } as const
+  const ranked = [...best.values()].sort((a, b) => order[a.kind] - order[b.kind] || (a.kind !== 'stream' ? b.seasonGain - a.seasonGain : b.weekGain - a.weekGain))
   // Streams beyond what the budget allows this week are still listed, but marked by the screen.
   return ranked.slice(0, opts.limit ?? 8)
 }

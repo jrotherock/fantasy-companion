@@ -53,3 +53,17 @@ test('what is still to fill names every seat that could be the open one', async 
   assert.deepEqual(g, { count: 1, options: ['C'] })
   assert.deepEqual(stillToFill([['PG'], ['SG'], ['SF'], ['PF'], ['C']], slots), { count: 0, options: [] })
 })
+
+test('a pickup never drops a center the lineup needs for its nights: two C seats keep a third center', async () => {
+  const { keepsSeatDepth } = await import('./adds.js')
+  const { startingSeats } = await import('./week.js')
+  const seats = startingSeats({ PG: 1, SG: 1, G: 1, SF: 1, PF: 1, F: 1, C: 2, Util: 2, BN: 3, IL: 3 })
+  const roster = [['PG'], ['PG', 'SG'], ['PG', 'SG'], ['SF', 'PF'], ['PF', 'C'], ['C'], ['C'], ['SF', 'PF'], ['PF'], ['PG', 'SG']].map((eligible) => ({ eligible }))
+  const without = (i: number) => roster.filter((_, k) => k !== i)
+  assert.equal(keepsSeatDepth(roster, [...without(4), { eligible: ['PG', 'SG'] }], seats), false, 'Siakam for a guard leaves two centers for two C seats')
+  assert.equal(keepsSeatDepth(roster, [...without(4), { eligible: ['C'] }], seats), true, 'a center for a center is fine')
+  assert.equal(keepsSeatDepth(roster, [...without(0), { eligible: ['SF'] }], seats), true, 'a spare guard can go')
+  assert.equal(keepsSeatDepth(roster, [...without(8), { eligible: ['PG', 'SG'] }], seats), true, 'a fourth forward can go for a guard: three forwards fill three forward seats')
+  const hoops = startingSeats({ PG: 1, SG: 1, SF: 1, PF: 1, C: 1, Util: 3, BN: 5, IL: 3 })
+  assert.equal(keepsSeatDepth(roster, [...without(4), { eligible: ['PG'] }], hoops), true, 'one C seat: three centers have spares')
+})

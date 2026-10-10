@@ -32,6 +32,8 @@ export interface SeasonView {
   trades: TradeIdea[]
   standing: { rank: number | null; w: number | null; l: number | null; t: number | null } | null
   players: Record<string, PlayerRef>
+  /** Before week 1: the day the season starts. Streams and lineups have nothing to say until then. */
+  startsOn: string | null
 }
 
 /** A category my team beats an average opponent in less than this often is one it has given up. */
@@ -53,7 +55,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
     lineup: null, week: null, budget: null, pickups: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
-    standing: null, players: {},
+    standing: null, players: {}, startsOn: null,
   }
   if (!drafted || !me) return base
 
@@ -78,6 +80,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     playoffs: playoffPlan(ctx, snap, me.id),
     trades: tradeIdeas(ctx, snap, me.id),
     standing: st ? { rank: st.rank, w: st.wins, l: st.losses, t: st.ties } : null,
+    startsOn: (() => { const first = [...snap.weeks].map((w) => w[1]).sort()[0]; return first && first > world.today ? first : null })(),
   }
   // Names for every id the screen mentions, so the page needs no player file.
   const ids = new Set<string>()

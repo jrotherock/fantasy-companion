@@ -219,6 +219,10 @@ export interface LineupRow {
   positions: string[]
   game: { vs: string; home: boolean; tip: string | null; started: boolean } | null
   status: Designation
+  /** Yahoo's own short code (Q, O, DTD, INJ…), as the football screens show it. */
+  code: string | null
+  /** Why, where known: Yahoo's injury note and CBS's return text. */
+  note: string | null
   play: number
 }
 
@@ -257,6 +261,8 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): Line
     const started = !!g?.tip && Date.parse(g.tip) <= now
     rows.push({
       id, name: p.name, slot: y.slot, positions: seatPositions(y.eligible), status: ctx.designation(id),
+      code: y.status || null,
+      note: [y.injury, ctx.returnOf(id).text].filter(Boolean).join(' — ') || null,
       game: g ? { ...g, started } : null, play: g ? ctx.play(id, today) : 0,
     })
   }

@@ -263,7 +263,7 @@ const ordinal = (n: number) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['
 function Today({ v }: { v: SeasonView }) {
   const l = v.lineup
   const name = (id: string | null) => (id ? v.players[id]?.name ?? id : '')
-  if (!l) return <div className="ckempty">Today's lineup has not been read yet.</div>
+  if (!l) return <div className="ckempty">{v.startsOn ? `No games yet: the season starts ${dateWord(v.startsOn)}${v.week?.opponent ? `, week 1 against ${v.week.opponent.name}` : ''}.` : "Today's lineup has not been read yet."}</div>
   const first = l.moves.map((m) => m.by).filter(Boolean).sort()[0] ?? null
   const order = (s: string | null) => ['PG', 'SG', 'G', 'SF', 'PF', 'F', 'C', 'Util', 'BN', 'IL', 'IL+'].indexOf(s ?? 'BN')
   const rows = [...l.rows].sort((a, b) => order(a.slot) - order(b.slot))
@@ -292,7 +292,8 @@ function Today({ v }: { v: SeasonView }) {
             <tr key={r.id} className={!r.game ? 'nl-idle' : ''}>
               <td className="nl-slot">{r.slot ?? '—'}</td>
               <td className="l">{r.name} <span className="nl-dim">{r.positions.join('/')}</span>
-                {r.status !== 'healthy' && <span className={`nl-stat ${r.status}`}>{r.status}</span>}</td>
+                {r.status !== 'healthy' && <span className={`nl-stat ${r.status}`} title={r.note ?? r.status}>{r.code ?? r.status}</span>}
+                {r.note && <span className="nl-dim nl-note-inline" title={r.note}> {r.note.length > 48 ? r.note.slice(0, 46) + '…' : r.note}</span>}</td>
               <td className="l nl-dim">{r.game ? `${r.game.home ? 'v' : '@'} ${r.game.vs} ${r.game.started ? '· under way' : time(r.game.tip)}` : 'no game'}</td>
               <td>{r.game ? pct(r.play) : ''}</td>
             </tr>
@@ -323,7 +324,7 @@ function Week({ v }: { v: SeasonView }) {
           <div className="nl-vs">Week {w.week}{w.playoffs ? ' · playoffs' : ''} · vs {w.opponent?.name ?? '—'}</div>
           {w.odds && (
             <div className="nl-big">{w.score.mine ?? 0}–{w.score.theirs ?? 0}
-              <span className="nl-sub"> now · {w.odds.expected.toFixed(1)} of 9 expected · win {pct(w.odds.win)}</span></div>
+              <span className="nl-sub"> now · {w.odds.expected.toFixed(1)} of 9 categories expected this week · {pct(w.odds.win)} chance to win the matchup</span></div>
           )}
           {w.points && (
             <div className="nl-big">{w.points.mineNow.toFixed(0)}–{w.points.theirsNow.toFixed(0)}
@@ -336,6 +337,7 @@ function Week({ v }: { v: SeasonView }) {
         {w.idleGames >= 1 && ` ${w.idleGames.toFixed(0)} of your players' games fall on days with no seat for them.`}
         {swing.length > 0 && ` In play: ${swing.join(', ')}.`}
       </p>
+      {w.odds && <div className="nl-subh">Each category: so far · your chance to win it · where it ends up</div>}
       {w.odds && (
         <div className="nl-cats">
           {w.odds.races.map((r) => (
@@ -348,7 +350,8 @@ function Week({ v }: { v: SeasonView }) {
           ))}
         </div>
       )}
-      <Section title="Days left" hint="your starts · theirs">
+      <Section title="Days left" hint="players starting each day: yours · theirs">
+        <p className="nl-note">For each day left in the week: how many of your players have a game and a seat in your lineup, then the same for your opponent. More starts means more stats that day. "Idle" is your players with a game but no open seat.</p>
         <div className="nl-days">
           {w.days.map((d) => (
             <div key={d.date} className="nl-day">
@@ -370,9 +373,11 @@ function Adds({ v }: { v: SeasonView }) {
   const b = v.budget
   const streams = v.pickups.filter((p) => p.kind === 'stream')
   const ups = v.pickups.filter((p) => p.kind === 'upgrade')
+  const stashes = v.pickups.filter((p) => p.kind === 'stash')
   const cats = v.league.scoring === 'categories'
   return (
     <>
+      {v.startsOn && <div className="nl-pre">The season starts {dateWord(v.startsOn)}. Season upgrades and stashes can be made now; streams appear once games begin.</div>}
       {b && (
         <div className="nl-budget">
           {b.week && <div><b>{Math.max(0, b.week.max - b.week.used)}</b> of {b.week.max} left this week</div>}
@@ -384,8 +389,13 @@ function Adds({ v }: { v: SeasonView }) {
         {!ups.length && <div className="nl-none">Nobody on the wire beats your roster by enough to spend an add.</div>}
         {ups.map((p) => <PickupRow key={p.add} p={p} cats={cats} />)}
       </Section>
+      {stashes.length > 0 && (
+        <Section title="Injured stashes" hint="out now, worth an IL seat">
+          {stashes.map((p) => <PickupRow key={p.add} p={p} cats={cats} />)}
+        </Section>
+      )}
       <Section title="Streams for this week" hint={b ? `${b.forStreams} to spend at your pace` : undefined}>
-        {!streams.length && <div className="nl-none">No stream moves this week by enough to spend an add.</div>}
+        {!streams.length && <div className="nl-none">{v.startsOn ? `No games until ${dateWord(v.startsOn)}: streams start then.` : 'No stream moves this week by enough to spend an add.'}</div>}
         {streams.map((p, i) => <PickupRow key={p.add} p={p} cats={cats} over={b ? i >= b.forStreams : false} />)}
       </Section>
       {v.punts.length > 0 && <p className="nl-note">Your roster is not competing in {v.punts.map((c) => LABEL[c]).join(', ')}, so season value leaves {v.punts.length === 1 ? 'it' : 'them'} out. A stream counts every category: any category won this week counts.</p>}
@@ -393,26 +403,38 @@ function Adds({ v }: { v: SeasonView }) {
   )
 }
 
+/**
+ * One pickup: who to add and drop, whether he is a free agent (now) or on waivers (a claim, a day), what it does for
+ * the rest of the season and, separately, for this week, which can disagree; the other players he could replace.
+ */
 function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: boolean; over?: boolean }) {
+  const wk = (g: number) => (cats ? `${g >= 0 ? '+' : ''}${g.toFixed(2)} cats` : `${g >= 0 ? '+' : ''}${g.toFixed(0)} pts`)
+  const weekCost = p.winAfter < p.winBefore - 0.02
   return (
     <div className={`nl-pick${over ? ' over' : ''}`}>
       <div className="nl-pickh">
         <span className={`nl-kind ${p.kind}`}>{p.kind}</span>
         <b>Add {p.name}</b> <span className="nl-dim">{p.team} · {p.positions.join('/')}</span>
-        {p.waiver && <span className="nl-stat questionable">waivers</span>}
+        <span className={`nl-src ${p.waiver ? 'waiver' : 'free'}`} title={p.waiver ? 'On waivers: put in a claim; it clears after the waiver period' : 'A free agent: add him now'}>{p.waiver ? 'waivers · claim' : 'free agent · add now'}</span>
       </div>
       <div className="nl-pickd">
-        {p.dropName && <>Drop {p.dropName} · </>}
-        {p.why}
-        {cats
-          ? <> · week {p.weekGain >= 0 ? '+' : ''}{p.weekGain.toFixed(2)} cats</>
-          : <> · week {p.weekGain >= 0 ? '+' : ''}{p.weekGain.toFixed(0)} pts</>}
-        {' · win '}{pct(p.winBefore)} → {pct(p.winAfter)}
-        {over && <span className="nl-dim"> · beyond your pace</span>}
+        {p.dropName && <><b>Drop {p.dropName}</b> · </>}{p.why}
       </div>
+      <div className="nl-pickd nl-dim">
+        {p.kind !== 'stream' && <span title="His value over the games he has left, less the dropped player's: categories in play, summed per game">Season: +{Math.round(p.seasonGain)} value</span>}
+        {p.kind !== 'stream' && ' · '}
+        <span className={weekCost ? 'nl-cost' : ''}>This week: win {pct(p.winBefore)} → {pct(p.winAfter)} ({wk(p.weekGain)}){weekCost ? ' — costs this week' : ''}</span>
+        {over && <span> · beyond your pace</span>}
+      </div>
+      {p.steps && <div className="nl-steps">{p.steps}</div>}
+      {p.alternatives.length > 0 && (
+        <div className="nl-pickd nl-dim">Or drop: {p.alternatives.map((a, i) => <span key={a.drop}>{i ? ' · ' : ''}{a.dropName} <span title="this week's win chance after the move">(week {pct(a.winAfter)}, season +{Math.round(a.seasonGain)})</span></span>)}</div>
+      )}
     </div>
   )
 }
+
+const dateWord = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
 
 // ── News ──
 
@@ -449,7 +471,7 @@ function Season({ v }: { v: SeasonView }) {
   return (
     <>
       <a className="nl-room" href={`/nba/draft/${v.league.id}`}><span className="nl-roomk">Draft</span><span>How the draft came out, and the room</span><span className="ckchev">›</span></a>
-      <Section title="Power" hint={cats ? 'categories a week against an average team' : 'chance of beating an average team'}>
+      <Section title="Power" hint={cats ? "categories a week against this league's average roster" : "chance of beating this league's average roster"}>
         <table className="nl-table">
           <thead><tr><th>#</th><th className="l">Team</th><th>{cats ? 'Cats' : 'Win'}</th>{cats && CAT_ORDER.map((c) => <th key={c} className="nl-edgeh">{LABEL[c]}</th>)}</tr></thead>
           <tbody>

@@ -1041,7 +1041,7 @@ function NbaCard({ t, onOpen }: { t: SeasonTile; onOpen: (id: string) => void })
         <span className="cknm" title={t.label}>{t.label}</span>
         <span className="cksp" />
         {s && s.mine != null && (
-          <span className="ckrec" title={s.expected != null ? `${s.expected.toFixed(1)} categories expected` : undefined}>
+          <span className="ckrec" title={`This week's matchup${s.expected != null ? `: ${s.expected.toFixed(1)} of 9 categories expected` : ''}${s.win != null ? ` · ${Math.round(s.win * 100)}% chance to win it` : ''}`}>
             <b>{s.mine}–{s.theirs ?? '—'}</b>
             {s.win != null && <i className="ckplace">{Math.round(s.win * 100)}%</i>}
           </span>

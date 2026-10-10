@@ -724,7 +724,7 @@ function Review({ view }: { view: DraftView; act: Act }) {
     <div className="nb-build">
       <div className="nb-bhead"><span className="vlabel">HOW IT CAME OUT</span><span className="spacer" />{view.mock && <a className="nb-link" href={`${leaguePage(view)}#mocks`}>What all your mocks say →</a>}</div>
       {r.expected != null && r.win && <>
-        <div className="nb-bignum">{r.expected.toFixed(1)} <span className="nb-dim">of 9 categories a week</span></div>
+        <div className="nb-bignum">{r.expected.toFixed(1)} <span className="nb-dim">of 9 categories a week against an average team, by the draft model</span></div>
         <div className="nb-cats">{CATS.map((c) => <div key={c} className={`nb-cat nb-cat-${tone(r.win![c]) || 'even'}`}><span className="l">{LABEL[c]}</span><span className="v">{pct(r.win![c])}</span></div>)}</div>
         <div className="nb-meter">{r.punting.length ? `Punted ${r.punting.map((c) => LABEL[c]).join(', ')}` : 'Nothing punted'}</div>
       </>}
