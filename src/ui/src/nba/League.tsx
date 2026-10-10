@@ -448,6 +448,17 @@ function Week({ v }: { v: SeasonView }) {
           )}
         </div>
       </div>
+      {w.odds && (() => {
+        const by = (st: string[]) => w.odds!.races.filter((r) => st.includes(r.state)).map((r) => LABEL[r.cat])
+        const fav = by(['safe', 'leaning']), against = by(['behind', 'lost']), play = by(['swing'])
+        return (
+          <p className="nl-preview">
+            {fav.length > 0 && <>Favored in <b>{fav.join(', ')}</b>. </>}
+            {against.length > 0 && <>Behind in <b>{against.join(', ')}</b>. </>}
+            {play.length > 0 ? <>In play: <b className="nl-amber">{play.join(', ')}</b> — that is where a start or a stream decides the week.</> : 'Nothing is close: the week is mostly decided by who plays.'}
+          </p>
+        )
+      })()}
       <p className="nl-line">
         {w.startsLeft.mine.toFixed(0)} starts left for you, {w.startsLeft.theirs.toFixed(0)} for them.
         {w.idleGames >= 1 && ` ${w.idleGames.toFixed(0)} of your players' games fall on days with no seat for them.`}
@@ -512,6 +523,15 @@ function Adds({ v }: { v: SeasonView }) {
           {b.season && <div><b>{Math.max(0, b.season.max - b.season.used)}</b> of {b.season.max} left this season</div>}
           <div className="nl-dim">{b.note}</div>
         </div>
+      )}
+      {v.addPlan && v.addPlan.steps.length > 0 && (
+        <Section title="This week's plan" hint={`${v.addPlan.left} add${v.addPlan.left === 1 ? '' : 's'} left${v.addPlan.reserve ? `, ${v.addPlan.reserve} kept for an injury` : ''}`}>
+          <ol className="nl-plan">
+            {v.addPlan.steps.map((st, i) => (
+              <li key={i}><b>Add {st.add}</b>{st.drop && <>, drop {st.drop}</>} <span className="nl-dim">— {st.when}</span><div className="nl-dim">{st.why}</div></li>
+            ))}
+          </ol>
+        </Section>
       )}
       <Section title="For the rest of the season" hint="better than someone you have">
         {!ups.length && <div className="nl-none">Nobody on the wire beats your roster by enough to spend an add.</div>}
@@ -615,6 +635,29 @@ function Season({ v }: { v: SeasonView }) {
   return (
     <>
       <a className="nl-room" href={`/nba/draft/${v.league.id}`}><span className="nl-roomk">Draft</span><span>How the draft came out, and the room</span><span className="ckchev">›</span></a>
+      {v.catPlan && (
+        <Section title="Category plan" hint="against this league's rosters">
+          <p className="nl-line">
+            {v.catPlan.strong.length > 0 && <>Winning: <b className="nl-green">{v.catPlan.strong.map((c) => LABEL[c]).join(', ')}</b>. </>}
+            {v.catPlan.lean.length > 0 && <>Leaning: <b>{v.catPlan.lean.map((c) => LABEL[c]).join(', ')}</b>. </>}
+            {v.catPlan.swing.length > 0 && <>In play: <b className="nl-amber">{v.catPlan.swing.map((c) => LABEL[c]).join(', ')}</b>. </>}
+            {v.catPlan.givenUp.length > 0 && <>Given up: <span className="nl-dim">{v.catPlan.givenUp.map((c) => LABEL[c]).join(', ')}</span>.</>}
+          </p>
+          {v.catPlan.target && (
+            <>
+              <p className="nl-line">
+                {v.catPlan.strong.length >= 5 ? 'A 6–3 week needs a sixth category won most weeks' : 'A 5–4 week needs five categories won most weeks'}: the closest is <b>{LABEL[v.catPlan.target]}</b>.
+                {v.catPlan.targets.length ? ' Free agents who would push it without costing what you win:' : ' Nobody on the wire pushes it without costing what you win.'}
+              </p>
+              {v.catPlan.targets.length > 0 && (
+                <div className="nl-chips">{v.catPlan.targets.map((t) => (
+                  <span key={t.id} className="nl-chip">{t.name} <span className="nl-dim">{t.team} · {t.positions.join('/')}{t.waiver ? ' · waivers' : ''}</span> <b>+{LABEL[v.catPlan!.target!]}</b>{t.costs.length > 0 && <span className="nl-dim"> −{t.costs.map((c) => LABEL[c]).join(', −')}</span>}</span>
+                ))}</div>
+              )}
+            </>
+          )}
+        </Section>
+      )}
       <Section title="Power" hint={cats ? "categories a week against this league's average roster" : "chance of beating this league's average roster"}>
         <table className="nl-table">
           <thead><tr><th>#</th><th className="l">Team</th><th>{cats ? 'Cats' : 'Win'}</th>{cats && CAT_ORDER.map((c) => <th key={c} className="nl-edgeh">{LABEL[c]}</th>)}</tr></thead>

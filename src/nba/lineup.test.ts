@@ -67,3 +67,22 @@ test('a pickup never drops a center the lineup needs for its nights: two C seats
   const hoops = startingSeats({ PG: 1, SG: 1, SF: 1, PF: 1, C: 1, Util: 3, BN: 5, IL: 3 })
   assert.equal(keepsSeatDepth(roster, [...without(4), { eligible: ['PG'] }], hoops), true, 'one C seat: three centers have spares')
 })
+
+test('the add plan: an upgrade that does not cost the week first, streams rolled across the week, one add kept back', async () => {
+  const { addPlan } = await import('./adds.js')
+  const pick = (name: string, kind: 'upgrade' | 'stream' | 'stash', days: string[], winAfter = 0.5, drop = 'Bridges') => ({
+    add: name, name, team: 'X', positions: ['PG'], drop, dropName: drop, kind, weekGain: kind === 'stream' ? 0.2 : 0, winBefore: 0.5, winAfter,
+    seasonGain: 50, startsThisWeek: days.length, waiver: false, why: 'w', alternatives: [], steps: null, seasonCats: [], weekCats: [],
+    playDays: days.map((date) => ({ date, open: true })),
+  })
+  const plan = addPlan([
+    pick('Sheppard', 'upgrade', ['2026-10-21'], 0.48),
+    pick('Costly', 'upgrade', ['2026-10-21'], 0.30, 'VanVleet'),
+    pick('Sexton', 'stream', ['2026-10-21', '2026-10-23'], 0.56, 'Herro'),
+    pick('Overlap', 'stream', ['2026-10-22'], 0.55, 'Herro'),
+    pick('Late', 'stream', ['2026-10-24', '2026-10-25'], 0.54, 'Herro'),
+  ] as any, { week: { used: 0, max: 4 }, season: null, weeksLeft: 22, pace: null, forStreams: 4, note: '' }, '2026-10-20')!
+  assert.equal(plan.reserve, 1)
+  assert.deepEqual(plan.steps.map((s) => s.add), ['Sheppard', 'Sexton', 'Late'], 'the costly upgrade is left out; the overlapping stream too')
+  assert.equal(plan.steps[2].drop, 'Sexton', 'the second stream replaces the first')
+})

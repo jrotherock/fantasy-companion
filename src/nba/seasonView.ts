@@ -7,7 +7,7 @@ import type { Cat } from './value.js'
 import { CATS } from './value.js'
 import { startingSeats } from './week.js'
 import { buildWeek, checkLineup, Context, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
-import { budgetOf, pickups, type Budget, type Pickup } from './adds.js'
+import { addPlan, budgetOf, categoryPlan, pickups, type AddPlan, type Budget, type CategoryPlan, type Pickup } from './adds.js'
 import { leagueNews, type NewsItem, type StatusEvent } from './news.js'
 import { allPlay, playoffPlan, power, tradeIdeas, type AllPlay, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
 
@@ -34,6 +34,9 @@ export interface SeasonView {
   players: Record<string, PlayerRef>
   /** Before week 1: the day the season starts. Streams and lineups have nothing to say until then. */
   startsOn: string | null
+  /** The week's adds as a plan, and the season's category plan (categories leagues). */
+  addPlan: AddPlan | null
+  catPlan: CategoryPlan | null
 }
 
 /** A category my team beats an average opponent in less than this often is one it has given up. */
@@ -55,7 +58,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
     lineup: null, week: null, budget: null, pickups: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
-    standing: null, players: {}, startsOn: null,
+    standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null,
   }
   if (!drafted || !me) return base
 
@@ -88,6 +91,8 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     playoffs: playoffPlan(ctx, snap, me.id),
     trades: tradeIdeas(ctx, snap, me.id),
     standing: st ? { rank: st.rank, w: st.wins, l: st.losses, t: st.ties } : null,
+    addPlan: addPlan(picks, budget, world.today),
+    catPlan: league.scoring === 'categories' && mine?.edges ? categoryPlan(ctx, snap, mine.edges, punts) : null,
     startsOn: (() => { const first = [...snap.weeks].map((w) => w[1]).sort()[0]; return first && first > world.today ? first : null })(),
   }
   // Names for every id the screen mentions, so the page needs no player file.

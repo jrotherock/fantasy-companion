@@ -174,3 +174,8 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-locked { color: var(--muted); font-style: italic; }
 .nl-ilmoves li b { color: var(--amber); }
 @media (max-width: 600px) { .nl-today .nl-line-cell { white-space: normal; } }
+.nl-plan { margin: 0.3rem 0 0.5rem 1.1rem; padding: 0; font-size: 0.88rem; }
+.nl-plan li { margin-bottom: 0.35rem; }
+.nl-preview { font-size: 0.9rem; margin: 0.3rem 0 0.5rem; }
+.nl-amber { color: var(--amber); }
+.nl-green { color: var(--green); }

@@ -368,6 +368,34 @@ export function nbaAlerts(now = clock()): Alert[] {
         playerId: m.start,
       })
     }
+    // My players' news that got worse: an injury, a downgrade, a lost role. Worth knowing the day it happens.
+    for (const n of v.news) {
+      if (n.whose !== 'mine' || n.kind !== 'worse') continue
+      out.push({
+        id: `nba-news:${l.id}:${n.key}`,
+        leagueId: l.id, rule: 'nba-news',
+        headline: `${l.label}: ${n.headline}`,
+        detail: n.detail,
+        consequence: close ? 60 : 45,
+        deadline: null,
+        link: `/nba/league/${l.id}`,
+        playerId: n.playerId,
+      })
+    }
+    // A healthy player stuck on IL: he cannot play, and Yahoo blocks adds until he is moved.
+    for (const m of v.lineup?.ilMoves ?? []) {
+      if (m.action !== 'off-il') continue
+      out.push({
+        id: `nba-il:${l.id}:${v.today}:${m.id}`,
+        leagueId: l.id, rule: 'nba-il',
+        headline: `${l.label}: take ${m.name} off IL`,
+        detail: m.why,
+        consequence: 55,
+        deadline: null,
+        link: `/nba/league/${l.id}`,
+        playerId: m.id,
+      })
+    }
   }
   // A player who starts in both leagues ruled out tonight.
   for (const e of exposure()) {

@@ -319,3 +319,87 @@ export const addDays = (d: string, n: number) => {
   t.setUTCDate(t.getUTCDate() + n)
   return t.toISOString().slice(0, 10)
 }
+
+/**
+ * The week's adds as a plan: a season upgrade first where it does not cost the week, then streams rolled across the
+ * week (the second picked up after the first one's last game, dropping him), one add kept back for an injury when
+ * there are three or more. Built from the pickups already scored; the steps are suggestions in order, not a script.
+ */
+export interface AddPlan {
+  left: number
+  steps: { when: string; add: string; drop: string | null; why: string }[]
+  reserve: number
+}
+
+export function addPlan(picks: Pickup[], budget: Budget | null, today: string): AddPlan | null {
+  const left = budget?.week ? Math.max(0, budget.week.max - budget.week.used)
+    : budget?.season ? Math.max(0, budget.season.max - budget.season.used) : 4
+  if (!left) return { left, steps: [], reserve: 0 }
+  const reserve = left >= 3 ? 1 : 0
+  let spend = left - reserve
+  const steps: AddPlan['steps'] = []
+  const used = new Set<string>()
+  const dropped = new Set<string>()
+  const ups = picks.filter((p) => p.kind === 'upgrade' && p.winAfter >= p.winBefore - 0.03)
+  for (const p of ups) {
+    if (!spend || dropped.has(p.drop ?? '')) continue
+    steps.push({ when: p.waiver ? 'claim now (clears in a day)' : 'now', add: p.name, drop: p.dropName, why: `${p.why}; this week ${Math.round(p.winBefore * 100)}% → ${Math.round(p.winAfter * 100)}%` })
+    used.add(p.add); if (p.drop) dropped.add(p.drop); spend--
+  }
+  // Streams: the best first; then, while adds remain, one whose games all come after the last stream's last game.
+  const streams = picks.filter((p) => p.kind === 'stream' && !used.has(p.add) && p.playDays.length).sort((a, b) => b.weekGain - a.weekGain)
+  let last: Pickup | null = null
+  for (const p of streams) {
+    if (!spend) break
+    if (last && p.playDays[0].date <= last.playDays.at(-1)!.date) continue
+    if (!last && dropped.has(p.drop ?? '')) continue
+    const dayWord = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })
+    steps.push({
+      when: last ? `after ${last.name}'s last game (${dayWord(last.playDays.at(-1)!.date)})` : p.waiver ? 'claim now' : 'now',
+      add: p.name, drop: last ? last.name : p.dropName,
+      why: `plays ${p.playDays.map((d) => dayWord(d.date)).join(', ')}, ${p.playDays.filter((d) => d.open).length} into empty spots`,
+    })
+    last = p; spend--
+  }
+  return { left, steps, reserve }
+}
+
+/**
+ * The season's category plan: where my roster wins, leans, is in play and has given up, against this league's
+ * rosters (Power's edges); the category closest to becoming another strong one; and the free agents who would push
+ * it without costing the strong ones. A 6-3 week needs a sixth category won more often than not.
+ */
+export interface CategoryPlan {
+  strong: Cat[]; lean: Cat[]; swing: Cat[]; givenUp: Cat[]
+  target: Cat | null
+  targets: { id: string; name: string; team: string | null; positions: string[]; gain: number; costs: Cat[]; waiver: boolean }[]
+}
+
+export function categoryPlan(ctx: Context, snap: Snapshot, edges: Partial<Record<Cat, number>>, punts: Cat[]): CategoryPlan {
+  const e = (c: Cat) => edges[c] ?? 0.5
+  const strong = CATS.filter((c) => e(c) >= 0.6)
+  const lean = CATS.filter((c) => e(c) >= 0.5 && e(c) < 0.6)
+  const swing = CATS.filter((c) => e(c) >= 0.35 && e(c) < 0.5 && !punts.includes(c))
+  const givenUp = CATS.filter((c) => !strong.includes(c) && !lean.includes(c) && !swing.includes(c))
+  const target = [...lean, ...swing].sort((a, b) => e(b) - e(a))[0] ?? null
+  if (!target) return { strong, lean, swing, givenUp, target, targets: [] }
+  const rostered = new Set<string>()
+  for (const r of snap.rosters) for (const y of r.players) { const id = ctx.resolve(y); if (id) rostered.add(id) }
+  const waivers = new Set(snap.waivers)
+  const targets = ctx.world.players
+    .filter((p) => p.projection && p.team && !rostered.has(p.id) && !ctx.world.never.has(p.id) && ctx.gamesLeft(p.id) >= 20)
+    .map((p) => {
+      const z = ctx.zOf(p.id)
+      if (!z) return null
+      const keep = strong.reduce((s, c) => s + z[c], 0)
+      return { p, z, keep }
+    })
+    .filter((x): x is NonNullable<typeof x> => !!x && x.z[target] >= 0.5 && x.keep >= -0.5)
+    .sort((a, b) => b.z[target] + 0.3 * b.keep - (a.z[target] + 0.3 * a.keep))
+    .slice(0, 3)
+    .map(({ p, z }) => ({
+      id: p.id, name: p.name, team: p.team, positions: p.positions, gain: z[target],
+      costs: strong.filter((c) => z[c] <= -0.4), waiver: !!p.yahoo?.yahooId && waivers.has(p.yahoo.yahooId),
+    }))
+  return { strong, lean, swing, givenUp, target, targets }
+}
