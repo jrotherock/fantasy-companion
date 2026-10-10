@@ -1,5 +1,5 @@
 {
-  "note": "Read from Yahoo league settings and the API on 2026-10-02. Both are offline drafts with no date set. history: older seasons Yahoo's renewal chain does not reach, read off the league page's season selector; each is used only if Yahoo marks a team in it as yours. adpSpread: how far picks land from that season’s preseason ADP in this league’s own drafts (sd = a + b*ADP), measured 2026-10-04 from GET /api/nba/history/:id/spread.",
+  "note": "Read from Yahoo league settings and the API on 2026-10-02. Both are offline drafts with no date set. history: older seasons Yahoo's renewal chain does not reach, read off the league page's season selector; each is used only if Yahoo marks a team in it as yours. adpSpread: how far picks land from that season’s preseason ADP in this league’s own drafts (sd = a + b*ADP), measured 2026-10-04 from GET /api/nba/history/:id/spread. nba-public (Yahoo public league 231557, 2026-10-09): Yahoo's default 9-cat lineup (G, F, two C), 10 teams, live draft 2026-10-09 22:30 PT; no history, so the spread is the one that fit human mock rooms best (2 + 0.12·ADP).",
   "leagues": [
     {
       "id": "nba-harker",
@@ -158,6 +158,54 @@
           "season": "2005",
           "leagueId": "54354"
         }
+      ],
+      "adpSpread": {
+        "a": 2,
+        "b": 0.12
+      }
+    },
+    {
+      "id": "nba-public",
+      "label": "Public 231557",
+      "sport": "nba",
+      "leagueKey": "478.l.231557",
+      "myTeamId": "2",
+      "myTeamName": "Justin's Optimal Team",
+      "teams": 10,
+      "scoring": "categories",
+      "categories": [
+        "fg%",
+        "ft%",
+        "tpm",
+        "pts",
+        "reb",
+        "ast",
+        "stl",
+        "blk",
+        "to"
+      ],
+      "roster": {
+        "PG": 1,
+        "SG": 1,
+        "G": 1,
+        "SF": 1,
+        "PF": 1,
+        "F": 1,
+        "C": 2,
+        "Util": 2,
+        "BN": 3,
+        "IL": 3
+      },
+      "adds": {
+        "perWeek": 4,
+        "season": null
+      },
+      "waivers": "rolling list",
+      "playoffTeams": 6,
+      "playoffWeeks": [
+        20,
+        21,
+        22
       ],
       "adpSpread": {
         "a": 2,
