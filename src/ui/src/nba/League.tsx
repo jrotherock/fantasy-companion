@@ -443,7 +443,7 @@ function Week({ v }: { v: SeasonView }) {
         <Section title="Your players this week" hint="expected starts and what they produce">
           <div className="nl-scroll">
             <table className="nl-table nl-wkp">
-              <thead><tr><th className="l">Player</th><th title="Expected starts this week (games he plays with a seat)">St</th><th title="Projected minutes a game">MPG</th>
+              <thead><tr><th className="l">Player</th><th title="Expected starts this week: his games with a lineup spot, less his chance of sitting hurt">Starts</th><th title="Projected minutes a game">MPG</th>
                 {YCOLS.map((c) => <th key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dimh' : ''} title={c.cat && swingCats.has(c.cat) ? 'In play this week' : undefined}>{c.label}</th>)}</tr></thead>
               <tbody>
                 {w.players.map((p) => (
