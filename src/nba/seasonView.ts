@@ -69,6 +69,14 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     : []
   const lineup = snap.mineToday ? checkLineup(ctx, snap.mineToday, startingSeats(league.roster)) : null
   const week = buildWeek(ctx, snap, me.id)
+  // Games left in the matchup week for each player on today's lineup: what decides who starts and who streams.
+  if (lineup && week) {
+    const from = world.today > week.start ? world.today : week.start
+    for (const r of lineup.rows) {
+      const team = ctx.byId.get(r.id)?.team
+      r.weekGames = team ? world.schedule.filter((g) => g.date >= from && g.date <= week.end && (g.home === team || g.away === team)).length : null
+    }
+  }
   const budget = budgetOf(snap, me.id, league, world.today)
   const picks = pickups(ctx, snap, me.id, { punts })
   const news = leagueNews(ctx, snap, me.id, events, week?.opponent?.id ?? null).slice(0, 40)

@@ -235,6 +235,8 @@ export interface LineupRow {
   note: string | null
   /** No game today: his next one. */
   next: { date: string; vs: string; home: boolean } | null
+  /** His team's games left in this matchup week (week 1 before the season), today included. */
+  weekGames: number | null
   play: number
 }
 
@@ -278,6 +280,7 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): Line
       id, name: p.name, slot: y.slot, positions: seatPositions(y.eligible), status: ctx.designation(id),
       code: y.status || CODE[ctx.designation(id)] || null,
       next: g ? null : nextGame(schedule, p.team, today),
+      weekGames: null,
       note: [y.injury, ctx.returnOf(id).text].filter(Boolean).join(' — ') || null,
       game: g ? { ...g, started } : null, play: g ? ctx.play(id, today) : 0,
     })

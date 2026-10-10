@@ -305,7 +305,7 @@ function Today({ v }: { v: SeasonView }) {
         </ul>
       )}
       <table className="nl-table nl-today">
-        <thead><tr><th className="l nl-slotc">Slot</th><th className="l">Player</th><th className="l nl-gamec">{l.rows.some((r) => r.game) ? 'Today' : 'Next game'}</th><th className="nl-playc">Plays</th></tr></thead>
+        <thead><tr><th className="l nl-slotc">Slot</th><th className="l">Player</th><th className="l nl-gamec">{l.rows.some((r) => r.game) ? 'Today' : 'Next game'}</th><th className="nl-wkc" title="Games left in this matchup week">Wk</th></tr></thead>
         <tbody>
           {rows.map((r) => (
             <Fragment key={r.id}>
@@ -316,13 +316,13 @@ function Today({ v }: { v: SeasonView }) {
                 <td className="l nl-dim nl-gamec">{r.game
                   ? `${r.game.home ? 'v' : '@'} ${r.game.vs} ${r.game.started ? '· under way' : time(r.game.tip)}`
                   : r.next ? `${dateWord(r.next.date)} ${r.next.home ? 'v' : '@'} ${r.next.vs}` : '—'}</td>
-                <td className="nl-playc">{r.game ? pct(r.play) : ''}</td>
+                <td className="nl-wkc">{r.weekGames ?? ''}</td>
               </tr>
             </Fragment>
           ))}
         </tbody>
       </table>
-      <p className="nl-note">Yahoo locks each player at his game's tip. "Plays" is the chance he plays today, from his designation and any return date.</p>
+      <p className="nl-note">Yahoo locks each player at his game's tip. "Wk" is his games left in this matchup week: a bench player with more games than a starter is worth the seat, and a short week is where a stream helps. A tag's card has the chance he plays.</p>
     </>
   )
 }
