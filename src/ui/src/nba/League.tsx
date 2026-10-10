@@ -471,6 +471,12 @@ function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: 
           This week: {p.weekCats.map((c) => <span key={c.cat} className={`nl-catchip ${c.after > c.before ? 'up' : 'down'}`}>{LABEL[c.cat]} {pct(c.before)}→{pct(c.after)}</span>)}
         </div>
       )}
+      {p.playDays.length > 0 && (
+        <div className="nl-pickd nl-why2" title="The days he plays this week once added. Green: you have an open seat that day, so his game counts without benching anyone">
+          Plays: {p.playDays.map((d) => <span key={d.date} className={`nl-catchip ${d.open ? 'up' : 'flat'}`}>{day(d.date)}{d.open ? ' · open' : ''}</span>)}
+          <span className="nl-dim"> {p.playDays.filter((d) => d.open).length} of {p.playDays.length} into open seats</span>
+        </div>
+      )}
       {p.steps && <div className="nl-steps">{p.steps}</div>}
       {p.alternatives.length > 0 && (
         <div className="nl-pickd nl-dim">Or drop: {p.alternatives.map((a, i) => <span key={a.drop}>{i ? ' · ' : ''}{a.dropName} <span title="this week's win chance after the move">(week {pct(a.winAfter)}, season +{Math.round(a.seasonGain)})</span></span>)}</div>

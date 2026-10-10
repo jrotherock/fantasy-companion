@@ -88,6 +88,8 @@ export interface Pickup {
   why: string
   /** Why, by category: where he beats the dropped player per game (the season), and the week's races it moves most. */
   seasonCats: { cat: Cat; diff: number }[]
+  /** The days he plays this week once he can be added, and whether I have a seat nobody fills that day. */
+  playDays: { date: string; open: boolean }[]
   weekCats: { cat: Cat; before: number; after: number }[]
   /** Other players he could replace, best first: the drop is the user's call. */
   alternatives: { drop: string; dropName: string; weekGain: number; winAfter: number; seasonGain: number }[]
@@ -180,6 +182,12 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
     return { gain: o.mine - o.theirs, win: o.win }
   }
   const base = score(myIds)
+  // My open seats each day as the roster stands: the days a pickup's games count without benching anyone.
+  const openOn = new Map<string, number>()
+  if (allDays.length) {
+    const wk0 = sideOutlook(ctx, mySide, myIds, seats, allDays).week
+    allDays.forEach((d, i) => openOn.set(d, Math.max(0, seats.length - (wk0.days[i]?.starting.length ?? 0))))
+  }
 
   // Who could go: the weakest for the season, not hurt long-term (they belong on IL instead).
   const drops = myIds
@@ -243,6 +251,7 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
         kind: stash ? 'stash' : upgrade ? 'upgrade' : 'stream',
         alternatives: [],
         ...whyCats(c.id, d.id, after.races),
+        playDays: daysFor(c.id).filter((day) => { const t = ctx.byId.get(c.id)?.team; return !!t && schedulePlays(ctx, day, t) }).map((date) => ({ date, open: (openOn.get(date) ?? 0) > 0 })),
         steps: stash
           ? `${waiverIds.has(c.id) ? 'Claim' : 'Add'} him dropping ${ctx.byId.get(d.id)?.name}, move him to IL once he is yours (Yahoo will not add straight to IL), then use the freed spot for another add.${back ? ` Back about ${back}.` : ''}`
           : null,
