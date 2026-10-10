@@ -324,7 +324,7 @@ function Today({ v }: { v: SeasonView }) {
             <RosterGroup title="Playing tonight" rows={tonight} showLine />
             <RosterGroup title="No game today" rows={noGame} />
           </>
-        : <RosterGroup title="Next games" rows={[...tonight, ...noGame]} />}
+        : <RosterGroup title={v.startsOn ? 'Your roster' : 'Next games'} rows={[...tonight, ...noGame]} wkLabel={v.startsOn ? 'Wk 1' : undefined} />}
       {hurt.length > 0 && <RosterGroup title="Out or on IL" rows={hurt} />}
       <p className="nl-note">Yahoo locks each player at his game's tip. Tonight's line is his projection; once his game starts it shows what he has done, read from Yahoo about every ten minutes. "Wk" is his games left in the matchup week.</p>
     </>
@@ -332,26 +332,36 @@ function Today({ v }: { v: SeasonView }) {
 }
 
 /** A group of today's roster: slot, player and tag, the game (or the next one), tonight's line, games left this week. */
-function RosterGroup({ title, rows, showLine }: { title: string; rows: NonNullable<SeasonView['lineup']>['rows']; showLine?: boolean }) {
+function RosterGroup({ title, rows, showLine, wkLabel }: { title: string; rows: NonNullable<SeasonView['lineup']>['rows']; showLine?: boolean; wkLabel?: string }) {
   if (!rows.length) return null
+  const tonight = rows.some((r) => r.game)
   return (
     <>
       <div className="nl-subh nl-grouph">{title} <span className="nl-dim">· {rows.length}</span></div>
       <table className="nl-table nl-today">
+        <thead>
+          <tr>
+            <th className="l nl-slotc">Slot</th>
+            <th className="l">Player</th>
+            <th className="l nl-gamec">{tonight ? 'Tonight' : 'Next game'}</th>
+            {showLine && <th className="l">Line</th>}
+            <th className="nl-wkc" title="Games left in this matchup week">{wkLabel ?? 'Wk'}</th>
+          </tr>
+        </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
-              <td className="l nl-slot">{r.slot ?? '—'}</td>
+              <td className="l nl-slotc">{r.slot ?? '—'}</td>
               <td className="l">{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>{r.status !== 'healthy' && <InjuryTag r={r} />}</td>
               <td className="l nl-dim nl-gamec">{r.game
-                ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · {r.game.started ? <span className="nl-locked">{r.live ? 'playing / played' : 'locked'}</span> : <>locks {time(r.game.tip)}</>}</>
+                ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · {r.game.started ? <span className={`nl-locked ${!r.game.final && r.live ? 'on' : ''}`}>{r.game.final ? 'final' : r.live ? 'live' : 'locked'}</span> : <>locks {time(r.game.tip)}</>}</>
                 : r.next ? `${dateWord(r.next.date)} ${r.next.home ? 'v' : '@'} ${r.next.vs}` : '—'}</td>
               {showLine && (
                 <td className="l nl-line-cell">
-                  {r.live ? <><b>{lineOf(r.live)}</b>{r.tonight && <div className="nl-dim nl-proj">proj {lineOf(r.tonight)}</div>}</> : r.tonight ? <span className="nl-dim">proj {lineOf(r.tonight)}</span> : ''}
+                  {r.live ? <><b>{lineOf(r.live, true)}</b>{r.tonight && <div className="nl-dim nl-proj">proj {lineOf(r.tonight)}</div>}</> : r.tonight ? <span className="nl-dim">proj {lineOf(r.tonight)}</span> : ''}
                 </td>
               )}
-              <td className="nl-wkc" title="Games left in this matchup week">{r.weekGames ?? ''}<span className="nl-dim nl-wkl"> wk</span></td>
+              <td className="nl-wkc">{r.weekGames ?? ''}</td>
             </tr>
           ))}
         </tbody>
@@ -360,9 +370,9 @@ function RosterGroup({ title, rows, showLine }: { title: string; rows: NonNullab
   )
 }
 
-/** A projected game in one short line: 18p 5r 6a 2t 1.2s 0.4b. */
-function lineOf(b: { pts: number; reb: number; ast: number; tpm: number; stl: number; blk: number }): string {
-  const n = (x: number) => (x >= 3 ? Math.round(x).toString() : x.toFixed(1))
+/** A game in one short line: 18p 5r 6a 2·3 1.2s 0.4b. A real line (whole) has no tenths. */
+function lineOf(b: { pts: number; reb: number; ast: number; tpm: number; stl: number; blk: number }, whole = false): string {
+  const n = (x: number) => (whole || x >= 3 ? Math.round(x).toString() : x.toFixed(1))
   return `${n(b.pts)}p ${n(b.reb)}r ${n(b.ast)}a ${n(b.tpm)}·3 ${n(b.stl)}s ${n(b.blk)}b`
 }
 

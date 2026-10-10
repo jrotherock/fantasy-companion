@@ -9,13 +9,15 @@
  * starters are given designations so the news and lineup screens have
  * something to say. The server only takes this for leagues ending in -test.
  * Run it with NBA_NOW set on the server to the same day (see .claude/launch.json).
+ * A fourth argument, an ISO instant, gives my players whose games tipped by then
+ * a box line, as Yahoo's would read mid-game (the nba-test-live server).
  */
 import { readFileSync } from 'node:fs'
 import type { NbaPlayer, Game } from '../src/nba/types.js'
 import { emptyBox, type Box, type NbaMatchup, type TeamMeta } from '../src/nba/yahooSeason.js'
 import { perGameBox } from '../src/nba/outlook.js'
 
-const [leagueId = 'nba-hoops-test', today = '2026-11-18', base = 'http://localhost:4603'] = process.argv.slice(2)
+const [leagueId = 'nba-hoops-test', today = '2026-11-18', base = 'http://localhost:4603', liveAt] = process.argv.slice(2)
 if (!leagueId.endsWith('-test')) throw new Error('only -test leagues')
 
 const players: NbaPlayer[] = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
@@ -113,13 +115,21 @@ const waivers = players.filter((p) => p.yahoo && !owned.has(p.id)).slice(0, 4).m
 const now = Date.parse(today + 'T20:00:00Z')
 const statusEvents = Object.entries(statuses).map(([id, s], i) => ({ id, at: now - (i + 1) * 3600000, from: 'healthy', to: s === 'O' ? 'out' : 'questionable' }))
 
+/** Part of a game's line for a player whose game has tipped: Yahoo's box so far. */
+function liveBox(p: NbaPlayer): Box | null {
+  if (!liveAt) return null
+  const g = schedule.find((x) => x.date === today && x.tip && (x.home === p.team || x.away === p.team))
+  if (!g || Date.parse(g.tip!) > Date.parse(liveAt)) return null
+  const share = Math.min(1, (Date.parse(liveAt) - Date.parse(g.tip!)) / (2.4 * 3600000))
+  return scale(perGameBox(p), share * (0.6 + rand() * 0.8))
+}
+
 const snap = {
   settings: { maxAdds: real.adds.season, maxWeeklyAdds: real.adds.perWeek, tradeEnd: '2027-02-04', playoffStartWeek: real.playoffWeeks[0], playoffTeams: real.playoffTeams, waiverType: 'R', waiverDays: 2, faab: real.scoring === 'points', scoringType: 'head' },
   weeks, rosters: teamsRows,
-  mineToday: { team: meta(mineIdx), date: today, players: teamsRows[mineIdx].players.map((y) => ({ ...y, box: null })) },
+  mineToday: { team: meta(mineIdx), date: today, players: teamsRows[mineIdx].players.map((y, j) => ({ ...y, box: liveBox(rosters[mineIdx][j]) })) },
   scoreboard, past, standings, waivers, transactions: [], statusEvents,
 }
-void schedule
 
 const res = await fetch(`${base}/api/nba/season/${leagueId}/snapshot`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(snap) })
 const v = await res.json()

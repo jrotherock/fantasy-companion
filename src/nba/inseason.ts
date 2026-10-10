@@ -227,7 +227,7 @@ export interface LineupRow {
   name: string
   slot: string | null
   positions: string[]
-  game: { vs: string; home: boolean; tip: string | null; started: boolean } | null
+  game: { vs: string; home: boolean; tip: string | null; started: boolean; /** Tipped long enough ago (2¾ hours) to be over. */ final: boolean } | null
   status: Designation
   /** Yahoo's own short code (Q, O, DTD, INJ…), as the football screens show it. */
   code: string | null
@@ -286,6 +286,7 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): Line
     const p = ctx.byId.get(id)!
     const g = gameToday(schedule, p.team, today)
     const started = !!g?.tip && Date.parse(g.tip) <= now
+    const final = !!g?.tip && Date.parse(g.tip) + 2.75 * 3_600_000 <= now
     rows.push({
       id, name: p.name, slot: y.slot, positions: seatPositions(y.eligible), status: ctx.designation(id),
       code: y.status || CODE[ctx.designation(id)] || null,
@@ -294,7 +295,7 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): Line
       tonight: g ? (ctx.outlook(id, today)?.box ?? null) : null,
       live: (y as { box?: Box | null }).box ?? null,
       note: [y.injury, ctx.returnOf(id).text].filter(Boolean).join(' — ') || null,
-      game: g ? { ...g, started } : null, play: g ? ctx.play(id, today) : 0,
+      game: g ? { ...g, started, final } : null, play: g ? ctx.play(id, today) : 0,
     })
   }
   // Seats already spoken for by players whose game has started.
