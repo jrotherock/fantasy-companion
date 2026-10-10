@@ -455,6 +455,16 @@ if (MODE === 'build') {
   }
 }
 
+if (MODE === 'punt1') {
+  // After a forced first pick: the cards as they are, against each single punt locked from my second pick.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  for (const c of (arg('punts') ?? CATS.join(';')).split(';') as Cat[]) {
+    strategies[`punt ${c}`] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', mine.length >= 1 ? [c] : [], H)
+  }
+}
+
 if (MODE === 'nudge') {
   // A nudge toward bigs who do not cost FT% (C-eligible, FT% z no worse than -0.5: about 76% or better on modest volume): a bonus on the card score, in
   // categories a week, against the cards as they now are (reading the roster from pick 2).
