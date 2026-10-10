@@ -148,3 +148,10 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-catchip.up { color: var(--green); border-color: color-mix(in srgb, var(--green) 50%, var(--line)); }
 .nl-catchip.down { color: var(--red); border-color: color-mix(in srgb, var(--red) 50%, var(--line)); }
 .nl-catchip.flat { color: var(--muted); }
+
+/* Your players this week: a row each, the categories in play highlighted. */
+.nl-scroll { overflow-x: auto; }
+.nl-wkp td, .nl-wkp th { padding-left: 0.45rem; padding-right: 0.45rem; white-space: nowrap; }
+.nl-wkp .nl-inplay { background: color-mix(in srgb, var(--amber) 9%, transparent); }
+.nl-wkp th.nl-inplay { color: var(--amber); }
+.nl-wkp tr.nl-total td { border-top: 1px solid var(--line); font-weight: 600; }

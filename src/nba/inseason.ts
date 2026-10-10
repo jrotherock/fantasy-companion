@@ -12,7 +12,7 @@ import type { NbaPlayer, Game, YahooWeek } from './types.js'
 import type { InjuryNote } from './sources.js'
 import { NameIndex } from './join.js'
 import { CATS, categoryZ, type Cat } from './value.js'
-import { emptyBox, type Box, type NbaMatchup, type RosterDay, type SeasonSettings, type Side, type TeamMeta } from './yahooSeason.js'
+import { addBox, emptyBox, type Box, type NbaMatchup, type RosterDay, type SeasonSettings, type Side, type TeamMeta } from './yahooSeason.js'
 import { daysFrom, projectWeek, seat, startingSeats, type GameOutlook, type Man, type WeekOutlook } from './week.js'
 import { categoryWeek, pointsWeek, type PointsOdds, type SideOutlook, type WeekOdds, type Weights } from './matchup.js'
 import { designation, perGameBox, playChance, withForm, type Designation, type GameLog } from './outlook.js'
@@ -334,6 +334,8 @@ export interface WeekView {
   /** Expected starts left, each side, and my player-games with no seat. */
   startsLeft: { mine: number; theirs: number }
   idleGames: number
+  /** Each of my players this week: games, expected starts, and what those starts should produce. */
+  players: { id: string; name: string; games: number; starts: number; box: Box }[]
   /** Per day: my starters, theirs, my players with a game but no seat, and my seats nobody fills (a stream's room). */
   days: { date: string; mine: number; theirs: number; idle: number; open: number }[]
   playoffs: boolean
@@ -386,6 +388,11 @@ export function buildWeek(ctx: Context, snap: Snapshot, myTeamId: string): WeekV
     score: { mine: mine?.points ?? null, theirs: theirs?.points ?? null },
     odds, points,
     startsLeft: { mine: a.week.starts, theirs: b.week.starts },
+    players: rosterIds(ctx, rosterOf(myTeamId)).map(({ id }) => {
+      const pm = a.week.perMan.get(id) ?? { games: 0, starts: 0 }
+      const pg = ctx.perGame(id)
+      return { id, name: ctx.byId.get(id)?.name ?? id, games: pm.games, starts: pm.starts, box: addBox(emptyBox(), pg, pm.starts) }
+    }).sort((x, y) => y.starts - x.starts),
     idleGames: a.week.wasted,
     days: days.map((d, i) => ({
       date: d,

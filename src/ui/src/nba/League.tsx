@@ -335,10 +335,23 @@ function fmt(cat: Cat, x: number) {
   return cat === 'fg' || cat === 'ft' ? x.toFixed(3).replace(/^0/, '') : Math.round(x).toString()
 }
 
+type WBox = SeasonView['week'] extends infer W ? W extends { players: { box: infer B }[] } ? B : never : never
+const WEEK_CATS: Cat[] = ['fg', 'ft', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to']
+const emptyBoxUI = (): WBox => ({ fgm: 0, fga: 0, ftm: 0, fta: 0, tpm: 0, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0 }) as WBox
+const addBoxUI = (a: WBox, b: WBox): WBox => Object.fromEntries(Object.keys(a).map((k) => [k, (a as any)[k] + (b as any)[k]])) as WBox
+/** A week's box in one category: the percentages as made over attempted, the rest rounded. */
+function boxCell(b: WBox, c: Cat): string {
+  if (c === 'fg') return b.fga ? (b.fgm / b.fga).toFixed(3).replace(/^0/, '') : '—'
+  if (c === 'ft') return b.fta ? (b.ftm / b.fta).toFixed(3).replace(/^0/, '') : '—'
+  const x = (b as any)[c] as number
+  return x >= 10 ? Math.round(x).toString() : x.toFixed(1)
+}
+
 function Week({ v }: { v: SeasonView }) {
   const w = v.week
   if (!w) return <div className="ckempty">No matchup this week.</div>
   const swing = w.odds?.races.filter((r) => r.state === 'swing').map((r) => LABEL[r.cat]) ?? []
+  const swingCats = new Set<Cat>(w.odds?.races.filter((r) => r.state === 'swing').map((r) => r.cat) ?? [])
   return (
     <>
       <div className="nl-score">
@@ -371,6 +384,27 @@ function Week({ v }: { v: SeasonView }) {
             </div>
           ))}
         </div>
+      )}
+      {w.odds && w.players.length > 0 && (
+        <Section title="Your players this week" hint="expected starts and what they produce">
+          <div className="nl-scroll">
+            <table className="nl-table nl-wkp">
+              <thead><tr><th className="l">Player</th><th title="Expected starts this week (games he plays with a seat)">St</th>
+                {WEEK_CATS.map((c) => <th key={c} className={swingCats.has(c) ? 'nl-inplay' : ''} title={swingCats.has(c) ? 'In play this week' : undefined}>{LABEL[c]}</th>)}</tr></thead>
+              <tbody>
+                {w.players.map((p) => (
+                  <tr key={p.id} className={p.starts < 0.5 ? 'nl-idle' : ''}>
+                    <td className="l">{p.name}</td><td>{p.starts.toFixed(1)}</td>
+                    {WEEK_CATS.map((c) => <td key={c} className={swingCats.has(c) ? 'nl-inplay' : ''}>{boxCell(p.box, c)}</td>)}
+                  </tr>
+                ))}
+                <tr className="nl-total"><td className="l">Your week</td><td>{w.players.reduce((a, p) => a + p.starts, 0).toFixed(0)}</td>
+                  {WEEK_CATS.map((c) => <td key={c} className={swingCats.has(c) ? 'nl-inplay' : ''}>{boxCell(w.players.reduce((a, p) => addBoxUI(a, p.box), emptyBoxUI()), c)}</td>)}</tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="nl-note">Expected starts times his per-game line. Highlighted columns are this week's categories in play (35–65%): the players strongest in them are the ones not to bench, and what a stream should bring.</p>
+        </Section>
       )}
       <Section title="Days left" hint="starts each day: yours · theirs">
         {(() => {
