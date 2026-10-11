@@ -455,6 +455,36 @@ if (MODE === 'build') {
   }
 }
 
+if (MODE === 'band') {
+  // A wider near-tie band, shown only where the board's own simulations rate a player even with the top card:
+  // the worst case for it, a drafter who always takes the sims' favourite within the band instead of the card.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  const sims = new Map<string, { delta: number; err: number }>()
+  for (const r of (JSON.parse(readFileSync('data/nba/draft-rank/nba-hoops.json', 'utf8')).players as { name: string; delta: number; err: number }[])) {
+    const p = players.find((x) => x.name === r.name)
+    if (p) sims.set(p.id, { delta: r.delta, err: r.err })
+  }
+  const log = arg('band-log')
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  for (const band of (arg('bands') ?? '0.06;0.08;0.10;0.12').split(';').map(Number)) {
+    strategies[`sims' favourite within ${band}`] = (avail, mine, overall, slot) => {
+      const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
+        { teams: league.teams, rounds, slot, overall, spread: H }, base, { canTake: canTake(mine), neutralUntil: BUILD_FROM })
+      if (!advice.length) return windowOf(avail, mine)[0]
+      const top = advice[0], ts = sims.get(top.id)
+      if (!ts) return top.id
+      // Even: no worse than the top card by more than the two results' combined error.
+      const even = advice.filter((a) => top.score - a.score <= band && sims.has(a.id))
+        .filter((a) => { const s = sims.get(a.id)!; return s.delta >= ts.delta - Math.hypot(s.err, ts.err) })
+        .sort((a, b) => sims.get(b.id)!.delta - sims.get(a.id)!.delta)
+      const pick = even[0]?.id ?? top.id
+      if (log && pick !== top.id) appendFileSync(log, `${band} ${mine.length + 1}\n`)
+      return pick
+    }
+  }
+}
+
 if (MODE === 'forwards') {
   // The all-round forwards the cards rarely show (Flagg, Barnes, Jalen Johnson): taken at my 1st or my 2nd
   // pick when he is there, the cards for every other pick, against the cards throughout.
