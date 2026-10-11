@@ -243,7 +243,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
         status.lastError = json.unresolved?.length
           ? `${json.unresolved.length} unresolved: ${json.unresolved.slice(0, 3).join(', ')}`
           : out.failed.length ? `not reached: ${out.failed.join(', ')}` : null
-        safeReply(reply, { ok: out.ok, accepted: json.accepted ?? 0 })
+        safeReply(reply, { ok: out.ok, accepted: json.accepted ?? 0, pollMs: json.pollMs ?? null })
       })
       .catch((err) => {
         status.connected = false

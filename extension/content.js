@@ -26,6 +26,13 @@
  * healthy. Poll gently and back off hard when refused.
  */
 const POLL_MS = 6000
+/*
+ * How often the loop wakes to see whose turn it is. Each league keeps its own
+ * pace (the server's pollMs, checked against nextDue); a six-second wake made
+ * the three-second pace near my pick impossible (2026-10-11 mock: White went
+ * at 33 and the board still offered him at 34).
+ */
+const TICK_MS = 1000
 const MAX_BACKOFF_MS = 120000
 /*
  * The tick is the resolution, not the request rate. Each league carries its own
@@ -581,7 +588,15 @@ async function captureRoster() {
   })
 }
 
+// One read at a time: with a one-second wake, a slow page must not start a second read of the same board.
+let ticking = false
 async function tick() {
+  if (ticking) return
+  ticking = true
+  try { await tickOnce() } finally { ticking = false }
+}
+
+async function tickOnce() {
   await captureRoster()
   if (backoff && Date.now() < backoff) return
 
@@ -647,7 +662,12 @@ async function tick() {
         continue
       }
       // Awaiting the reply keeps the service worker alive until the POST lands.
-      await send({ type: 'snapshot', ...payload, shape })
+      const reply = await send({ type: 'snapshot', ...payload, shape })
+      // The server says how fast to read next: faster the moment my turn is near, not at the next list refresh.
+      if (reply && reply.pollMs && mapping.sensor && reply.pollMs !== mapping.sensor.pollMs) {
+        mapping.sensor.pollMs = reply.pollMs
+        nextDue.set(key, Date.now() + jitter(reply.pollMs))
+      }
     } catch (err) {
       const message = String(err && err.message ? err.message : err)
       if (err && err.rateLimited) {
@@ -694,7 +714,7 @@ function start() {
     if (!mappings.length) return
     clearInterval(timer)
     tick()
-    timer = setInterval(tick, POLL_MS)
+    timer = setInterval(tick, TICK_MS)
   })
   // A mock started mid-session adds a league the companion did not have when
   // this tab loaded. Re-reading the list means that heals itself instead of

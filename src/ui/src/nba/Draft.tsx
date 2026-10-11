@@ -284,6 +284,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
       <div className="vhead">
         <span className="vlabel">{onClock ? 'TAKE' : `LIKELY THERE AT YOUR PICK ${view.clock.myNext}`}</span>
       </div>
+      <StaleFeed view={view} />
       <Verdict view={view} second={second} />
       <PuntTipLine view={view} act={act} />
       {stale ? (
@@ -389,6 +390,22 @@ function Fate({ view, survives, canWait, there, thenName, second }: { view: Draf
  * One line above the cards: who to take, how sure, and the one thing that might change your mind — a scarce
  * category first, then better scores that will be back, the playoff tiebreak, the avoid list, the pair.
  */
+/**
+ * The feed is behind just when it matters: on the clock or two picks out, and no read for 20 seconds. The
+ * cards may still offer someone already taken (2026-10-11 mock: White at 34, gone at 33).
+ */
+function StaleFeed({ view }: { view: DraftView }) {
+  const s = view.sensor, c = view.clock
+  const age = s.at ? Math.round((Date.now() - s.at) / 1000) : null
+  if (c.done || view.review || c.picksUntil == null || c.picksUntil > 2 || age == null || age < 20) return null
+  return (
+    <div className="nb-queue nb-queue-stale">
+      <span className="vlabel">FEED {age}s BEHIND</span> Picks may be missing. Before you pick, check the card is still on Yahoo's board;
+      if he's gone, tap <b>Mark drafted</b> on him and the cards move to the next best. Keep Yahoo's draft tab visible — Chrome slows reads in a hidden tab.
+    </div>
+  )
+}
+
 /**
  * After a first pick where one punt tested well in the simulations, offer it once, with a lock.
  * Shown from the 2nd pick to the 4th while nothing is locked; "Not now" hides it for this draft.

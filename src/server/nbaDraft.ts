@@ -440,6 +440,8 @@ function cadence(s: Session): number {
   // A mock the API cannot read has only the extension, and bots pick at once.
   if (s.league.mock && s.league.mock.apiOk !== true) return 6_000
   if (!d.picks.length) return 120_000
+  // A mock's bots pick within a second or two: fifteen seconds let seven picks go by unseen (2026-10-11).
+  if (s.league.mock) return 4_000
   return 15_000
 }
 
@@ -650,7 +652,8 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
       if (changed) save(s)
       else writeFileSync(fileOf(s.league.id), JSON.stringify(s.draft))
       if (s.view) s.view.sensor = s.draft.sensor
-      json(res, 200, { ok: true, ...result })
+      // The pace for the next read goes back with the answer, so the switch near my turn is immediate.
+      json(res, 200, { ok: true, ...result, pollMs: cadence(s) })
       return true
     }
     case 'pick': {
