@@ -87,6 +87,8 @@ export interface Prepared {
   playoffNorm: number | null
   /** For a player starting the season hurt: when he is back and what that leaves. */
   returnNote: (id: string) => string | null
+  /** For a player starting the season hurt: weeks of the season he misses (Infinity: out for it); 0 otherwise. */
+  weeksOut: (id: string) => number
   /** The season's game days (sampled), for counting starts; null without a schedule. */
   calendar: Calendar | null
   /** The 240 check by team (teamLoad.ts). */
@@ -167,7 +169,7 @@ const shortDate = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('
  * he is back, at his usual rate of availability, never more than he was
  * projected for a full season. Out for the season is no games at all.
  */
-export function gamesAfterReturn(p: NbaPlayer, av: Availability, teamDates: Record<string, string[]>, today: string): { gp: number; note: string } {
+export function gamesAfterReturn(p: NbaPlayer, av: Availability, teamDates: Record<string, string[]>, today: string): { gp: number; note: string; from?: string } {
   const base = effectiveGames(p).gp
   if (av.outForSeason) return { gp: 0, note: 'Out for the season' }
   if (!av.returnDate) return { gp: base, note: av.text }
@@ -181,7 +183,7 @@ export function gamesAfterReturn(p: NbaPlayer, av: Availability, teamDates: Reco
   const rate = Math.min(0.95, Math.max(0.6, p.durability.gpShare ?? 0.85, base / TEAM_GAMES))
   const gp = Math.min(base, left * rate)
   const why = av.source === 'you' ? 'your date' : `CBS: at least ${shortDate(av.returnDate)}`
-  return { gp, note: `Back ~${shortDate(from)} (${why}) · ${Math.round(gp)} games` }
+  return { gp, note: `Back ~${shortDate(from)} (${why}) · ${Math.round(gp)} games`, from }
 }
 
 /** Team code → games in each league's playoff weeks (data/nba/teams.json). */
@@ -217,11 +219,13 @@ export function prepare(
   checkScoring(league)
   // A player starting the season hurt is valued on the games he will be back for.
   const notes = new Map<string, string>()
+  const backs = new Map<string, string | null>()
   const players = !injuries ? rawPlayers : rawPlayers.map((p) => {
     const av = injuries.returns.get(p.id)
     if (!av || !p.projection) return p
     const r = gamesAfterReturn(p, av, injuries.teamDates, injuries.today)
     notes.set(p.id, r.note)
+    backs.set(p.id, av.outForSeason ? null : r.from ?? null)
     return { ...p, projection: { ...p.projection, gp: r.gp, gpSource: 'injury' as const } }
   })
   const byId = new Map(players.map((p) => [p.id, p]))
@@ -238,6 +242,13 @@ export function prepare(
     league, rounds, players: byId, adp, positions, slots: positionalSlots(league.roster), adpOrder: [],
     playoff, playoffNorm: games.length ? games[Math.floor(games.length / 2)] : null,
     returnNote: (id: string) => notes.get(id) ?? null,
+    weeksOut: (id: string) => {
+      if (!backs.has(id)) return 0
+      const back = backs.get(id)
+      if (back == null) return Infinity
+      const start = injuries ? Object.values(injuries.teamDates).flat().reduce((a, b) => (b < a ? b : a), '9999') : back
+      return Math.max(0, (Date.parse(back) - Date.parse(start)) / (7 * 86_400_000))
+    },
     calendar: injuries ? calendarOf(injuries.teamDates) : null,
     teams: new Map(), context: () => null, draftRank: new Map(),
   }
@@ -441,14 +452,19 @@ export function emptySeatShare(prep: Prepared, ids: string[], draws = 6): Map<st
   return out
 }
 
+/** Out this many weeks of the season or fewer: no IL-stash advice on his card. */
+export const STASH_WEEKS = 2
+
 /**
  * A player back after a while, in a league with IL seats: the card says how to carry him (Mark Williams, last
  * pick). The cards count only his games after he is back, which assumes an IL seat and a pickup meanwhile (the
  * sims assume the same); with my IL seats already spoken for, he would hold a bench seat instead, and it says so.
  */
-export function stashNote(prep: Prepared, note: string | null, hurtOnRoster: number): string | null {
+export function stashNote(prep: Prepared, note: string | null, hurtOnRoster: number, id?: string): string | null {
   const il = prep.league.roster.IL ?? 0
   if (!note || !(il > 0) || !/^Back ~/.test(note)) return note
+  // A week or so out is a bench call, not an IL stash (Knueppel and Coby White, back a week into the season).
+  if (id && prep.weeksOut(id) <= STASH_WEEKS) return note
   return hurtOnRoster >= il
     ? `${note} · your ${il} IL seat${il === 1 ? ' is' : 's are'} spoken for: he'd hold a bench seat till then`
     : `${note} · stash him on IL (${hurtOnRoster + 1} of ${il}) and add someone healthy till then`
@@ -937,7 +953,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   const mineP = slot == null ? [] : myPicks(d, teams, slotFor)
   const mine = mineP.map((p) => p.playerId)
   // Players on my roster who start the season hurt (back later, or out for it): each takes an IL seat.
-  const hurtOnRoster = mine.filter((id) => { const n = prep.returnNote(id); return !!n && (/^Back ~/.test(n) || /^Out for the season/.test(n)) }).length
+  const hurtOnRoster = mine.filter((id) => prep.weeksOut(id) > STASH_WEEKS).length
   const onClock = !done && slot != null && slotFor(overall, teams) === slot
   const myNext = slot == null || done ? null : nextPickFor(slot, teams, rounds, overall - 1)
   const nextAfter = slot == null || myNext == null ? null : nextPickFor(slot, teams, rounds, myNext)
@@ -1023,7 +1039,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       fpg: prep.points?.byId.get(a.id)?.fpg,
       gp: (prep.cats?.byId.get(a.id)?.games.gp ?? prep.points?.byId.get(a.id)?.games.gp) ?? 0,
       playoff: prep.playoff(a.id),
-      returnNote: stashNote(prep, prep.returnNote(a.id), hurtOnRoster),
+      returnNote: stashNote(prep, prep.returnNote(a.id), hurtOnRoster, a.id),
       injuryHistory: injuryHistoryOf(prep, a.id),
       bestBuild: bestBuildOf(prep, a.id),
       fits: prep.cats ? fitsOf(contribution(prep.cats.byId.get(a.id)!)) : [],
@@ -1118,7 +1134,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       tag: tags.get(r.id) ?? null,
       injury: pl.injury?.status ?? null,
       playoff: prep.playoff(r.id),
-      returnNote: stashNote(prep, prep.returnNote(r.id), hurtOnRoster),
+      returnNote: stashNote(prep, prep.returnNote(r.id), hurtOnRoster, r.id),
       takenAt: t?.overall ?? null, takenBy: t?.manager ?? null,
       mine: mine.includes(r.id),
     }

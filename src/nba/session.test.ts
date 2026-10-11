@@ -162,12 +162,14 @@ test("the sims' tiebreak moves the star only within its band (0.06, or 25% in po
 })
 
 test('a late returner is an IL stash while the league has IL seats free, and says so when they are taken', () => {
-  const harker: any = { league: { roster: { IL: 2 } } }
+  const harker: any = { league: { roster: { IL: 2 } }, weeksOut: (id: string) => (id === 'short' ? 1 : 5) }
   const note = 'Back ~Nov 11 (CBS: at least Nov 1) · 54 games'
   assert.match(stashNote(harker, note, 0)!, /stash him on IL \(1 of 2\)/)
   assert.match(stashNote(harker, note, 2)!, /IL seats are spoken for: he'd hold a bench seat/)
   assert.equal(stashNote({ league: { roster: {} } } as any, note, 0), note, 'no IL seats: the plain note')
   assert.equal(stashNote(harker, null, 0), null)
+  assert.equal(stashNote(harker, note, 0, 'short'), note, 'a week out is a bench call: the plain note')
+  assert.match(stashNote(harker, note, 0, 'long')!, /stash him on IL/)
 })
 
 test('a league scoring anything the models cannot value fails loudly', () => {
