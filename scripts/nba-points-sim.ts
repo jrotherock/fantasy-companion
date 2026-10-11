@@ -300,6 +300,20 @@ function rawAllPlay(teams: string[][], seed: number): number[] {
   })
 }
 
+// `--eval order.txt --slot N --seeds K`: one finished draft (picks in order) scored as the sims score: raw seasons,
+// all-play against the room, averaged over K seasons; every seat's result, mine marked.
+if (MODE === 'eval') {
+  const order = readFileSync(arg('eval')!, 'utf8').trim().split(',')
+  const mySlot = Number(arg('slot'))
+  const teams: string[][] = Array.from({ length: league.teams }, () => [])
+  order.forEach((id, i) => teams[slotFor(i + 1, league.teams) - 1].push(id))
+  const tot = teams.map(() => 0)
+  for (let k = 1; k <= SEEDS; k++) rawAllPlay(teams, k * 104729).forEach((x, i) => (tot[i] += x / SEEDS))
+  const ranked = tot.map((x, i) => [i + 1, x] as const).sort((a, b) => b[1] - a[1])
+  console.log(JSON.stringify({ mine: tot[mySlot - 1], place: ranked.findIndex(([s]) => s === mySlot) + 1, top: ranked.slice(0, 4).map(([s, x]) => [s, +(x * 100).toFixed(1)]) }))
+  process.exit(0)
+}
+
 const res: Record<string, { ap: number[]; pts: number[]; c: number[] }> = {}
 for (const [name, pick] of Object.entries(strategies)) {
   const r = { ap: [] as number[], pts: [] as number[], c: [] as number[] }
