@@ -11,7 +11,7 @@
  * week-to-week spread the app uses (11% of the week's points). Reported as an
  * all-play win rate.
  */
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, appendFileSync } from 'node:fs'
 import type { NbaPlayer } from '../src/nba/types.js'
 import { pointsValues, rosterSpots } from '../src/nba/value.js'
 import { adpFor, advisePoints, survives } from '../src/nba/draft.js'
@@ -29,6 +29,14 @@ import { pointsOf } from '../src/nba/matchup.js'
 
 const arg = (k: string) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : null }
 const SEEDS = Number(arg('seeds') ?? 20)
+/** `--seed-from 101`: a fresh set of rooms. `--slots 5-12`: only these slots. */
+const SEED_FROM = Number(arg('seed-from') ?? 1)
+const [SLOT_FROM, SLOT_TO] = (arg('slots') ?? '').split('-').map(Number)
+/** `--first "Name"` takes him with my first pick; `--reserve` holds him back from the room until then. */
+const FIRST = arg('first')
+const RESERVE_FIRST = process.argv.includes('--reserve')
+/** `--dump path`: every draft's all-play as JSON lines (the first-pick test reads these). */
+const DUMP = arg('dump')
 const SPREAD = { a: 1.5, b: 0.1 }
 
 const rawPlayers: NbaPlayer[] = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
@@ -112,6 +120,28 @@ const skipUnder = (games: number): Pick => (avail, mine, overall, slot) => {
   return app()(ok.length ? ok : avail, mine, overall, slot)
 }
 const MODE = arg('mode') ?? 'center'
+// ── The sims' tiebreak (as in Hoops): within a band of the top card, the one the first-pick sims rate higher ──
+const rankFile = arg('rank-file') ?? 'data/nba/draft-rank/nba-harker.json'
+const sims = new Map<string, { delta: number; err: number }>()
+if (MODE === 'band' && existsSync(rankFile)) for (const r of JSON.parse(readFileSync(rankFile, 'utf8')).players as { name: string; delta: number; err: number }[]) {
+  const p = players.find((x) => x.name === r.name)
+  if (p) sims.set(p.id, { delta: r.delta, err: r.err })
+}
+/** A band as a share of the top card's score, the way the cards measure a points near-tie (1%). */
+/** As the app does it: only among players as urgent as the top card (likely gone, a coin flip, or likely back). */
+const urgency = (a: { survives: number }) => (a.survives >= 0.6 ? 2 : a.survives > 0.25 ? 1 : 0)
+const SAME_URGENCY = process.argv.includes('--same-urgency')
+const simBand = (band: number): Pick => (avail, mine, overall, slot) => {
+  const advice = advisePoints(avail.map((id) => rowOf.get(id)!).filter(Boolean), { teams: league.teams, rounds, slot, overall, spread: SPREAD }, 25, canTake(mine))
+  const top = advice[0]
+  if (!top) return app()(avail, mine, overall, slot)
+  const ts = sims.get(top.id)
+  if (!ts) return top.id
+  const best = advice.filter((a) => a.id !== top.id && (!SAME_URGENCY || urgency(a) === urgency(top)) && top.score - a.score <= Math.abs(top.score) * band && sims.has(a.id) && sims.get(a.id)!.delta > ts.delta)
+    .sort((a, b) => sims.get(b.id)!.delta - sims.get(a.id)!.delta)[0]
+  return best?.id ?? top.id
+}
+const bestValue: Pick = (avail, mine) => [...avail].filter((id) => canTake(mine)(id)).sort((a, b) => rowOf.get(b)!.value - rowOf.get(a)!.value)[0] ?? avail[0]
 const cappedTeam = (n: number): Pick => (avail, mine, overall, slot) => {
   const teamOf = (id: string) => byId.get(id)!.team
   const ok = avail.filter((id) => mine.filter((m) => teamOf(m) === teamOf(id)).length < n)
@@ -150,7 +180,9 @@ const cMin = (n: number, by: number): Pick => (avail, mine, overall, slot) => {
   }
   return app()(avail, mine, overall, slot)
 }
-const strategies: Record<string, Pick> = MODE === 'centers' ? {
+const strategies: Record<string, Pick> = MODE === 'pool' ? (arg('follow') === 'value' ? { 'best value': bestValue } : { 'the app (recommender)': app() })
+: MODE === 'band' ? Object.fromEntries([['the app (recommender)', app()], ...(arg('bands') ?? '0.01;0.024').split(';').map((b) => [`sims' favourite within ${(Number(b) * 100).toFixed(1)}%`, simBand(Number(b))])])
+: MODE === 'centers' ? {
   'the app (recommender)': app(),
   '2 C by my pick 5': cMin(2, 5),
   '2 C by my pick 7': cMin(2, 7),
@@ -197,8 +229,11 @@ function draft(slot: number, seed: number, pick: Pick): string[][] {
   for (let overall = 1; overall <= league.teams * rounds; overall++) {
     const seat = slotFor(overall, league.teams)
     const avail = pool.filter((id) => !taken.has(id))
-    const id = seat === slot ? pick(avail, teams[seat - 1], overall, slot)
-      : byScatter(avail.filter((x) => canTake(teams[seat - 1])(x) || never.has(x)))[0] ?? byScatter(avail)[0]
+    const firstId = FIRST ? players.find((p) => p.name === FIRST)?.id : undefined
+    const held = RESERVE_FIRST && firstId && teams[slot - 1].length === 0 ? firstId : null
+    const id = seat === slot
+      ? (firstId && teams[seat - 1].length === 0 && avail.includes(firstId) ? firstId : pick(avail, teams[seat - 1], overall, slot))
+      : byScatter(avail.filter((x) => x !== held && (canTake(teams[seat - 1])(x) || never.has(x))))[0] ?? byScatter(avail.filter((x) => x !== held))[0]
     taken.add(id)
     teams[seat - 1].push(id)
     history.push(id)
@@ -269,12 +304,13 @@ const res: Record<string, { ap: number[]; pts: number[]; c: number[] }> = {}
 for (const [name, pick] of Object.entries(strategies)) {
   const r = { ap: [] as number[], pts: [] as number[], c: [] as number[] }
   // Turns only differ at the ends of the order: the first and last slots pick back to back.
-  for (let slot = 1; slot <= league.teams; slot++) for (let seed = 1; seed <= SEEDS; seed++) {
+  for (let slot = SLOT_FROM || 1; slot <= (SLOT_TO || league.teams); slot++) for (let seed = SEED_FROM; seed < SEED_FROM + SEEDS; seed++) {
     if (MODE === 'turns' && slot !== 1 && slot !== league.teams) continue
     const teams = draft(slot, seed, pick)
     const pts = teams.map(weeklyPoints)
     const me = pts[slot - 1]
     r.ap.push(RAW ? rawAllPlay(teams, seed * 7919 + slot)[slot - 1] : pts.filter((_, i) => i !== slot - 1).reduce((s, o) => s + edge(me, o), 0) / (league.teams - 1))
+    if (DUMP) appendFileSync(DUMP, JSON.stringify({ strategy: name, first: FIRST ?? null, slot, seed, ap: r.ap[r.ap.length - 1] }) + '\n')
     r.pts.push(me)
     r.c.push(teams[slot - 1].findIndex(isC) + 1 || 99)
   }

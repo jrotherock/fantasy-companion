@@ -1643,6 +1643,13 @@ export const FIT_MIN = 0.25
  */
 export const SIM_TIE = 0.06
 /**
+ * Points (Harker): the band as a share of the top card's score. There the first-pick sims were the better guide
+ * the wider the band, to a plateau: 2.4% +0.9, 5% +2.1 to +2.4, 10% +3.3, 15% +4.2 to +4.4, 25% +4.6, 40% +4.7
+ * weeks in 100 (scripts/nba-points-sim.ts --mode band, eight fresh room sets of 400, 2026-10-11); the same with the
+ * swap kept among equally urgent players (+4.6).
+ */
+export const SIM_TIE_POINTS = 0.25
+/**
  * At my first two picks the near-tie group also shows players this far behind whom the simulations rate
  * even with the top card: shown, never the ★. Taking one of them at pick 2 tested even to slightly better
  * (Flagg, Barnes, Jalen Johnson: +1.1 ± 0.8 over the drafts it changed).
@@ -1660,12 +1667,13 @@ export function simTiebreak<T extends { id: string; name: string; score: number 
   prep: Prepared, cards: T[], pool: T[], urgency: (a: T) => number,
 ): { advice: T[]; note: SimPick | null } {
   const top = cards[0]
-  const ts = top && prep.cats ? prep.draftRank.get(top.id)?.sim : null
+  const ts = top ? prep.draftRank.get(top.id)?.sim : null
   if (!ts) return { advice: cards, note: null }
   const u = urgency(top)
+  const band = prep.cats ? SIM_TIE : Math.abs(top.score) * SIM_TIE_POINTS
   const best = pool
     // Never to a player you tagged avoid: avoid loses every close call, and this is one.
-    .filter((a) => a.id !== top.id && urgency(a) === u && top.score - a.score <= SIM_TIE && (a as { tag?: string | null }).tag !== 'avoid')
+    .filter((a) => a.id !== top.id && urgency(a) === u && top.score - a.score <= band && (a as { tag?: string | null }).tag !== 'avoid')
     .map((a) => ({ a, s: prep.draftRank.get(a.id)?.sim }))
     .filter((x): x is { a: T; s: { delta: number; err: number } } => !!x.s && x.s.delta > ts.delta)
     .sort((x, y) => y.s.delta - x.s.delta)[0]

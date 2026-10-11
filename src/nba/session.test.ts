@@ -145,7 +145,7 @@ test('a starting spot nobody can fill is flagged, with the steady player near th
   assert.equal(seatFillFor(hoops, twoBigs, third, false, ['fg'])?.seat === 'C', false, 'no third center under a punt of FG%')
 })
 
-test("the sims' tiebreak moves the star only within 0.06, among the equally urgent, and never to an avoid", () => {
+test("the sims' tiebreak moves the star only within its band (0.06, or 25% in points), among the equally urgent, never to an avoid", () => {
   const sim = (delta: number) => ({ rank: 1, mark: null, sim: { delta, err: 1.8 } })
   const prep: any = { cats: {}, draftRank: new Map([['a', sim(-3)], ['b', sim(-1)], ['c', sim(2)], ['d', sim(4)], ['e', sim(5)]]) }
   const p = (id: string, score: number, urgent = 0, tag: string | null = null) => ({ id, name: id.toUpperCase(), score, urgent, tag })
@@ -156,7 +156,9 @@ test("the sims' tiebreak moves the star only within 0.06, among the equally urge
   assert.equal(r.note?.over, 'A')
   assert.equal(r.advice.length, 3)
   assert.equal(simTiebreak(prep, [p('e', 5), p('a', 4.99)], [p('e', 5), p('a', 4.99)], () => 0).note, null, 'no move when the top card leads the sims')
-  assert.equal(simTiebreak({ cats: null, draftRank: prep.draftRank } as any, cards, pool, () => 0).note, null, 'categories only')
+  // Points: the band is a share of the top score (25%), so a player well behind in points can still take it.
+  const pts = simTiebreak({ cats: null, draftRank: prep.draftRank } as any, [p('a', 1000), p('b', 900)], [p('a', 1000), p('b', 900), p('e', 700)], () => 0)
+  assert.equal(pts.advice[0].id, 'b', 'e is 30% back: outside; b, 10% back and ahead in the sims, takes it')
 })
 
 test('a league scoring anything the models cannot value fails loudly', () => {
