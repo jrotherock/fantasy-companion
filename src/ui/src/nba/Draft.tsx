@@ -293,7 +293,8 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
         </div>
       ) : queue.length > 0 && (
         <div className="nb-queue">
-          <span className="vlabel" title="In this order. Yahoo skips whoever goes first, so set it now and leave it: a timeout then takes the app's pick">QUEUE IN YAHOO</span> {queue.map((q, i) => <span key={q.id}>{i ? ' · ' : ''}<b>{q.name}</b></span>)}
+          <span className="vlabel" title="In this order. Yahoo skips whoever goes first, so set it now and leave it: a timeout or a dropped connection then takes the app's pick, not Yahoo's ranking">QUEUE IN YAHOO{!onClock && view.clock.myNext != null ? ` FOR PICK ${view.clock.myNext}` : ''}</span> {queue.map((q, i) => <span key={q.id}>{i ? ' · ' : ''}<b>{q.name}</b></span>)}
+          {!onClock && (view.clock.picksUntil ?? 0) > 2 && <span className="nb-dim"> — set it now; Yahoo skips anyone taken before your pick.</span>}
         </div>
       )}
       {view.tied ? <Tied view={view} act={act} pins={pins} pin={pin} second={second} previewId={previewId} setPreviewId={setPreviewId} /> : <div className="threeup">

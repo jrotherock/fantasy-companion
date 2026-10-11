@@ -382,6 +382,13 @@ export const BIG_CATS: Cat[] = ['fg', 'reb', 'blk']
 /** How far behind the top card a "won't last" option may be, categories a week. */
 export const WONT_LAST_MARGIN = 0.08
 
+/** Yahoo queue depth: on the clock or two picks out, and while my turn is further off (many picks can go first). */
+export const QUEUE_NEAR = 4
+export const QUEUE_FAR = 8
+
+/** A points league's card scores, on the categories scale the seat filler's bands use: a typical early top card. */
+export const POINTS_FILL_REF = 1500
+
 export interface SeatFill { id: string; name: string; seat: string; before: number; after: number; behind: number }
 
 /** From my 6th pick: by then a seat left empty is the roster's shape. A center at the 5th instead of a guard cost
@@ -434,6 +441,12 @@ export function emptySeatShare(prep: Prepared, ids: string[], draws = 6): Map<st
   return out
 }
 
+/** A player back after a while, in a league with IL seats: the card says how to carry him (Mark Williams, last pick). */
+function stashNote(prep: Prepared, note: string | null): string | null {
+  if (!note || !(prep.league.roster.IL > 0) || !/^Back ~/.test(note)) return note
+  return `${note} · stash him on IL and add someone healthy till then`
+}
+
 /** The steady player near the top of the cards who fills the seat my roster leaves empty most nights. */
 export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string; name: string; score: number }[], idle = false, locks: Cat[] = [], star: string | null = null): SeatFill | null {
   if (!prep.calendar || mine.length < SEAT_FILL_FROM || !advice.length) return null
@@ -449,7 +462,9 @@ export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string
   const top = advice[0].score
   const byPick = [...SEAT_FILL_BANDS].reverse().find((b) => mine.length >= b.from)?.band ?? SEAT_FILL_MARGIN
   const band = Math.max(byPick, idle ? SEAT_FILL_MARGIN_IDLE : SEAT_FILL_MARGIN)
-  const margin = prep.cats ? band : Math.abs(top) * band / 2.5
+  // Points scores fall steeply late (1,174 at a 7th pick, 105 at the last): a share of the top card shrank the
+  // band to nothing just when a seat needed filling. A fixed scale instead: a typical early top card.
+  const margin = prep.cats ? band : Math.max(Math.abs(top), POINTS_FILL_REF) * band / 2.5
   // With FG% punted, a big's FG% is wasted: prefer a stretch big (a 75% free-throw shooter or a three a game).
   const stretch = (id: string) => { const pr = prep.players.get(id)?.projection; return !!pr && ((pr.shooting.ftPct ?? 0) >= 0.75 || pr.perGame.tpm >= 1) }
   const prefersStretch = locks.includes('fg')
@@ -467,7 +482,7 @@ export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string
     // Empty nights cut, less what he costs on the cards (0.03 a week is worth about ten points of empty nights),
     // with the center seat (the hardest to fill) and, under a punt of FG%, a stretch big a little ahead.
     // In points the gap is season points: put it on the categories scale the bands use (2.5 cats ~ the top score).
-    const cost = (behind: number) => SEAT_FILL_COST * (prep.cats ? behind : behind * 2.5 / Math.max(1, Math.abs(top)))
+    const cost = (behind: number) => SEAT_FILL_COST * (prep.cats ? behind : behind * 2.5 / Math.max(Math.abs(top), POINTS_FILL_REF))
     const worth = (x: SeatFill) => (x.before - x.after) - cost(x.behind)
       + (x.seat === 'C' ? 0.12 : 0) + (prefersStretch && x.seat === 'C' && stretch(x.id) ? 0.05 : 0)
     const better = (x: SeatFill, y: SeatFill) => worth(x) > worth(y)
@@ -988,7 +1003,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       fpg: prep.points?.byId.get(a.id)?.fpg,
       gp: (prep.cats?.byId.get(a.id)?.games.gp ?? prep.points?.byId.get(a.id)?.games.gp) ?? 0,
       playoff: prep.playoff(a.id),
-      returnNote: prep.returnNote(a.id),
+      returnNote: stashNote(prep, prep.returnNote(a.id)),
       injuryHistory: injuryHistoryOf(prep, a.id),
       bestBuild: bestBuildOf(prep, a.id),
       fits: prep.cats ? fitsOf(contribution(prep.cats.byId.get(a.id)!)) : [],
@@ -1241,9 +1256,11 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     }
   }
 
-  // ── What to queue in Yahoo, two picks out or on the clock ──
+  // ── What to queue in Yahoo: from the moment my turn ends, deeper while it is far ──
+  // A dropped connection or a missed clock takes Yahoo's queue, and an empty queue takes Yahoo's own ranking
+  // (2026-10-11 Harker mock: two blips on back-to-back turns, four of Yahoo's picks instead of the cards').
   let queue: DraftView['queue'] = null
-  if (spot && myNext != null && myNext - overall <= 2) {
+  if (spot && myNext != null) {
     // On the clock the cards are already unfiltered; off it, rank everyone as if the pick were now.
     const fresh = (): typeof advice[number][] => {
       const r = prep.cats
@@ -1266,7 +1283,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       return d.locks.length ? ordered : simTiebreak(prep, ordered, ranked.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), urg).advice
     })()
     const top = order[0] ?? ranked[0]
-    const ids = [...new Set([top?.id, top?.then, ...order.map((a) => a.id), ...ranked.map((a) => a.id)].filter(Boolean) as string[])].slice(0, 3)
+    const depth = onClock || myNext - overall <= 2 ? QUEUE_NEAR : QUEUE_FAR
+    const ids = [...new Set([top?.id, top?.then, ...order.map((a) => a.id), ...ranked.map((a) => a.id)].filter(Boolean) as string[])].slice(0, depth)
     queue = ids.map((id) => ({ id, name: p(id).name }))
   }
 
