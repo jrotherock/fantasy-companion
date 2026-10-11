@@ -467,8 +467,13 @@ if (MODE === 'band') {
   }
   const log = arg('band-log')
   strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
-  for (const band of (arg('bands') ?? '0.06;0.08;0.10;0.12').split(';').map(Number)) {
-    strategies[`sims' favourite within ${band}`] = (avail, mine, overall, slot) => {
+  // `--early 0.10:2`: a wider band at my first picks only (the all-round forwards of late round 1 and round 2).
+  const [earlyBand, earlyPicks] = (arg('early') ?? '').split(':').map(Number)
+  const bands = (arg('bands') ?? '0.06;0.08;0.10;0.12').split(';').map(Number)
+  for (const b of bands) for (const e of earlyBand ? [0, earlyBand] : [0]) {
+    const label = e ? `sims' favourite within ${b}, ${e} at picks 1-${earlyPicks}` : `sims' favourite within ${b}`
+    strategies[label] = (avail, mine, overall, slot) => {
+      const band = e && mine.length < earlyPicks ? e : b
       const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
         { teams: league.teams, rounds, slot, overall, spread: H }, base, { canTake: canTake(mine), neutralUntil: BUILD_FROM })
       if (!advice.length) return windowOf(avail, mine)[0]
