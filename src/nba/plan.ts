@@ -466,7 +466,9 @@ export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string
     const cand = { id: a.id, name: a.name, ...best, behind: top - a.score }
     // Empty nights cut, less what he costs on the cards (0.03 a week is worth about ten points of empty nights),
     // with the center seat (the hardest to fill) and, under a punt of FG%, a stretch big a little ahead.
-    const worth = (x: SeatFill) => (x.before - x.after) - SEAT_FILL_COST * x.behind
+    // In points the gap is season points: put it on the categories scale the bands use (2.5 cats ~ the top score).
+    const cost = (behind: number) => SEAT_FILL_COST * (prep.cats ? behind : behind * 2.5 / Math.max(1, Math.abs(top)))
+    const worth = (x: SeatFill) => (x.before - x.after) - cost(x.behind)
       + (x.seat === 'C' ? 0.12 : 0) + (prefersStretch && x.seat === 'C' && stretch(x.id) ? 0.05 : 0)
     const better = (x: SeatFill, y: SeatFill) => worth(x) > worth(y)
     if (!pick || better(cand, pick)) pick = cand
