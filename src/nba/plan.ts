@@ -376,6 +376,9 @@ function seatPositionsOf(eligible: string[]): string[] {
   return [...out]
 }
 
+/** What centers bring: with any of these punted, a roster needs only one center more than its C seats. */
+export const BIG_CATS: Cat[] = ['fg', 'reb', 'blk']
+
 /** How far behind the top card a "won't last" option may be, categories a week. */
 export const WONT_LAST_MARGIN = 0.08
 
@@ -428,10 +431,16 @@ export function emptySeatShare(prep: Prepared, ids: string[], draws = 6): Map<st
 }
 
 /** The steady player near the top of the cards who fills the seat my roster leaves empty most nights. */
-export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string; name: string; score: number }[], idle = false): SeatFill | null {
+export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string; name: string; score: number }[], idle = false, locks: Cat[] = []): SeatFill | null {
   if (!prep.calendar || mine.length < SEAT_FILL_FROM || !advice.length) return null
   const now = emptySeatShare(prep, mine)
-  const short = [...now.entries()].filter(([, v]) => v > SEAT_FILL_EMPTY)
+  // A punt of what centers bring (FG%, REB or BLK) needs only one center more than the C seats: a third big
+  // in a punt-FG% build buys categories given up (2026-10-11 Maxey mock: Claxton as the third, even at best).
+  const seats = startingSeats(prep.league.roster)
+  const bigPunt = locks.some((c) => BIG_CATS.includes(c))
+  const centers = mine.filter((id) => seatPositionsOf(prep.positions(id)).includes('C')).length
+  const enoughBigs = bigPunt && centers >= seats.filter((x) => x === 'C').length + 1
+  const short = [...now.entries()].filter(([seat, v]) => v > SEAT_FILL_EMPTY && !(seat === 'C' && enoughBigs))
   if (!short.length) return null
   const top = advice[0].score
   const band = idle ? SEAT_FILL_MARGIN_IDLE : SEAT_FILL_MARGIN
@@ -1137,7 +1146,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     .slice(0, 3).map((a) => ({ id: a.id, name: a.name, behind: lastCard.score - a.score }))
   // Nothing on the cards about to go: the cheapest turn to fill a need, or to take someone who will not be back.
   const idle = takeNow.length > 0 && takeNow.every((a) => a.canWait) && !takeNow[0].thenName
-  const seatFill = seatFillFor(prep, mine, advice, idle)
+  const seatFill = seatFillFor(prep, mine, advice, idle, d.locks)
   const wontLast = !idle ? null : (() => {
     const top = takeNow[0].score
     const margin = prep.cats ? WONT_LAST_MARGIN : Math.abs(top) * 0.02

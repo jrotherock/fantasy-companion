@@ -139,6 +139,10 @@ test('a starting spot nobody can fill is flagged, with the steady player near th
   assert.equal(f?.seat, 'C')
   assert.equal(seatFillFor(hoops, guards, [advice[0], { ...advice[1], score: 4.9 }]), null, 'not when he is well behind the top')
   assert.equal(seatFillFor(hoops, guards.slice(0, 4), advice), null, 'not before the 6th pick')
+  // With FG% punted, two centers are enough for one C seat: no flag for a third.
+  const twoBigs = [...guards.slice(0, 3), id('Myles Turner'), id('Brook Lopez')]
+  const third = [{ id: id('Jamal Murray'), name: 'Jamal Murray', score: 5 }, { id: id('Nic Claxton'), name: 'Nic Claxton', score: 4.99 }]
+  assert.equal(seatFillFor(hoops, twoBigs, third, false, ['fg'])?.seat === 'C', false, 'no third center under a punt of FG%')
 })
 
 test("the sims' tiebreak moves the star only within 0.06, among the equally urgent, and never to an avoid", () => {
