@@ -346,6 +346,13 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
         </div>
       )}
       {view.seatFill && <SeatFillLine view={view} comparePair={comparePair} />}
+      {view.wontLast && (
+        <div className="nb-seatfill nb-wontlast">
+          <span className="vlabel">WON'T LAST</span>{' '}
+          <button className="nb-name" title={`Compare with ${view.takeNow[0]?.name}`} onClick={() => comparePair(view.takeNow[0].id, view.wontLast!.id)}>{view.wontLast.name}</button>
+          <span className="nb-dim"> (−{view.wontLast.behind.toFixed(3)})</span> — {Math.round(view.wontLast.gone * 100)}% likely gone by {view.ahead[0]?.overall ?? 'your next pick'}, where the cards above will likely still be there. Tap to compare.
+        </div>
+      )}
       {onClock && (
         <div className="nb-plan">
           <span className="vlabel">PLAN</span> {cards[0].name} now
@@ -443,7 +450,7 @@ function Verdict({ view, second }: { view: DraftView; second: number }) {
   const rival = cards.slice(1).find((a) => a.canWait === star.canWait && Math.abs(star.score - a.score) < margin)
   const better = !tied ? cards.filter((a) => a.id !== star.id && a.canWait && !star.canWait && a.score > star.score) : []
   const status = tied ? `or any of these ${others.length}, they're even`
-    : waiting ? 'nothing you need is about to go'
+    : waiting ? `nothing on the cards goes before ${next ?? 'your next pick'}`
     : better.length ? `${better.map((a) => lastName(a.name)).join(' and ')} score${better.length === 1 ? 's' : ''} a bit higher but will likely be back${next != null ? ` at ${next}` : ''}`
     : rival ? `close call with ${rival.name}` : 'clear pick'
   const scarceText = (sc: NonNullable<DraftView['advice'][number]['scarce']>) =>
@@ -454,7 +461,7 @@ function Verdict({ view, second }: { view: DraftView; second: number }) {
     : star.tiebreak ? `Playoff tiebreak: ${star.playoff} games in your playoff weeks.`
     : star.avoided ? 'On your avoid list, and still ahead.'
     : star.thenName ? `Then ${star.thenName} at pick ${second}.`
-    : waiting ? `All ${cards.length} will likely be back${next != null ? ` at ${next}` : ''}.`
+    : waiting ? `Take the best fit for your build now — the others should be back${view.wontLast || view.seatFill ? ', or spend the pick on an option below' : ''}.`
     : null
   return (
     <div className="nb-verdict">

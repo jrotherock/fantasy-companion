@@ -376,16 +376,21 @@ function seatPositionsOf(eligible: string[]): string[] {
   return [...out]
 }
 
+/** How far behind the top card a "won't last" option may be, categories a week. */
+export const WONT_LAST_MARGIN = 0.08
+
 export interface SeatFill { id: string; name: string; seat: string; before: number; after: number; behind: number }
 
 /** From my 6th pick: by then a seat left empty is the roster's shape, not just an early start. */
 export const SEAT_FILL_FROM = 5
-/** Flag a seat empty on more than this share of nights. */
-export const SEAT_FILL_EMPTY = 0.5
+/** Flag a seat empty on more than this share of nights: one center leaves the C seat empty about 40-60% of them. */
+export const SEAT_FILL_EMPTY = 0.35
 /** A filler no further behind the top card than this (categories a week; points: this share of the top score). */
 export const SEAT_FILL_MARGIN = 0.05
-/** He has to cut the empty nights by at least this much, and be a steady player (projected games). */
-export const SEAT_FILL_GAIN = 0.15
+/** When every card will likely be back at my next pick, the cheapest turn to fill a need: a wider margin. */
+export const SEAT_FILL_MARGIN_IDLE = 0.08
+/** He has to cut the empty nights by at least this much (a second center beside a C-eligible forward: 42% to 28%), and be a steady player. */
+export const SEAT_FILL_GAIN = 0.10
 export const SEAT_FILL_GAMES = 60
 /** Fillers within this much of each other on empty nights are even; the better card score wins. */
 export const SEAT_FILL_TIE = 0.05
@@ -423,13 +428,14 @@ export function emptySeatShare(prep: Prepared, ids: string[], draws = 6): Map<st
 }
 
 /** The steady player near the top of the cards who fills the seat my roster leaves empty most nights. */
-export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string; name: string; score: number }[]): SeatFill | null {
+export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string; name: string; score: number }[], idle = false): SeatFill | null {
   if (!prep.calendar || mine.length < SEAT_FILL_FROM || !advice.length) return null
   const now = emptySeatShare(prep, mine)
   const short = [...now.entries()].filter(([, v]) => v > SEAT_FILL_EMPTY)
   if (!short.length) return null
   const top = advice[0].score
-  const margin = prep.cats ? SEAT_FILL_MARGIN : Math.abs(top) * SEAT_FILL_MARGIN / 2.5
+  const band = idle ? SEAT_FILL_MARGIN_IDLE : SEAT_FILL_MARGIN
+  const margin = prep.cats ? band : Math.abs(top) * band / 2.5
   // Of the steady players near the top, the one who cuts empty nights most (by enough); the better score breaks a tie.
   let pick: SeatFill | null = null
   for (const a of advice) {
@@ -656,6 +662,10 @@ export interface DraftView {
   alsoClose: { id: string; name: string; behind: number }[]
   /** A steady player close to the top who fills a starting seat my roster leaves empty most nights. */
   seatFill: SeatFill | null
+  /** Every card will likely be back at my next pick: nothing on them is about to go. */
+  idle: boolean
+  /** On such a turn, the best player near the top who will likely be gone by my next pick. */
+  wontLast: { id: string; name: string; behind: number; gone: number } | null
   /**
    * Categories only: when three or more players who will not last are within TIE_GROUP of the top card,
    * the simulations cannot separate them, and the screen shows them all instead of three cards, ordered
@@ -1110,7 +1120,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     const tb = playoffTiebreak(takeNow, margin, (a) => urgencyOf(a.canWait, a.survives), (a) => (a.canWait ? 1 : a.survives))
     takeNow = tb.advice
     playoffNote = tb.note
-    const st = simTiebreak(prep, takeNow, advice, (a) => urgencyOf(a.canWait, a.survives))
+    // Tested with nothing locked: a punt changes what each player is worth, and the first-pick sims knew no punts.
+    const st = d.locks.length ? { advice: takeNow, note: null } : simTiebreak(prep, takeNow, advice, (a) => urgencyOf(a.canWait, a.survives))
     if (st.note) { takeNow = st.advice; simPick = st.note; playoffNote = null }
   }
 
@@ -1124,7 +1135,15 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   const alsoClose = !lastCard ? [] : advice
     .filter((a) => !a.canWait && !takeNow.some((t) => t.id === a.id) && lastCard.score - a.score <= closeMargin)
     .slice(0, 3).map((a) => ({ id: a.id, name: a.name, behind: lastCard.score - a.score }))
-  const seatFill = seatFillFor(prep, mine, advice)
+  // Nothing on the cards about to go: the cheapest turn to fill a need, or to take someone who will not be back.
+  const idle = takeNow.length > 0 && takeNow.every((a) => a.canWait) && !takeNow[0].thenName
+  const seatFill = seatFillFor(prep, mine, advice, idle)
+  const wontLast = !idle ? null : (() => {
+    const top = takeNow[0].score
+    const margin = prep.cats ? WONT_LAST_MARGIN : Math.abs(top) * 0.02
+    const a = advice.find((x) => !x.canWait && x.survives < 0.5 && top - x.score <= margin && !takeNow.some((t) => t.id === x.id))
+    return a ? { id: a.id, name: a.name, behind: top - a.score, gone: 1 - a.survives } : null
+  })()
 
   // ── Scarce: a close category a card fills that few will be left to fill at my next pick ──
   let scarceFor: (a: DraftView['advice'][number]) => Scarce | null = () => null
@@ -1163,7 +1182,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     const urgency = (a: { canWait: boolean; survives: number }): 0 | 1 | 2 => (pairTurn ? 0 : urgencyOf(a.canWait, a.survives))
     const group = advice.filter((a) => !waits(a) && Math.abs(head.score - a.score) <= TIE_GROUP)
     // At my first two picks, also those a little further back whom the simulations rate even with the pick.
-    const extras = mine.length >= SIM_SHOW_PICKS ? [] : advice
+    const extras = mine.length >= SIM_SHOW_PICKS || d.locks.length ? [] : advice
       .filter((a) => !waits(a) && !group.includes(a) && head.score - a.score <= SIM_SHOW && simEven(prep, a.id, head.id))
       .slice(0, 2)
     if (group.length >= TIE_MIN || (extras.length && group.length + extras.length >= TIE_MIN)) {
@@ -1214,7 +1233,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       if (!first3.length) return []
       const urg = (a: { id: string }) => urgencyOf(wait(a.id), back(a.id))
       const ordered = playoffTiebreak(first3.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), margin, urg, (a) => (wait(a.id) ? 1 : back(a.id))).advice
-      return simTiebreak(prep, ordered, ranked.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), urg).advice
+      return d.locks.length ? ordered : simTiebreak(prep, ordered, ranked.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), urg).advice
     })()
     const top = order[0] ?? ranked[0]
     const ids = [...new Set([top?.id, top?.then, ...order.map((a) => a.id), ...ranked.map((a) => a.id)].filter(Boolean) as string[])].slice(0, 3)
@@ -1226,6 +1245,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     canWait,
     alsoClose,
     seatFill,
+    idle,
+    wontLast,
     tied,
     queue,
     teams: [...prep.teams.values()].sort((a, b) => b.playsPct - a.playsPct),
