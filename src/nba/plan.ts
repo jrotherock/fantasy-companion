@@ -802,7 +802,7 @@ export interface DraftView {
      * Every team's draft on the same yardstick as mine, once every pick is in:
      * expected categories a week against an average team, or season value.
      */
-    room: { seat: number; manager: string | null; score: number; mine: boolean; rank: number; picks: number; of: number }[] | null
+    room: { seat: number; manager: string | null; score: number; mine: boolean; rank: number; picks: number; of: number; value?: number }[] | null
   }
   mock: NbaLeague['mock'] | null
 }
@@ -833,11 +833,22 @@ export function roomOf(prep: Prepared, d: StoredDraft, teams: number, mySlot: nu
     const seat = slotFor(x.overall, teams)
     ;(bySeat.get(seat) ?? bySeat.set(seat, []).get(seat)!).push(x.playerId)
   }
+  const seats = startingSeats(prep.league.roster)
   const rows = [...bySeat.entries()].map(([seat, ids]) => {
-    const score = prep.cats
-      ? expectedCats(strengthOf(prep, ids), ids.length, prep.cats.base)
-      : ids.reduce((n, id) => n + (prep.points!.byId.get(id)?.value ?? 0), 0)
-    return { seat, manager: d.managers?.[seat - 1] ?? null, score, mine: seat === mySlot, rank: 0, picks: ids.length, of: rounds }
+    // Points: the week's points from the games each player would start (seven seats, the real schedule), as the
+    // room table shows during the draft; season value beside it. Value alone counted a bench that seldom starts
+    // (2026-10-11 Harker mock: 2nd on value, 1st on points from starts and in the season sims).
+    let score: number, value: number | undefined
+    if (prep.cats) score = expectedCats(strengthOf(prep, ids), ids.length, prep.cats.base)
+    else {
+      const rs = ids.map((id) => prep.points!.byId.get(id)).filter((r): r is NonNullable<typeof r> => !!r)
+      const share = prep.calendar
+        ? startShares(rs.map((r) => ({ id: r.id, positions: seatPositionsOf(prep.positions(r.id)), team: prep.players.get(r.id)?.team ?? null, worth: r.fpg })), seats, prep.calendar)
+        : new Map<string, number>()
+      score = rs.reduce((n, r) => n + r.fpg * r.games.gp * (share.get(r.id) ?? 1), 0) / SEASON_WEEKS
+      value = rs.reduce((n, r) => n + r.value, 0)
+    }
+    return { seat, manager: d.managers?.[seat - 1] ?? null, score, mine: seat === mySlot, rank: 0, picks: ids.length, of: rounds, value }
   }).sort((a, b) => b.score - a.score)
   rows.forEach((r, i) => (r.rank = i + 1))
   return rows
