@@ -15,7 +15,7 @@
 import { addBox, emptyBox, type Box } from './yahooSeason.js'
 
 /** What each starting seat takes. Bench and injured-list seats are not starting seats. */
-const ACCEPTS: Record<string, string[] | null> = {
+export const ACCEPTS: Record<string, string[] | null> = {
   PG: ['PG'], SG: ['SG'], SF: ['SF'], PF: ['PF'], C: ['C'],
   G: ['PG', 'SG'], F: ['SF', 'PF'], Util: null,
 }

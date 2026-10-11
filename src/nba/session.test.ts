@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { addManual, emptyDraft, ingestYahoo, undoManual } from './session.js'
 import { NameIndex } from './join.js'
 import { draftOrder, parseDraftResults, parseTeams } from './yahooDraft.js'
-import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf, puntTipFor } from './plan.js'
+import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf, puntTipFor, emptySeatShare, seatFillFor } from './plan.js'
 import { adpFor } from './draft.js'
 
 const index = new NameIndex([
@@ -117,6 +117,28 @@ test('the punt tip follows the first pick, from the 2nd pick to the 4th, and nev
   d.slot = 7
   d.picks = Array.from({ length: 7 }, (_, i) => ({ overall: i + 1, playerId: i === 6 ? ant : players.filter((p: any) => p.id !== ant && p.yahoo)[i].id, name: '', source: 'manual' as const }))
   assert.equal(buildView(hoops, d, new Map()).build?.puntTip?.cat, 'ast')
+})
+
+test('a starting spot nobody can fill is flagged, with the steady player near the top who fills it', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const games = JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games as { date: string; home: string; away: string }[]
+  const teamDates: Record<string, string[]> = {}
+  for (const g of games) for (const t of [g.home, g.away]) (teamDates[t] ??= []).push(g.date)
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor, {}, { returns: new Map(), teamDates, today: '2026-10-11' })
+  const id = (n: string) => players.find((p: any) => p.name === n).id
+  const guards = ['Tyrese Haliburton', 'James Harden', 'Derrick White', 'Tyler Herro', 'Jalen Suggs'].map(id)
+  assert.equal(emptySeatShare(hoops, guards).get('C'), 1, 'no center: the C seat is empty every night')
+  const one = emptySeatShare(hoops, [...guards, id('Myles Turner')]).get('C')!
+  const two = emptySeatShare(hoops, [...guards, id('Myles Turner'), id('Brook Lopez')]).get('C')!
+  assert.ok(one > 0.3 && one < 0.8 && two < one, `one center ${one}, two ${two}`)
+  const advice = [{ id: id('Jamal Murray'), name: 'Jamal Murray', score: 5 }, { id: id('Myles Turner'), name: 'Myles Turner', score: 4.98 }]
+  const f = seatFillFor(hoops, guards, advice)
+  assert.equal(f?.name, 'Myles Turner')
+  assert.equal(f?.seat, 'C')
+  assert.equal(seatFillFor(hoops, guards, [advice[0], { ...advice[1], score: 4.9 }]), null, 'not when he is well behind the top')
+  assert.equal(seatFillFor(hoops, guards.slice(0, 4), advice), null, 'not before the 6th pick')
 })
 
 test('a league scoring anything the models cannot value fails loudly', () => {

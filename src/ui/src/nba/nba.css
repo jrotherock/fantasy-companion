@@ -236,6 +236,9 @@ div.nb-cat { cursor: default; }
 /* What to have in Yahoo's queue, two picks out: a timeout takes it instead of Yahoo's ranking */
 .nb-queue { border: 1px solid rgba(255,176,0,.55); border-radius: 4px; padding: 0.35rem 0.6rem; margin: 0 0 0.5rem; line-height: 1.5; }
 .nb-queue .vlabel { color: var(--amber); margin-right: 0.35rem; }
+/* A steady player who fills a starting spot left empty most nights */
+.nb-seatfill { border: 1px solid rgba(90,160,255,.5); border-radius: 4px; padding: 0.35rem 0.6rem; margin: 0.5rem 0; line-height: 1.5; }
+.nb-seatfill .vlabel { color: var(--blue); margin-right: 0.35rem; }
 /* A punt that tested well after my first pick: offered once, with a lock */
 .nb-punttip { border: 1px solid rgba(80,200,120,.55); border-radius: 4px; padding: 0.35rem 0.6rem; margin: 0 0 0.5rem; line-height: 1.5; }
 .nb-punttip .vlabel { color: var(--green); margin-right: 0.35rem; }

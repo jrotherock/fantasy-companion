@@ -345,6 +345,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
           <span className="nb-dim"> — as good as card {cards.length}, and not back next turn either. Tap to compare.</span>
         </div>
       )}
+      {view.seatFill && <SeatFillLine view={view} comparePair={comparePair} />}
       {onClock && (
         <div className="nb-plan">
           <span className="vlabel">PLAN</span> {cards[0].name} now
@@ -399,6 +400,26 @@ function PuntTipLine({ view, act }: { view: DraftView; act: Act }) {
         <button className="btn primary" onClick={() => act('locks', { locks: [tip.cat] })}>Lock {cat}</button>
         <button className="nb-link" onClick={hide}>Not now</button>
       </span>
+    </div>
+  )
+}
+
+/** A steady player near the top who fills a starting spot my roster leaves empty most nights. */
+function SeatFillLine({ view, comparePair }: { view: DraftView; comparePair: (a: string, b: string) => void }) {
+  const f = view.seatFill!
+  const top = view.takeNow[0]
+  const onCards = view.takeNow.some((a) => a.id === f.id) || view.tied?.players.some((x) => x.id === f.id)
+  const spot = f.seat === 'G' ? 'G (guard)' : f.seat === 'F' ? 'F (forward)' : f.seat
+  const pctOf = (x: number) => `${Math.round(x * 100)}%`
+  return (
+    <div className="nb-seatfill">
+      <span className="vlabel">FILLS YOUR {f.seat} SPOT</span>{' '}
+      {onCards || !top || top.id === f.id
+        ? <b>{f.name}</b>
+        : <button className="nb-name" title={`Compare with ${top.name}`} onClick={() => comparePair(top.id, f.id)}>{f.name}</button>}
+      {f.behind > 0.0005 && <span className="nb-dim"> ({view.league.scoring === 'categories' ? `−${f.behind.toFixed(3)}` : `−${Math.round(f.behind)}`})</span>}
+      {' '}— your {spot} spot sits empty {f.before >= 0.995 ? 'every night' : `${pctOf(f.before)} of nights`} as you stand, {pctOf(f.after)} with him.
+      {!onCards && top && top.id !== f.id && <span className="nb-dim"> Tap to compare.</span>}
     </div>
   )
 }

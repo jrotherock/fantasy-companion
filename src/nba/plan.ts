@@ -22,7 +22,7 @@ import {
 import { CATS, categoryZ, effectiveGames, pointsValues, rankBuild, rosterSpots, type Cat, type CatRow, type PointsRow } from './value.js'
 import { positionalSlots, stillFeasible, stillToFill } from './lineup.js'
 import { startShares, type Calendar } from './starts.js'
-import { startingSeats } from './week.js'
+import { ACCEPTS, startingSeats } from './week.js'
 import { myPicks, teamsIn, type FeedItem, type StoredDraft } from './session.js'
 import { contextNorm, contextWorthShowing, playerContext, teamLoads, type PlayerContext, type TeamLoad } from './teamLoad.js'
 import type { NbaPlayer } from './types.js'
@@ -371,6 +371,73 @@ function seatPositionsOf(eligible: string[]): string[] {
   return [...out]
 }
 
+export interface SeatFill { id: string; name: string; seat: string; before: number; after: number; behind: number }
+
+/** From my 6th pick: by then a seat left empty is the roster's shape, not just an early start. */
+export const SEAT_FILL_FROM = 5
+/** Flag a seat empty on more than this share of nights. */
+export const SEAT_FILL_EMPTY = 0.5
+/** A filler no further behind the top card than this (categories a week; points: this share of the top score). */
+export const SEAT_FILL_MARGIN = 0.05
+/** He has to cut the empty nights by at least this much, and be a steady player (projected games). */
+export const SEAT_FILL_GAIN = 0.15
+export const SEAT_FILL_GAMES = 60
+/** Fillers within this much of each other on empty nights are even; the better card score wins. */
+export const SEAT_FILL_TIE = 0.05
+
+/**
+ * The share of nights each positional seat type is short with this roster: fewer players who
+ * can fill it play that night than there are seats needing them (a C seat: none of my centers
+ * plays; with two C seats, fewer than two). A G or F seat counts the guards or forwards needed
+ * for the PG and SG (or SF and PF) seats too. Over the season's sampled game days, each player
+ * plays with his chance of playing (projected games of 82), a fixed set of draws so the same
+ * roster always reads the same. The user's rule (2026-10-11): never an empty seat if anything
+ * can be done about it. Scored starts as a whole tested even in the sims, so this is a flag.
+ */
+export function emptySeatShare(prep: Prepared, ids: string[], draws = 6): Map<string, number> {
+  const out = new Map<string, number>()
+  const cal = prep.calendar
+  if (!cal) return out
+  const seats = startingSeats(prep.league.roster).filter((s) => ACCEPTS[s])
+  const types = [...new Set(seats)].map((s) => {
+    const acc = new Set(ACCEPTS[s]!)
+    return { seat: s, acc, need: seats.filter((t) => ACCEPTS[t]!.every((x) => acc.has(x))).length }
+  })
+  const men = ids.map((id) => ({ pos: seatPositionsOf(prep.positions(id)), team: prep.players.get(id)?.team ?? null, play: Math.min(1, gamesOf(prep, id) / 82) }))
+  let seed = 7
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  const short = types.map(() => 0)
+  let nights = 0
+  for (const day of cal.days) for (let k = 0; k < draws; k++) {
+    const on = men.filter((m) => m.team && day.has(m.team) && rnd() < m.play)
+    types.forEach((t, i) => { if (on.filter((m) => m.pos.some((x) => t.acc.has(x))).length < t.need) short[i]++ })
+    nights++
+  }
+  types.forEach((t, i) => { if (nights) out.set(t.seat, short[i] / nights) })
+  return out
+}
+
+/** The steady player near the top of the cards who fills the seat my roster leaves empty most nights. */
+export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string; name: string; score: number }[]): SeatFill | null {
+  if (!prep.calendar || mine.length < SEAT_FILL_FROM || !advice.length) return null
+  const now = emptySeatShare(prep, mine)
+  const short = [...now.entries()].filter(([, v]) => v > SEAT_FILL_EMPTY)
+  if (!short.length) return null
+  const top = advice[0].score
+  const margin = prep.cats ? SEAT_FILL_MARGIN : Math.abs(top) * SEAT_FILL_MARGIN / 2.5
+  // Of the steady players near the top, the one who cuts empty nights most (by enough); the better score breaks a tie.
+  let pick: SeatFill | null = null
+  for (const a of advice) {
+    if (top - a.score > margin) break
+    if (gamesOf(prep, a.id) < SEAT_FILL_GAMES) continue
+    const after = emptySeatShare(prep, [...mine, a.id])
+    const best = short.map(([seat, before]) => ({ seat, before, after: after.get(seat) ?? 0 }))
+      .filter((x) => x.before - x.after >= SEAT_FILL_GAIN).sort((x, y) => (y.before - y.after) - (x.before - x.after))[0]
+    if (best && (!pick || best.before - best.after > pick.before - pick.after + SEAT_FILL_TIE)) pick = { id: a.id, name: a.name, ...best, behind: top - a.score }
+  }
+  return pick
+}
+
 /** Season value and rank of every player under one build, cached per build. */
 function buildValues(prep: Prepared, punt: Cat[]) {
   const key = [...punt].sort().join('+')
@@ -580,6 +647,8 @@ export interface DraftView {
    * Those who will last are in the plan line instead.
    */
   alsoClose: { id: string; name: string; behind: number }[]
+  /** A steady player close to the top who fills a starting seat my roster leaves empty most nights. */
+  seatFill: SeatFill | null
   /**
    * Categories only: when three or more players who will not last are within TIE_GROUP of the top card,
    * the simulations cannot separate them, and the screen shows them all instead of three cards, ordered
@@ -1043,6 +1112,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   const alsoClose = !lastCard ? [] : advice
     .filter((a) => !a.canWait && !takeNow.some((t) => t.id === a.id) && lastCard.score - a.score <= closeMargin)
     .slice(0, 3).map((a) => ({ id: a.id, name: a.name, behind: lastCard.score - a.score }))
+  const seatFill = seatFillFor(prep, mine, advice)
 
   // ── Scarce: a close category a card fills that few will be left to fill at my next pick ──
   let scarceFor: (a: DraftView['advice'][number]) => Scarce | null = () => null
@@ -1135,6 +1205,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     takeNow,
     canWait,
     alsoClose,
+    seatFill,
     tied,
     queue,
     teams: [...prep.teams.values()].sort((a, b) => b.playsPct - a.playsPct),
