@@ -96,3 +96,4 @@ data/nba/raw/
 # Real drafts replayed locally to exercise the basketball draft page. They carry
 # league-mates' team names, so they stay out of a public repository.
 fixtures/nba-replay-*.json
+data/nba/draft-rank/*.prev.json
