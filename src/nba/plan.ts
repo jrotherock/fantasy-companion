@@ -441,10 +441,17 @@ export function emptySeatShare(prep: Prepared, ids: string[], draws = 6): Map<st
   return out
 }
 
-/** A player back after a while, in a league with IL seats: the card says how to carry him (Mark Williams, last pick). */
-function stashNote(prep: Prepared, note: string | null): string | null {
-  if (!note || !(prep.league.roster.IL > 0) || !/^Back ~/.test(note)) return note
-  return `${note} · stash him on IL and add someone healthy till then`
+/**
+ * A player back after a while, in a league with IL seats: the card says how to carry him (Mark Williams, last
+ * pick). The cards count only his games after he is back, which assumes an IL seat and a pickup meanwhile (the
+ * sims assume the same); with my IL seats already spoken for, he would hold a bench seat instead, and it says so.
+ */
+export function stashNote(prep: Prepared, note: string | null, hurtOnRoster: number): string | null {
+  const il = prep.league.roster.IL ?? 0
+  if (!note || !(il > 0) || !/^Back ~/.test(note)) return note
+  return hurtOnRoster >= il
+    ? `${note} · your ${il} IL seat${il === 1 ? ' is' : 's are'} spoken for: he'd hold a bench seat till then`
+    : `${note} · stash him on IL (${hurtOnRoster + 1} of ${il}) and add someone healthy till then`
 }
 
 /** The steady player near the top of the cards who fills the seat my roster leaves empty most nights. */
@@ -918,6 +925,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   const slot = d.slot
   const mineP = slot == null ? [] : myPicks(d, teams, slotFor)
   const mine = mineP.map((p) => p.playerId)
+  // Players on my roster who start the season hurt (back later, or out for it): each takes an IL seat.
+  const hurtOnRoster = mine.filter((id) => { const n = prep.returnNote(id); return !!n && (/^Back ~/.test(n) || /^Out for the season/.test(n)) }).length
   const onClock = !done && slot != null && slotFor(overall, teams) === slot
   const myNext = slot == null || done ? null : nextPickFor(slot, teams, rounds, overall - 1)
   const nextAfter = slot == null || myNext == null ? null : nextPickFor(slot, teams, rounds, myNext)
@@ -1003,7 +1012,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       fpg: prep.points?.byId.get(a.id)?.fpg,
       gp: (prep.cats?.byId.get(a.id)?.games.gp ?? prep.points?.byId.get(a.id)?.games.gp) ?? 0,
       playoff: prep.playoff(a.id),
-      returnNote: stashNote(prep, prep.returnNote(a.id)),
+      returnNote: stashNote(prep, prep.returnNote(a.id), hurtOnRoster),
       injuryHistory: injuryHistoryOf(prep, a.id),
       bestBuild: bestBuildOf(prep, a.id),
       fits: prep.cats ? fitsOf(contribution(prep.cats.byId.get(a.id)!)) : [],
@@ -1098,7 +1107,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       tag: tags.get(r.id) ?? null,
       injury: pl.injury?.status ?? null,
       playoff: prep.playoff(r.id),
-      returnNote: prep.returnNote(r.id),
+      returnNote: stashNote(prep, prep.returnNote(r.id), hurtOnRoster),
       takenAt: t?.overall ?? null, takenBy: t?.manager ?? null,
       mine: mine.includes(r.id),
     }

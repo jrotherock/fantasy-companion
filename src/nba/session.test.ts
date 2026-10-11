@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { addManual, emptyDraft, ingestYahoo, undoManual } from './session.js'
 import { NameIndex } from './join.js'
 import { draftOrder, parseDraftResults, parseTeams } from './yahooDraft.js'
-import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf, puntTipFor, emptySeatShare, seatFillFor, simTiebreak } from './plan.js'
+import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf, puntTipFor, emptySeatShare, seatFillFor, simTiebreak, stashNote } from './plan.js'
 import { adpFor } from './draft.js'
 
 const index = new NameIndex([
@@ -159,6 +159,15 @@ test("the sims' tiebreak moves the star only within its band (0.06, or 25% in po
   // Points: the band is a share of the top score (25%), so a player well behind in points can still take it.
   const pts = simTiebreak({ cats: null, draftRank: prep.draftRank } as any, [p('a', 1000), p('b', 900)], [p('a', 1000), p('b', 900), p('e', 700)], () => 0)
   assert.equal(pts.advice[0].id, 'b', 'e is 30% back: outside; b, 10% back and ahead in the sims, takes it')
+})
+
+test('a late returner is an IL stash while the league has IL seats free, and says so when they are taken', () => {
+  const harker: any = { league: { roster: { IL: 2 } } }
+  const note = 'Back ~Nov 11 (CBS: at least Nov 1) · 54 games'
+  assert.match(stashNote(harker, note, 0)!, /stash him on IL \(1 of 2\)/)
+  assert.match(stashNote(harker, note, 2)!, /IL seats are spoken for: he'd hold a bench seat/)
+  assert.equal(stashNote({ league: { roster: {} } } as any, note, 0), note, 'no IL seats: the plain note')
+  assert.equal(stashNote(harker, null, 0), null)
 })
 
 test('a league scoring anything the models cannot value fails loudly', () => {
