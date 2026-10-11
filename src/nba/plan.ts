@@ -19,7 +19,7 @@ import {
   adviseCategories, advisePoints, baseline, contribution, expectedCats, readBuild, survives, winChances, zero,
   BUILD_FIRM, BUILD_FROM, type AdpSpread, type Advice, type Baseline, type CanTake, type Strength,
 } from './draft.js'
-import { CATS, categoryZ, effectiveGames, pointsValues, rankBuild, rosterSpots, type Cat, type CatRow, type PointsRow } from './value.js'
+import { CATS, categoryZ, effectiveGames, pointsValues, rankBuild, rosterSpots, type Cat, type CatRow, type PointsRow, TEAM_GAMES } from './value.js'
 import { positionalSlots, stillFeasible, stillToFill } from './lineup.js'
 import { startShares, type Calendar } from './starts.js'
 import { ACCEPTS, startingSeats } from './week.js'
@@ -98,7 +98,7 @@ export interface Prepared {
    * players first, then everyone with an ADP by the round he usually goes. A mark where the simulations
    * disagree with that round (simMarks).
    */
-  draftRank: Map<string, { rank: number; mark: SimMark | null }>
+  draftRank: Map<string, { rank: number; mark: SimMark | null; sim: { delta: number; err: number } | null }>
 }
 
 /** data/nba/draft-rank/<league>.json, as written by scripts/nba-draft-rank.ts. */
@@ -174,7 +174,11 @@ export function gamesAfterReturn(p: NbaPlayer, av: Availability, teamDates: Reco
   const back = av.source === 'cbs' ? addDays(av.returnDate, RETURN_SLIP_DAYS) : av.returnDate
   const from = back > today ? back : today
   const left = (teamDates[p.team ?? ''] ?? []).filter((d) => d >= from).length
-  const rate = Math.min(0.95, Math.max(0.6, p.durability.gpShare ?? 0.85))
+  // His rate once back: his history's, or the rate the board values him at everywhere else (his games of a
+  // season) where that is higher. A projection that already counts the absence plays at his history's rate;
+  // one that does not (Claxton, 74 of 82 with a two-week hamstring) keeps his board rate, so a short absence
+  // costs only its own games.
+  const rate = Math.min(0.95, Math.max(0.6, p.durability.gpShare ?? 0.85, base / TEAM_GAMES))
   const gp = Math.min(base, left * rate)
   const why = av.source === 'you' ? 'your date' : `CBS: at least ${shortDate(av.returnDate)}`
   return { gp, note: `Back ~${shortDate(from)} (${why}) · ${Math.round(gp)} games` }
@@ -244,6 +248,7 @@ export function prepare(
     const byName = new Map(players.map((p) => [p.name, p]))
     const round = (id: string) => Math.ceil(adp(id) / league.teams)
     const simAt = new Map(draftRankFile.players.map((r, i) => [byName.get(r.name)?.id, i]))
+    const simOf = new Map(draftRankFile.players.map((r) => [byName.get(r.name)?.id, { delta: r.delta, err: r.err }]))
     const marks = simMarks(draftRankFile, (name) => { const p = byName.get(name); return p?.yahoo ? round(p.id) : null })
     players
       .filter((p) => p.projection && (p.yahoo != null || (simAt.get(p.id) ?? Infinity) < SIM_TOP))
@@ -253,7 +258,7 @@ export function prepare(
         if (ta || tb) return ta && tb ? a.sim - b.sim : ta ? -1 : 1
         return round(a.id) - round(b.id) || a.sim - b.sim || adp(a.id) - adp(b.id)
       })
-      .forEach(({ id, name }, i) => prepared.draftRank.set(id, { rank: i + 1, mark: marks.get(name) ?? null }))
+      .forEach(({ id, name }, i) => prepared.draftRank.set(id, { rank: i + 1, mark: marks.get(name) ?? null, sim: simOf.get(id) ?? null }))
   }
   // The 240 check, and each player's line against last season's (teamLoad.ts): information beside the advice, never in it.
   const loads = teamLoads(rawPlayers, teamNotes)
@@ -582,6 +587,8 @@ export interface TiedPlayer {
   thenName: string | null
   /** My weekly win chance per category with him added, for the build tiles while his card is looked at. */
   preview: Record<Cat, number>
+  /** Further back than a near-tie, shown at my first two picks because the simulations rate him even with the pick. */
+  simEven?: boolean
   there: number | null
   tag: PrefTag | null
 }
@@ -702,6 +709,8 @@ export interface DraftView {
   canWait: { name: string; survives: number }[]
   /** When the first choices are too close to call and the playoff schedule separates them. */
   playoffNote: string | null
+  /** The ★ moved by the sims' tiebreak: whom it went to, over whom, and by how much in the simulations. */
+  simPick: SimPick | null
   /** Every team in the room, measured from its picks so far; null before any pick. */
   liveRoom: RoomRow[] | null
   /** My roster's close categories (35-65%), nearest a coin flip first, and whose they are ("Shai's" after one pick). */
@@ -915,6 +924,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   // ── Advice ──
   let advice: DraftView['advice'] = []
   let playoffNote: string | null = null
+  let simPick: SimPick | null = null
   if (spot) {
     // Off the clock the question is who will be there at my pick, so anyone more likely gone than not is left out.
     const there = (id: string) => onClock || survives(prep.adp(id), myNext!, prep.league.adpSpread, overall) >= 0.5
@@ -1100,6 +1110,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     const tb = playoffTiebreak(takeNow, margin, (a) => urgencyOf(a.canWait, a.survives), (a) => (a.canWait ? 1 : a.survives))
     takeNow = tb.advice
     playoffNote = tb.note
+    const st = simTiebreak(prep, takeNow, advice, (a) => urgencyOf(a.canWait, a.survives))
+    if (st.note) { takeNow = st.advice; simPick = st.note; playoffNote = null }
   }
 
   // Never the same player twice on the cards, whatever reordered them: the screen keys cards by player.
@@ -1150,7 +1162,11 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     // orders each. The app's pick is always in.
     const urgency = (a: { canWait: boolean; survives: number }): 0 | 1 | 2 => (pairTurn ? 0 : urgencyOf(a.canWait, a.survives))
     const group = advice.filter((a) => !waits(a) && Math.abs(head.score - a.score) <= TIE_GROUP)
-    if (group.length >= TIE_MIN) {
+    // At my first two picks, also those a little further back whom the simulations rate even with the pick.
+    const extras = mine.length >= SIM_SHOW_PICKS ? [] : advice
+      .filter((a) => !waits(a) && !group.includes(a) && head.score - a.score <= SIM_SHOW && simEven(prep, a.id, head.id))
+      .slice(0, 2)
+    if (group.length >= TIE_MIN || (extras.length && group.length + extras.length >= TIE_MIN)) {
       const best = Math.max(...group.map((a) => a.score))
       const roster = CATS.reduce((o, c) => ({ ...o, [c]: mine.reduce((n, id) => n + contribution(prep.cats!.byId.get(id)!)[c], 0) }), {} as Record<Cat, number>)
       // Who is in: those more likely gone than not, closest to the app's pick first, then those more likely back
@@ -1159,8 +1175,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       // pick first, so the eye never hunts for the star; the rest by urgency, then fit.
       const gap = (a: { score: number }) => Math.abs(head.score - a.score)
       const likelyBack = (a: { survives: number }) => !pairTurn && a.survives >= 0.5
-      const closest = [...group].sort((x, y) => Number(likelyBack(x)) - Number(likelyBack(y)) || gap(x) - gap(y)).slice(0, TIE_MAX)
-      if (!closest.some((a) => a.id === head.id)) closest[TIE_MAX - 1] = head
+      const closest = [...[...group].sort((x, y) => Number(likelyBack(x)) - Number(likelyBack(y)) || gap(x) - gap(y)).slice(0, TIE_MAX - extras.length), ...extras]
+      if (!closest.some((a) => a.id === head.id)) closest[0] = head
       const shown = closest.map((a) => ({ a, fit: tiedFit(a.contrib!, roster, d.locks) }))
         .sort((x, y) => Number(y.a.id === head.id) - Number(x.a.id === head.id) || urgency(x.a) - urgency(y.a) || (mine.length ? y.fit.score - x.fit.score : y.a.score - x.a.score))
       tied = {
@@ -1170,6 +1186,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
             id: a.id, name: a.name, team: a.team, positions: a.positions, behind: best - a.score, appPick: a.id === head.id,
             adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName, scarce: scarceFor(a), injuryHistory: a.injuryHistory,
             preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base), there: a.there, tag: a.tag,
+            simEven: extras.includes(a),
           })),
       }
     }
@@ -1194,7 +1211,10 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       const first3 = [...ranked.filter((a) => !wait(a.id)), ...ranked.filter((a) => wait(a.id))].slice(0, 3)
       const margin = prep.cats ? 0.02 : Math.abs(first3[0]?.score ?? 0) * 0.01
       const back = (id: string) => nextAfter == null ? 0 : survives(prep.adp(id), nextAfter, prep.league.adpSpread, myNext)
-      return first3.length ? playoffTiebreak(first3.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), margin, (a) => urgencyOf(wait(a.id), back(a.id)), (a) => (wait(a.id) ? 1 : back(a.id))).advice : []
+      if (!first3.length) return []
+      const urg = (a: { id: string }) => urgencyOf(wait(a.id), back(a.id))
+      const ordered = playoffTiebreak(first3.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), margin, urg, (a) => (wait(a.id) ? 1 : back(a.id))).advice
+      return simTiebreak(prep, ordered, ranked.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), urg).advice
     })()
     const top = order[0] ?? ranked[0]
     const ids = [...new Set([top?.id, top?.then, ...order.map((a) => a.id), ...ranked.map((a) => a.id)].filter(Boolean) as string[])].slice(0, 3)
@@ -1214,6 +1234,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     review,
     mock: L.mock ?? null,
     playoffNote,
+    simPick,
     weakSpots,
     strongSpots,
     liveRoom: d.picks.length ? liveRoom(prep, d, teams, slot) : null,
@@ -1562,6 +1583,48 @@ export function recordOf(prep: Prepared, d: StoredDraft, tags: Map<string, PrefT
  */
 /** A category counts as covered when a player adds at least this much of it over a season (in z, games-weighted). */
 export const FIT_MIN = 0.25
+/**
+ * The sims' tiebreak: within SIM_TIE of the top card, and only among players as urgent as it, the ★ goes
+ * to the one the board's first-pick simulations rate higher. In box-score seasons this beat the cards by
+ * about 4 weeks won in 100, on four sets of rooms (+4.4, +4.2, and +4.6, +4.2 on rooms never used to build
+ * the rank; scripts/nba-strategy-sim.ts --mode band, 2026-10-11). Wider bands did worse (0.10: +4.0, 0.12:
+ * +3.7), and so did 0.10 at the first two picks only (−0.6 against 0.06 throughout).
+ */
+export const SIM_TIE = 0.06
+/**
+ * At my first two picks the near-tie group also shows players this far behind whom the simulations rate
+ * even with the top card: shown, never the ★. Taking one of them at pick 2 tested even to slightly better
+ * (Flagg, Barnes, Jalen Johnson: +1.1 ± 0.8 over the drafts it changed).
+ */
+export const SIM_SHOW = 0.10
+export const SIM_SHOW_PICKS = 2
+export interface SimPick { pick: string; over: string; gain: number }
+
+const simEven = (prep: Prepared, id: string, than: string) => {
+  const a = prep.draftRank.get(id)?.sim, b = prep.draftRank.get(than)?.sim
+  return !!a && !!b && a.delta >= b.delta - Math.hypot(a.err, b.err)
+}
+
+export function simTiebreak<T extends { id: string; name: string; score: number }>(
+  prep: Prepared, cards: T[], pool: T[], urgency: (a: T) => number,
+): { advice: T[]; note: SimPick | null } {
+  const top = cards[0]
+  const ts = top && prep.cats ? prep.draftRank.get(top.id)?.sim : null
+  if (!ts) return { advice: cards, note: null }
+  const u = urgency(top)
+  const best = pool
+    // Never to a player you tagged avoid: avoid loses every close call, and this is one.
+    .filter((a) => a.id !== top.id && urgency(a) === u && top.score - a.score <= SIM_TIE && (a as { tag?: string | null }).tag !== 'avoid')
+    .map((a) => ({ a, s: prep.draftRank.get(a.id)?.sim }))
+    .filter((x): x is { a: T; s: { delta: number; err: number } } => !!x.s && x.s.delta > ts.delta)
+    .sort((x, y) => y.s.delta - x.s.delta)[0]
+  if (!best) return { advice: cards, note: null }
+  return {
+    advice: [best.a, ...cards.filter((x) => x.id !== best.a.id)].slice(0, Math.max(cards.length, 1)),
+    note: { pick: best.a.name, over: top.name, gain: best.s.delta - ts.delta },
+  }
+}
+
 /** The band in which a category is still in play: a pick moves its weekly win chance most here. */
 export const CLOSE_LOW = 0.35
 export const CLOSE_HIGH = 0.65

@@ -354,6 +354,11 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
         </div>
       )}
       {view.playoffNote && <div className="nb-ponote">{view.playoffNote}</div>}
+      {view.simPick && (
+        <div className="nb-ponote" title="Within 0.06 of the top card, the star goes to the player the first-pick simulations rate higher: in simulated seasons this won about 4 more weeks in 100 than the cards' own order.">
+          ★ <b>{view.simPick.pick}</b> over {view.simPick.over}: as close on the cards, and ahead in simulated seasons ({view.simPick.gain.toFixed(1)} more weeks won in 100).
+        </div>
+      )}
     </div>
   )
 }
@@ -483,7 +488,7 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
   // Three rows at most: three across on a wide screen holds all eight; on a phone, one across, three shown and the rest behind a tap.
   const [more, setMore] = useState(false)
   // The app's own pick always shows, wherever fit puts him.
-  const hidden = t.players.filter((x, i) => i >= 3 && !x.appPick && !x.scarce).length
+  const hidden = t.players.filter((x, i) => i >= 3 && !x.appPick && !x.scarce && !x.simEven).length
   return (
     <div>
       <div className="nb-tiednote nb-dim">
@@ -493,12 +498,13 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
       <div className="nb-tied">
         {t.players.map((x, i) => (
           <Fragment key={x.id}>
-          <div className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''} ${i >= 3 && !x.appPick && !x.scarce && !more ? 'nb-tiedmore' : ''}${previewId === x.id ? ' nb-previewing' : ''}${x.scarce ? ' nb-scarcecard' : ''}`}
+          <div className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''} ${i >= 3 && !x.appPick && !x.scarce && !x.simEven && !more ? 'nb-tiedmore' : ''}${previewId === x.id ? ' nb-previewing' : ''}${x.scarce ? ' nb-scarcecard' : ''}`}
             // Looking at a card shows its numbers on the build tiles: a hover, or a tap on a phone.
             onMouseEnter={() => setPreviewId(x.id)} onMouseLeave={() => setPreviewId(null)}
             onClick={() => setPreviewId(previewId === x.id ? null : x.id)}>
             <span className="nm">{x.appPick && <span className="nb-apppick" title="The app's own pick">★ </span>}{x.name}
-              {x.tag === 'like' && <span className="nb-tag nb-like">like</span>}{x.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
+              {x.tag === 'like' && <span className="nb-tag nb-like">like</span>}{x.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}
+              {x.simEven && <span className="nb-tag nb-simeven" title={`${x.behind.toFixed(2)} behind on the cards, but even with the pick in simulated seasons: taking him tested as good as the cards' choice`}>even in sims</span>}</span>
             <span className="sub" title={x.behind < 0.0005 ? 'The best score in the group' : `${x.behind.toFixed(3)} categories a week behind the best: noise`}>{x.team} · {x.positions.join(', ')}{x.injuryHistory && <InjuryTag h={x.injuryHistory} />}</span>
             {x.appPick && view.takeNow[0]?.tiebreak && <span className="nb-tiedwhy" title={`The app's pick on a playoff tiebreak: ${view.takeNow[0].playoff} games in your playoff weeks`}>{view.takeNow[0].playoff} PO g</span>}
             <div className="nb-tiedfit">

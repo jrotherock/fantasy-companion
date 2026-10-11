@@ -19,6 +19,8 @@ import { existsSync } from 'node:fs'
 import {
   parseBrefAdvanced, parseCbsInjuries, parseEspnSchedule, parseFantasyPros, parseSleeperProjections, parseSleeperSeason, parseYahooRanks,
 } from '../src/nba/sources.js'
+
+const REST = /^(rest|not injury related)$/i
 import { NameIndex, consensus, durability, teamRows } from '../src/nba/join.js'
 import type { NbaPlayer, Season, SourceLine, TeamNote, YahooWeek } from '../src/nba/types.js'
 
@@ -112,7 +114,9 @@ async function main() {
       positions: p.fantasy_positions ?? (p.position ? [p.position] : []),
       age: typeof p.age === 'number' ? p.age : null,
       yearsExp,
-      injury: p.injury_status ? { status: p.injury_status, body: p.injury_body_part ?? null, notes: p.injury_notes ?? null } : null,
+      // A rest day is not an injury: in the preseason Sleeper marks a rested star day-to-day ("Rest", "Not Injury
+      // Related"), which would tag half the first round on the draft board. The season screens read live status.
+      injury: p.injury_status && !REST.test(p.injury_body_part ?? '') ? { status: p.injury_status, body: p.injury_body_part ?? null, notes: p.injury_notes ?? null } : null,
       yahoo: y ? { yahooId: y.yahooId, rank: y.rank, adp: y.adp, cost: y.cost, pctDrafted: y.pctDrafted, positions: y.positions, status: y.status } : null,
       lines,
       projection: consensus(Object.values(lines), dur),

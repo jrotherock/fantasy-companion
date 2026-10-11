@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { addManual, emptyDraft, ingestYahoo, undoManual } from './session.js'
 import { NameIndex } from './join.js'
 import { draftOrder, parseDraftResults, parseTeams } from './yahooDraft.js'
-import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf, puntTipFor, emptySeatShare, seatFillFor } from './plan.js'
+import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf, puntTipFor, emptySeatShare, seatFillFor, simTiebreak } from './plan.js'
 import { adpFor } from './draft.js'
 
 const index = new NameIndex([
@@ -141,6 +141,20 @@ test('a starting spot nobody can fill is flagged, with the steady player near th
   assert.equal(seatFillFor(hoops, guards.slice(0, 4), advice), null, 'not before the 6th pick')
 })
 
+test("the sims' tiebreak moves the star only within 0.06, among the equally urgent, and never to an avoid", () => {
+  const sim = (delta: number) => ({ rank: 1, mark: null, sim: { delta, err: 1.8 } })
+  const prep: any = { cats: {}, draftRank: new Map([['a', sim(-3)], ['b', sim(-1)], ['c', sim(2)], ['d', sim(4)], ['e', sim(5)]]) }
+  const p = (id: string, score: number, urgent = 0, tag: string | null = null) => ({ id, name: id.toUpperCase(), score, urgent, tag })
+  const cards = [p('a', 5), p('b', 4.97), p('x', 4.9)]
+  const pool = [...cards, p('c', 4.95, 1), p('d', 4.99, 0, 'avoid'), p('e', 4.93)]
+  const r = simTiebreak(prep, cards, pool, (a) => a.urgent)
+  assert.equal(r.advice[0].id, 'b', 'e is 0.07 back, c is less urgent, d is an avoid: b, the next best in the sims')
+  assert.equal(r.note?.over, 'A')
+  assert.equal(r.advice.length, 3)
+  assert.equal(simTiebreak(prep, [p('e', 5), p('a', 4.99)], [p('e', 5), p('a', 4.99)], () => 0).note, null, 'no move when the top card leads the sims')
+  assert.equal(simTiebreak({ cats: null, draftRank: prep.draftRank } as any, cards, pool, () => 0).note, null, 'categories only')
+})
+
 test('a league scoring anything the models cannot value fails loudly', () => {
   const base = { id: 'x', label: 'x', leagueKey: 'k', myTeamName: '', teams: 10, roster: {} }
   assert.doesNotThrow(() => checkScoring({ ...base, scoring: 'categories', categories: ['fg%', 'ft%', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to'] }))
@@ -190,6 +204,11 @@ test('a hurt player is counted from when he is back, and CBS dates are pushed ba
   const mine = gamesAfterReturn(p, { returnDate: '2027-01-01', outForSeason: false, source: 'you', text: '' }, dates, '2026-10-02')
   assert.equal(mine.gp, 4 * 0.9, 'your own date is taken as given')
   assert.equal(gamesAfterReturn(p, { returnDate: null, outForSeason: true, source: 'cbs', text: '' }, dates, '2026-10-02').gp, 0)
+  // A projection above his history (74 of 82 against 0.85 played) keeps the board's rate after a short absence:
+  // the games he is valued at everywhere else, the projection blended with his history.
+  const steady: any = { ...p, durability: { gpShare: 0.85 }, projection: { ...p.projection, gp: 74 } }
+  const back = gamesAfterReturn(steady, { returnDate: '2027-01-01', outForSeason: false, source: 'you', text: '' }, dates, '2026-10-02').gp
+  assert.ok(Math.abs(back - 4 * ((74 + 0.85 * 82) / 2 / 82)) < 1e-9, `${back}`)
 })
 
 test('the three cards are players to take now; those likely back next turn go to the plan', () => {
@@ -395,7 +414,7 @@ test('a league with a Draft rank opens the board with the simulations\' top 5, t
   assert.equal(mark('Giannis Antetokounmpo'), 'down')
   assert.equal(mark('Trae Young'), 'down')
   assert.equal(mark('Anthony Edwards'), null)
-  assert.equal(mark('Donovan Clingan'), 'lean')
+  assert.equal(mark('Donovan Mitchell'), 'lean')
   assert.ok(v.board.some((r) => r.forMe === 0), 'the top card reads 0 for my team')
   const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)
   const h = buildView(harker, { ...emptyDraft('t'), slot: 5 }, new Map())
