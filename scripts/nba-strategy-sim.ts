@@ -455,6 +455,26 @@ if (MODE === 'build') {
   }
 }
 
+if (MODE === 'forwards') {
+  // The all-round forwards the cards rarely show (Flagg, Barnes, Jalen Johnson): taken at my 1st or my 2nd
+  // pick when he is there, the cards for every other pick, against the cards throughout.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  const names = (arg('players') ?? 'Cooper Flagg;Scottie Barnes;Jalen Johnson').split(';')
+  const ids = names.map((n) => players.find((p) => p.name === n)!.id)
+  const app: Pick = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  strategies['the app (recommender)'] = app
+  const at = (turn: number, want: string[]): Pick => (avail, mine, overall, slot, taken) => {
+    if (mine.length === turn - 1) { const x = want.find((id) => avail.includes(id)); if (x) return x }
+    return app(avail, mine, overall, slot, taken)
+  }
+  names.forEach((n, i) => {
+    strategies[`${n} at pick 1`] = at(1, [ids[i]])
+    strategies[`${n} at pick 2`] = at(2, [ids[i]])
+  })
+  strategies['any of them at pick 2'] = at(2, ids)
+}
+
 if (MODE === 'punt1') {
   // After a forced first pick: the cards as they are, against each single punt locked from my second pick.
   for (const k of Object.keys(strategies)) delete strategies[k]
