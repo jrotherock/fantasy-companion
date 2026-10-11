@@ -702,7 +702,19 @@ function PreviewDelta({ from, to }: { from: number; to: number }) {
   return <span className={`nb-delta ${d > 0 ? 'up' : 'down'}`}> → {pct(to)}</span>
 }
 
-function Build({ view, act, preview }: { view: DraftView; act: Act; preview: { name: string; preview?: Record<Cat, number> } | null }) {
+/**
+ * The hovered card against the ★, on the cards' own scale (categories won a week, with what is likely back
+ * later counted in). The tiles show only today's roster with him added; this is the trade they leave out.
+ */
+function vsStar(view: DraftView, preview: { id?: string; score?: number; behind?: number } | null): number | null {
+  const star = view.takeNow[0]
+  if (!preview || !star || preview.id === star.id) return null
+  if (typeof preview.score === 'number') return preview.score - star.score
+  const t = view.tied, mark = t?.players.find((x) => x.appPick)
+  return t && mark && typeof preview.behind === 'number' ? mark.behind - preview.behind : null
+}
+
+function Build({ view, act, preview }: { view: DraftView; act: Act; preview: { id?: string; name: string; score?: number; behind?: number; preview?: Record<Cat, number> } | null }) {
   const b = view.build!
   const after = preview?.preview ?? null
   const [confirm, setConfirm] = useState<Cat | null>(null)
@@ -729,6 +741,14 @@ function Build({ view, act, preview }: { view: DraftView; act: Act; preview: { n
     <div className="nb-build">
       <div className="nb-bhead">
         <span className="vlabel">YOUR BUILD</span><span className="nb-dim nb-small">{after ? <>with <b>{preview!.name}</b> added</> : 'weekly win chance per category'}</span>
+        {after && (() => {
+          const d = vsStar(view, preview)
+          if (d == null) return null
+          const even = Math.abs(d) < 0.02
+          return <span className={`nb-small nb-vsstar ${even ? '' : d < 0 ? 'nb-down' : 'nb-up'}`} title="On the cards' own scale: categories won a week, counting who is likely back at your next picks. The tiles above leave that out.">
+            {even ? 'even with ★' : `${d > 0 ? '+' : '−'}${Math.abs(d).toFixed(3)} a week vs ★`}{view.tied && view.tied.players.some((x) => x.id === (preview as any).id) ? ' · near-tie: fit can decide' : ''}
+          </span>
+        })()}
         <span className="spacer" /><button className="nb-link" onClick={() => setHelp(!help)}>{help ? 'Hide help' : 'How to read this'}</button>
       </div>
       <div className="nb-cats">
