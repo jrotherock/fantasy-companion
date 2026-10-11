@@ -384,8 +384,10 @@ export const WONT_LAST_MARGIN = 0.08
 
 export interface SeatFill { id: string; name: string; seat: string; before: number; after: number; behind: number }
 
-/** From my 6th pick: by then a seat left empty is the roster's shape, not just an early start. */
+/** From my 6th pick: by then a seat left empty is the roster's shape. A center at the 5th instead of a guard cost
+ * 0.4 wins in a season replay (2026-10-11 Maxey mock: Sarr for Bane at 47); from the 6th the flags were even or better. */
 export const SEAT_FILL_FROM = 5
+export const SEAT_FILL_BANDS: { from: number; band: number }[] = [{ from: 5, band: 0.08 }, { from: 8, band: 0.12 }]
 /** Flag a seat empty on more than this share of nights: one center leaves the C seat empty about 40-60% of them. */
 export const SEAT_FILL_EMPTY = 0.35
 /** A filler no further behind the top card than this (categories a week; points: this share of the top score). */
@@ -396,7 +398,9 @@ export const SEAT_FILL_MARGIN_IDLE = 0.08
 export const SEAT_FILL_GAIN = 0.10
 export const SEAT_FILL_GAMES = 60
 /** Fillers within this much of each other on empty nights are even; the better card score wins. */
-export const SEAT_FILL_TIE = 0.05
+export const SEAT_FILL_TIE = 0.08
+/** Empty nights a filler must save for each category a week he trails the top card by. */
+export const SEAT_FILL_COST = 3
 
 /**
  * The share of nights each positional seat type is short with this roster: fewer players who
@@ -431,7 +435,7 @@ export function emptySeatShare(prep: Prepared, ids: string[], draws = 6): Map<st
 }
 
 /** The steady player near the top of the cards who fills the seat my roster leaves empty most nights. */
-export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string; name: string; score: number }[], idle = false, locks: Cat[] = []): SeatFill | null {
+export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string; name: string; score: number }[], idle = false, locks: Cat[] = [], star: string | null = null): SeatFill | null {
   if (!prep.calendar || mine.length < SEAT_FILL_FROM || !advice.length) return null
   const now = emptySeatShare(prep, mine)
   // A punt of what centers bring (FG%, REB or BLK) needs only one center more than the C seats: a third big
@@ -443,17 +447,29 @@ export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string
   const short = [...now.entries()].filter(([seat, v]) => v > SEAT_FILL_EMPTY && !(seat === 'C' && enoughBigs))
   if (!short.length) return null
   const top = advice[0].score
-  const band = idle ? SEAT_FILL_MARGIN_IDLE : SEAT_FILL_MARGIN
+  const byPick = [...SEAT_FILL_BANDS].reverse().find((b) => mine.length >= b.from)?.band ?? SEAT_FILL_MARGIN
+  const band = Math.max(byPick, idle ? SEAT_FILL_MARGIN_IDLE : SEAT_FILL_MARGIN)
   const margin = prep.cats ? band : Math.abs(top) * band / 2.5
+  // With FG% punted, a big's FG% is wasted: prefer a stretch big (a 75% free-throw shooter or a three a game).
+  const stretch = (id: string) => { const pr = prep.players.get(id)?.projection; return !!pr && ((pr.shooting.ftPct ?? 0) >= 0.75 || pr.perGame.tpm >= 1) }
+  const prefersStretch = locks.includes('fg')
   // Of the steady players near the top, the one who cuts empty nights most (by enough); the better score breaks a tie.
   let pick: SeatFill | null = null
   for (const a of advice) {
     if (top - a.score > margin) break
-    if (gamesOf(prep, a.id) < SEAT_FILL_GAMES) continue
+    // The star filling a seat is no news: the line is for the next best way to fill it.
+    if (a.id === star || gamesOf(prep, a.id) < SEAT_FILL_GAMES) continue
     const after = emptySeatShare(prep, [...mine, a.id])
     const best = short.map(([seat, before]) => ({ seat, before, after: after.get(seat) ?? 0 }))
       .filter((x) => x.before - x.after >= SEAT_FILL_GAIN).sort((x, y) => (y.before - y.after) - (x.before - x.after))[0]
-    if (best && (!pick || best.before - best.after > pick.before - pick.after + SEAT_FILL_TIE)) pick = { id: a.id, name: a.name, ...best, behind: top - a.score }
+    if (!best) continue
+    const cand = { id: a.id, name: a.name, ...best, behind: top - a.score }
+    // Empty nights cut, less what he costs on the cards (0.03 a week is worth about ten points of empty nights),
+    // with the center seat (the hardest to fill) and, under a punt of FG%, a stretch big a little ahead.
+    const worth = (x: SeatFill) => (x.before - x.after) - SEAT_FILL_COST * x.behind
+      + (x.seat === 'C' ? 0.12 : 0) + (prefersStretch && x.seat === 'C' && stretch(x.id) ? 0.05 : 0)
+    const better = (x: SeatFill, y: SeatFill) => worth(x) > worth(y)
+    if (!pick || better(cand, pick)) pick = cand
   }
   return pick
 }
@@ -942,6 +958,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
 
   // ── Advice ──
   let advice: DraftView['advice'] = []
+  // Everyone scored, past the fifteen the screen keeps: the seat filler looks this far from my 9th pick.
+  let scoredAll: { id: string; name: string; score: number }[] = []
   let playoffNote: string | null = null
   let simPick: SimPick | null = null
   if (spot) {
@@ -952,6 +970,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
         // A lock is a build you have declared: from then on the roster is read as it is.
         { canTake, neutralUntil: d.locks.length ? 0 : READ_FROM, ignore: d.locks })
       : advisePoints(prep.points!.rows.filter((r) => !taken.has(r.id) && there(r.id)), spot, 25, canTake)
+    scoredAll = (raw as { id: string; score: number }[]).map((a) => ({ id: a.id, name: p(a.id).name, score: a.score }))
     // Fifteen, though the screen shows six: comparing mocks needs the score of whoever I took instead.
     advice = raw.slice(0, 15).map((a) => ({
       ...a, team: p(a.id).team, positions: prep.positions(a.id), tag: tags.get(a.id) ?? null,
@@ -1146,7 +1165,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     .slice(0, 3).map((a) => ({ id: a.id, name: a.name, behind: lastCard.score - a.score }))
   // Nothing on the cards about to go: the cheapest turn to fill a need, or to take someone who will not be back.
   const idle = takeNow.length > 0 && takeNow.every((a) => a.canWait) && !takeNow[0].thenName
-  const seatFill = seatFillFor(prep, mine, advice, idle, d.locks)
+  const seatFill = seatFillFor(prep, mine, (mine.length >= 8 ? scoredAll : advice).filter((x) => tags.get(x.id) !== 'never' && tags.get(x.id) !== 'avoid'), idle, d.locks, takeNow[0]?.id ?? null)
   const wontLast = !idle ? null : (() => {
     const top = takeNow[0].score
     const margin = prep.cats ? WONT_LAST_MARGIN : Math.abs(top) * 0.02
