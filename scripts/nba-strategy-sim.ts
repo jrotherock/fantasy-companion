@@ -455,6 +455,62 @@ if (MODE === 'build') {
   }
 }
 
+if (MODE === 'seatstar') {
+  // The seat filler as the star: when a starting seat would sit empty on many nights, the steady player near the top
+  // who fills it most (the draft room's FILLS line) is taken instead of the card. `--lock ast` locks from pick 2.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  const lock = (arg('lock') ?? '').split('+').filter(Boolean) as Cat[]
+  const locksFor = (mine: string[]) => (mine.length >= 1 ? lock : [])
+  const ACC: Record<string, string[]> = { PG: ['PG'], SG: ['SG'], G: ['PG', 'SG'], SF: ['SF'], PF: ['PF'], F: ['SF', 'PF'], C: ['C'] }
+  const posSeats = seatsOf.filter((s) => s in ACC)
+  const types = [...new Set(posSeats)].map((s) => ({ seat: s, acc: new Set(ACC[s]), need: posSeats.filter((t) => ACC[t].every((x) => ACC[s].includes(x))).length }))
+  const play = (id: string) => Math.min(1, (rowOf.get(id)?.games.gp ?? 60) / 82)
+  // Share of sampled nights each seat type is short: fewer eligible players playing than seats needing them (expected, by play chance).
+  const shortShare = (ids: string[]) => {
+    const men = ids.map((id) => ({ pos: seatPositions(posOf(id)), team: byId.get(id)!.team, p: play(id) }))
+    const out = new Map<string, number>()
+    for (const t of types) {
+      let short = 0
+      for (const day of cal.days) {
+        // Chance that fewer than `need` eligible players play tonight (independent play chances).
+        let dist = [1]
+        for (const m of men) if (m.team && day.has(m.team) && m.pos.some((x) => t.acc.has(x))) { const n = dist.map(() => 0).concat(0); dist.forEach((v, i) => { n[i] += v * (1 - m.p); n[i + 1] += v * m.p }); dist = n }
+        short += dist.slice(0, t.need).reduce((a, b) => a + b, 0)
+      }
+      out.set(t.seat, short / cal.days.length)
+    }
+    return out
+  }
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', locksFor(mine), H)
+  for (const [label, from, gainMin, emptyMin] of [['seat filler as the star', 5, 0.10, 0.35]] as [string, number, number, number][]) {
+    strategies[label] = (avail, mine, overall, slot) => {
+      const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
+        { teams: league.teams, rounds, slot, overall, spread: H }, base, { canTake: canTake(mine), neutralUntil: locksFor(mine).length ? 0 : BUILD_FROM, ignore: locksFor(mine) })
+      if (!advice.length) return windowOf(avail, mine)[0]
+      const top = advice[0]
+      if (mine.length < from) return top.id
+      const now = shortShare(mine)
+      const short = [...now.entries()].filter(([, v]) => v > emptyMin)
+      if (!short.length) return top.id
+      const band = mine.length >= 8 ? 0.12 : 0.08
+      let best: { id: string; worth: number } | null = null
+      for (const a of advice.slice(0, 40)) {
+        if (top.score - a.score > band) break
+        if (a.id === top.id || (rowOf.get(a.id)?.games.gp ?? 0) < 60) continue
+        const after = shortShare([...mine, a.id])
+        for (const [seat, before] of short) {
+          const gain = before - (after.get(seat) ?? 0)
+          if (gain < gainMin) continue
+          const worth = gain - 3 * (top.score - a.score) + (seat === 'C' ? 0.12 : 0)
+          if (!best || worth > best.worth) best = { id: a.id, worth }
+        }
+      }
+      return best?.id ?? top.id
+    }
+  }
+}
+
 if (MODE === 'band') {
   // A wider near-tie band, shown only where the board's own simulations rate a player even with the top card:
   // the worst case for it, a drafter who always takes the sims' favourite within the band instead of the card.
