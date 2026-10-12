@@ -474,17 +474,20 @@ function Verdict({ view, second }: { view: DraftView; second: number }) {
   const scarceText = (sc: NonNullable<DraftView['advice'][number]['scarce']>) =>
     `${sc.cat === 'to' ? 'low TO' : LABEL[sc.cat]} is scarce: ${sc.left === 0 ? 'no one' : 'only 1'} like him at ${sc.next}`
   const scarceOther = (tied ? tied.players : cards).find((x) => x.id !== star.id && x.scarce)
+  // On a turn where every card will be back, the plan: the star, why (a playoff tiebreak counts), and who should still be there.
+  const plan = waiting ? (() => {
+    const rest = cards.slice(1).sort((a, b) => b.survives - a.survives)
+    const back = rest.map((a) => `${lastName(a.name)} ${Math.round(a.survives * 100)}%`).join(', ')
+    const why = star.tiebreak ? `the pick on a playoff tiebreak (${star.playoff} games in your playoff weeks)` : 'the best fit'
+    const least = rest.every((a) => a.survives >= star.survives) ? ' and the least sure to last' : ''
+    return `${lastName(star.name)} is ${why}${least}; ${rest.length ? `${back} likely still there${next != null ? ` at ${next}` : ''}` : 'the others should be back'}${view.wontLast || view.seatFill ? ' — or spend the pick on an option below' : ''}.`
+  })() : null
   const fact = star.scarce ? `His ${scarceText(star.scarce)}.`
     : scarceOther?.scarce ? `${lastName(scarceOther.name)}'s ${scarceText(scarceOther.scarce)}.`
+    : plan ? plan
     : star.tiebreak ? `Playoff tiebreak: ${star.playoff} games in your playoff weeks.`
     : star.avoided ? 'On your avoid list, and still ahead.'
     : star.thenName ? `Then ${star.thenName} at pick ${second}.`
-    : waiting ? (() => {
-        // Name the plan: the star is the best fit and, of the cards, the one least sure to last; the rest should be back.
-        const rest = cards.slice(1).sort((a, b) => b.survives - a.survives)
-        const back = rest.map((a) => `${lastName(a.name)} ${Math.round(a.survives * 100)}%`).join(', ')
-        return `${lastName(star.name)} is the best fit${rest.every((a) => a.survives >= star.survives) ? ' and the least sure to last' : ''}; ${rest.length ? `${back} likely still there${next != null ? ` at ${next}` : ''}` : 'the others should be back'}${view.wontLast || view.seatFill ? ' — or spend the pick on an option below' : ''}.`
-      })()
     : null
   return (
     <div className="nb-verdict">
