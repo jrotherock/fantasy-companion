@@ -479,7 +479,12 @@ function Verdict({ view, second }: { view: DraftView; second: number }) {
     : star.tiebreak ? `Playoff tiebreak: ${star.playoff} games in your playoff weeks.`
     : star.avoided ? 'On your avoid list, and still ahead.'
     : star.thenName ? `Then ${star.thenName} at pick ${second}.`
-    : waiting ? `Take the best fit for your build now — the others should be back${view.wontLast || view.seatFill ? ', or spend the pick on an option below' : ''}.`
+    : waiting ? (() => {
+        // Name the plan: the star is the best fit and, of the cards, the one least sure to last; the rest should be back.
+        const rest = cards.slice(1).sort((a, b) => b.survives - a.survives)
+        const back = rest.map((a) => `${lastName(a.name)} ${Math.round(a.survives * 100)}%`).join(', ')
+        return `${lastName(star.name)} is the best fit${rest.every((a) => a.survives >= star.survives) ? ' and the least sure to last' : ''}; ${rest.length ? `${back} likely still there${next != null ? ` at ${next}` : ''}` : 'the others should be back'}${view.wontLast || view.seatFill ? ' — or spend the pick on an option below' : ''}.`
+      })()
     : null
   return (
     <div className="nb-verdict">
