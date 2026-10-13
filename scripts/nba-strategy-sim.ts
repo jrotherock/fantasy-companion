@@ -483,7 +483,10 @@ if (MODE === 'seatstar') {
     return out
   }
   strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', locksFor(mine), H)
-  for (const [label, from, gainMin, emptyMin] of [['seat filler as the star', 5, 0.10, 0.35]] as [string, number, number, number][]) {
+  // `--fill-costs 3;6;10`: one filler-as-star strategy per cost (empty nights a filler must save for each category a
+  // week he trails the top card by): the tiebreak between fillers, from most empty nights cut to best card score.
+  const costs = (arg('fill-costs') ?? '3').split(';').map(Number)
+  for (const [label, from, gainMin, emptyMin, cost] of costs.map((c) => [costs.length > 1 ? `seat filler as the star, cost ${c}` : 'seat filler as the star', 5, 0.10, 0.35, c]) as [string, number, number, number, number][]) {
     strategies[label] = (avail, mine, overall, slot) => {
       const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
         { teams: league.teams, rounds, slot, overall, spread: H }, base, { canTake: canTake(mine), neutralUntil: locksFor(mine).length ? 0 : BUILD_FROM, ignore: locksFor(mine) })
@@ -502,7 +505,7 @@ if (MODE === 'seatstar') {
         for (const [seat, before] of short) {
           const gain = before - (after.get(seat) ?? 0)
           if (gain < gainMin) continue
-          const worth = gain - 3 * (top.score - a.score) + (seat === 'C' ? 0.12 : 0)
+          const worth = gain - cost * (top.score - a.score) + (seat === 'C' ? 0.12 : 0)
           if (!best || worth > best.worth) best = { id: a.id, worth }
         }
       }

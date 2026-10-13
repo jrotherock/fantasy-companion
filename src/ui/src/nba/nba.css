@@ -340,3 +340,9 @@ div.nb-cat { cursor: default; }
 
 /* The hovered card against the star, on the cards' own scale */
 .nb-vsstar { margin-left: 0.6rem; font-family: var(--mono); }
+.threeup.four { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 620px) { .threeup.four { grid-template-columns: 1fr; } }
+.vc.nb-fillcard { border-color: rgba(90,160,255,.6); background: linear-gradient(155deg, rgba(90,160,255,.10), var(--surface)); }
+.vc.nb-fillcard .rk { color: var(--blue); }
+.nb-fillnote { font-size: 0.75rem; color: var(--blue); line-height: 1.4; }
+.nb-tag.nb-filltag { background: rgba(90,160,255,.18); color: var(--blue); margin: 0 0.35rem 0 0; }

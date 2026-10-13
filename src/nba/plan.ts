@@ -727,6 +727,8 @@ export interface DraftView {
   alsoClose: { id: string; name: string; behind: number }[]
   /** A steady player close to the top who fills a starting seat my roster leaves empty most nights. */
   seatFill: SeatFill | null
+  /** The filler's own card, shown beside the three when he is not on them (null when he is, or there is none). */
+  seatFillCard: DraftView['advice'][number] | null
   /** Every card will likely be back at my next pick: nothing on them is about to go. */
   idle: boolean
   /** On such a turn, the best player near the top who will likely be gone by my next pick. */
@@ -1013,6 +1015,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   let advice: DraftView['advice'] = []
   // Everyone scored, past the fifteen the screen keeps: the seat filler looks this far from my 9th pick.
   let scoredAll: { id: string; name: string; score: number }[] = []
+  let rawById = new Map<string, any>()
   let playoffNote: string | null = null
   let simPick: SimPick | null = null
   if (spot) {
@@ -1024,8 +1027,14 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
         { canTake, neutralUntil: d.locks.length ? 0 : READ_FROM, ignore: d.locks })
       : advisePoints(prep.points!.rows.filter((r) => !taken.has(r.id) && there(r.id)), spot, 25, canTake)
     scoredAll = (raw as { id: string; score: number }[]).map((a) => ({ id: a.id, name: p(a.id).name, score: a.score }))
+    rawById = new Map((raw as (typeof raw)[number][]).map((a) => [a.id, a]))
     // Fifteen, though the screen shows six: comparing mocks needs the score of whoever I took instead.
-    advice = raw.slice(0, 15).map((a) => ({
+    advice = raw.slice(0, 15).map((a) => cardOf(a))
+    // Avoid costs a player one near-tie: never the pick on a coin flip, still the pick when clearly best.
+    advice = stretchBigs(prep, handicapAvoided(advice, tags, avoidMargin(prep, advice)))
+  }
+  function cardOf(a: any): DraftView['advice'][number] {
+    return {
       ...a, team: p(a.id).team, positions: prep.positions(a.id), tag: tags.get(a.id) ?? null,
       // "There next time" is the turn after this one; a player who will very likely still be there can wait.
       // With that turn straight after this one (a back-to-back at the end of a round), everyone will be.
@@ -1046,9 +1055,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       stacks: prep.cats ? stacksOf(contribution(prep.cats.byId.get(a.id)!)) : [],
       hurts: prep.cats ? hurtsOf(contribution(prep.cats.byId.get(a.id)!)) : [],
       avoided: tags.get(a.id) === 'avoid',
-    }))
-    // Avoid costs a player one near-tie: never the pick on a coin flip, still the pick when clearly best.
-    advice = stretchBigs(prep, handicapAvoided(advice, tags, avoidMargin(prep, advice)))
+    }
   }
 
   // ── Paths and targets ahead ──
@@ -1219,6 +1226,12 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   // Nothing on the cards about to go: the cheapest turn to fill a need, or to take someone who will not be back.
   const idle = takeNow.length > 0 && takeNow.every((a) => a.canWait) && !takeNow[0].thenName
   const seatFill = seatFillFor(prep, mine, (mine.length >= 8 ? scoredAll : advice).filter((x) => tags.get(x.id) !== 'never' && tags.get(x.id) !== 'avoid'), idle, d.locks, takeNow[0]?.id ?? null)
+  // The filler as a full card beside the three, when he is not one of them already.
+  const fillRaw = seatFill && !takeNow.some((t) => t.id === seatFill.id) ? rawById.get(seatFill.id) : null
+  const seatFillCard = !fillRaw ? null : (() => {
+    const c = cardOf(fillRaw)
+    return prep.cats ? { ...c, preview: winChances(strengthOf(prep, [...mine, c.id]), mine.length + 1, prep.cats.base) } : c
+  })()
   const wontLast = !idle ? null : (() => {
     const top = takeNow[0].score
     const margin = prep.cats ? WONT_LAST_MARGIN : Math.abs(top) * 0.02
@@ -1329,6 +1342,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     canWait,
     alsoClose,
     seatFill,
+    seatFillCard: seatFillCard && prep.cats ? { ...seatFillCard, scarce: scarceFor(seatFillCard) } : seatFillCard,
     idle,
     wontLast,
     tied,

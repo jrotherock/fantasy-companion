@@ -279,31 +279,19 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
   const set = onClock && setFor.current?.pick === view.clock.overall ? setFor.current : null
   const firstLeft = set ? set.ids.findIndex((x) => !takenNow.has(x)) : -1
   const stale = set && firstLeft >= 0 && set.ids[firstLeft] !== cards[0].id ? set.names[firstLeft] : null
-  return (
-    <div>
-      <div className="vhead">
-        <span className="vlabel">{onClock ? 'TAKE' : `LIKELY THERE AT YOUR PICK ${view.clock.myNext}`}</span>
-      </div>
-      <StaleFeed view={view} />
-      <Verdict view={view} second={second} />
-      <PuntTipLine view={view} act={act} />
-      {stale ? (
-        <div className="nb-queue nb-queue-stale">
-          <span className="vlabel">QUEUE CHANGED</span> Put <b>{cards[0].name}</b> first in Yahoo — your queue would take {stale}
-        </div>
-      ) : queue.length > 0 && (
-        <div className="nb-queue">
-          <span className="vlabel" title="In this order. Yahoo skips whoever goes first, so set it now and leave it: a timeout or a dropped connection then takes the app's pick, not Yahoo's ranking">QUEUE IN YAHOO{!onClock && view.clock.myNext != null ? ` FOR PICK ${view.clock.myNext}` : ''}</span> {queue.map((q, i) => <span key={q.id}>{i ? ' · ' : ''}<b>{q.name}</b></span>)}
-          {!onClock && (view.clock.picksUntil ?? 0) > 2 && <span className="nb-dim"> — set it now; Yahoo skips anyone taken before your pick.</span>}
-        </div>
-      )}
-      {view.tied ? <Tied view={view} act={act} pins={pins} pin={pin} second={second} previewId={previewId} setPreviewId={setPreviewId} /> : <div className="threeup">
-        {cards.map((a, i) => (
-          <div key={a.id} className={`vc ${i === 0 ? 'sel' : ''}${previewId === a.id ? ' nb-previewing' : ''}${a.scarce ? ' nb-scarcecard' : ''}`}
+  // The seat filler: a tag on his card when he is one of the three, else a fourth card of his own.
+  const fill = view.seatFill
+  const fillCard = view.seatFillCard
+  const renderCard = (a: DraftView['takeNow'][number], i: number) => {
+    const isFill = fill?.id === a.id
+    const extra = fillCard?.id === a.id
+    return (
+          <div key={a.id} className={`vc ${i === 0 ? 'sel' : ''}${previewId === a.id ? ' nb-previewing' : ''}${a.scarce ? ' nb-scarcecard' : ''}${extra ? ' nb-fillcard' : ''}`}
+
             onMouseEnter={() => a.preview && setPreviewId(a.id)} onMouseLeave={() => setPreviewId(null)}
             // A tap on a phone toggles the preview; the Mark drafted button stops its own click.
             onClick={() => a.preview && setPreviewId(previewId === a.id ? null : a.id)}>
-            <span className="rk">{i + 1}{i === 0 && onClock ? ' · TAKE' : ''}</span>
+            <span className="rk">{extra ? `FILLS YOUR ${fill!.seat} SPOT` : <>{i + 1}{i === 0 && onClock ? ' · TAKE' : ''}</>}</span>
             <span className="nm">{a.name}{a.tag === 'like' && <span className="nb-tag nb-like">like</span>}{a.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
             <span className="sub">{a.team} · {a.positions.join(', ')}{a.injuryHistory && <InjuryTag h={a.injuryHistory} />}</span>
             <div className="nb-reason">
@@ -315,6 +303,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
               {a.mates.length > 0 && <span className="nb-mates" title="Same NBA team, same nights. Information only: in simulated seasons, avoiding teammates made no difference">shares {a.team}'s nights with {a.mates.map((n) => n.split(' ').at(-1)).join(', ')}</span>}
               {a.bestBuild && a.bestBuild.name !== view.aheadBuild && <span className="nb-bb">{ordinal(a.bestBuild.rank)} if {a.bestBuild.name.replace(/^Punt /, 'you punt ')}</span>}
             </div>
+            {isFill && <FillNote view={view} extra={extra} />}
             {a.avoided && <div className="nb-avoidnote">{i === 0 && cards[1]
               ? `On your avoid list, and still the pick: ahead by ${view.league.scoring === 'categories' ? (a.score - cards[1].score).toFixed(3) : Math.round(a.score - cards[1].score)} after the handicap`
               : 'On your avoid list: shown only when clearly better than the alternatives'}</div>}
@@ -335,7 +324,31 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
               <button className={`btn nb-cmp ${pins.includes(a.id) ? 'on' : ''}`} title="Compare side by side" onClick={(e) => { e.stopPropagation(); pin(a.id) }}>{pins.includes(a.id) ? 'Comparing' : 'Compare'}</button>
             </div>
           </div>
-        ))}
+    )
+  }
+  return (
+    <div>
+      <div className="vhead">
+        <span className="vlabel">{onClock ? 'TAKE' : `LIKELY THERE AT YOUR PICK ${view.clock.myNext}`}</span>
+      </div>
+      <StaleFeed view={view} />
+      <Verdict view={view} second={second} />
+      <PuntTipLine view={view} act={act} />
+      {stale ? (
+        <div className="nb-queue nb-queue-stale">
+          <span className="vlabel">QUEUE CHANGED</span> Put <b>{cards[0].name}</b> first in Yahoo — your queue would take {stale}
+        </div>
+      ) : queue.length > 0 && (
+        <div className="nb-queue">
+          <span className="vlabel" title="In this order. Yahoo skips whoever goes first, so set it now and leave it: a timeout or a dropped connection then takes the app's pick, not Yahoo's ranking">QUEUE IN YAHOO{!onClock && view.clock.myNext != null ? ` FOR PICK ${view.clock.myNext}` : ''}</span> {queue.map((q, i) => <span key={q.id}>{i ? ' · ' : ''}<b>{q.name}</b></span>)}
+          {!onClock && (view.clock.picksUntil ?? 0) > 2 && <span className="nb-dim"> — set it now; Yahoo skips anyone taken before your pick.</span>}
+        </div>
+      )}
+      {view.tied ? <>
+        <Tied view={view} act={act} pins={pins} pin={pin} second={second} previewId={previewId} setPreviewId={setPreviewId} />
+        {fillCard && !view.tied.players.some((x) => x.id === fillCard.id) && <div className="threeup">{renderCard(fillCard, cards.length)}</div>}
+      </> : <div className={`threeup${fillCard ? ' four' : ''}`}>
+        {[...cards, ...(fillCard ? [fillCard] : [])].map((a, i) => renderCard(a, i))}
       </div>}
       {!view.tied && view.alsoClose.length > 0 && (
         <div className="nb-also">
@@ -347,7 +360,6 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
           <span className="nb-dim"> — as good as card {cards.length}, and not back next turn either. Tap to compare.</span>
         </div>
       )}
-      {view.seatFill && <SeatFillLine view={view} comparePair={comparePair} />}
       {view.wontLast && (
         <div className="nb-seatfill nb-wontlast">
           <span className="vlabel">WON'T LAST</span>{' '}
@@ -434,22 +446,16 @@ function PuntTipLine({ view, act }: { view: DraftView; act: Act }) {
   )
 }
 
-/** A steady player near the top who fills a starting spot my roster leaves empty most nights. */
-function SeatFillLine({ view, comparePair }: { view: DraftView; comparePair: (a: string, b: string) => void }) {
+/** On the filler's card: the seat he fills, how often it sits empty without and with him, and what he costs. */
+function FillNote({ view, extra }: { view: DraftView; extra: boolean }) {
   const f = view.seatFill!
-  const top = view.takeNow[0]
-  const onCards = view.takeNow.some((a) => a.id === f.id) || view.tied?.players.some((x) => x.id === f.id)
-  const spot = f.seat === 'G' ? 'G (guard)' : f.seat === 'F' ? 'F (forward)' : f.seat
   const pctOf = (x: number) => `${Math.round(x * 100)}%`
+  const spot = f.seat === 'G' ? 'guard' : f.seat === 'F' ? 'forward' : f.seat
   return (
-    <div className="nb-seatfill">
-      <span className="vlabel">FILLS YOUR {f.seat} SPOT</span>{' '}
-      {onCards || !top || top.id === f.id
-        ? <b>{f.name}</b>
-        : <button className="nb-name" title={`Compare with ${top.name}`} onClick={() => comparePair(top.id, f.id)}>{f.name}</button>}
-      {f.behind > 0.0005 && <span className="nb-dim"> ({view.league.scoring === 'categories' ? `−${f.behind.toFixed(3)}` : `−${Math.round(f.behind)}`})</span>}
-      {' '}— your {spot} spot sits empty {f.before >= 0.995 ? 'every night' : `${pctOf(f.before)} of nights`} as you stand, {pctOf(f.after)} with him.
-      {!onCards && top && top.id !== f.id && <span className="nb-dim"> Tap to compare.</span>}
+    <div className="nb-fillnote">
+      {!extra && <span className="nb-tag nb-filltag">fills {f.seat}</span>}
+      Your {spot} spot sits empty {f.before >= 0.995 ? 'every night' : `${pctOf(f.before)} of nights`}; {pctOf(f.after)} with him.
+      {extra && f.behind > 0.0005 && <span className="nb-dim"> {view.league.scoring === 'categories' ? `−${f.behind.toFixed(3)}` : `−${Math.round(f.behind)}`} on the cards.</span>}
     </div>
   )
 }
@@ -480,7 +486,7 @@ function Verdict({ view, second }: { view: DraftView; second: number }) {
     const back = rest.map((a) => `${lastName(a.name)} ${Math.round(a.survives * 100)}%`).join(', ')
     const why = star.tiebreak ? `the pick on a playoff tiebreak (${star.playoff} games in your playoff weeks)` : 'the best fit'
     const least = rest.every((a) => a.survives >= star.survives) ? ' and the least sure to last' : ''
-    return `${lastName(star.name)} is ${why}${least}; ${rest.length ? `${back} likely still there${next != null ? ` at ${next}` : ''}` : 'the others should be back'}${view.wontLast || view.seatFill ? ' — or spend the pick on an option below' : ''}.`
+    return `${lastName(star.name)} is ${why}${least}; ${rest.length ? `${back} likely still there${next != null ? ` at ${next}` : ''}` : 'the others should be back'}${view.seatFill ? ` — or fill your ${view.seatFill.seat} spot with ${lastName(view.seatFill.name)} (blue card)` : view.wontLast ? ' — or spend the pick on the one below' : ''}.`
   })() : null
   const fact = star.scarce ? `His ${scarceText(star.scarce)}.`
     : scarceOther?.scarce ? `${lastName(scarceOther.name)}'s ${scarceText(scarceOther.scarce)}.`
@@ -521,7 +527,9 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
   // Three rows at most: three across on a wide screen holds all eight; on a phone, one across, three shown and the rest behind a tap.
   const [more, setMore] = useState(false)
   // The app's own pick always shows, wherever fit puts him.
-  const hidden = t.players.filter((x, i) => i >= 3 && !x.appPick && !x.scarce && !x.simEven).length
+  // So does the seat filler, tagged.
+  const fillId = view.seatFill?.id
+  const hidden = t.players.filter((x, i) => i >= 3 && !x.appPick && !x.scarce && !x.simEven && x.id !== fillId).length
   return (
     <div>
       <div className="nb-tiednote nb-dim">
@@ -531,7 +539,7 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
       <div className="nb-tied">
         {t.players.map((x, i) => (
           <Fragment key={x.id}>
-          <div className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''} ${i >= 3 && !x.appPick && !x.scarce && !x.simEven && !more ? 'nb-tiedmore' : ''}${previewId === x.id ? ' nb-previewing' : ''}${x.scarce ? ' nb-scarcecard' : ''}`}
+          <div className={`vc ${x.appPick ? 'sel' : ''} ${x.canWait ? 'nb-tiedwait' : ''} ${i >= 3 && !x.appPick && !x.scarce && !x.simEven && x.id !== fillId && !more ? 'nb-tiedmore' : ''}${previewId === x.id ? ' nb-previewing' : ''}${x.scarce ? ' nb-scarcecard' : ''}${x.id === fillId ? ' nb-fillcard' : ''}`}
             // Looking at a card shows its numbers on the build tiles: a hover, or a tap on a phone.
             onMouseEnter={() => setPreviewId(x.id)} onMouseLeave={() => setPreviewId(null)}
             onClick={() => setPreviewId(previewId === x.id ? null : x.id)}>
@@ -546,6 +554,7 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
                 : <span key={c} className="nb-chip">{c === 'to' ? 'low TO' : LABEL[c]}</span>)}
               {x.costs.map((c) => <span key={c} className="nb-chip nb-chip-cost">−{c === 'to' ? 'high TO' : LABEL[c]}</span>)}
             </div>
+            {x.id === fillId && <FillNote view={view} extra={false} />}
             {x.scarce && <ScarceLine s={x.scarce} />}
             <Fate view={view} survives={x.survives} canWait={x.canWait} there={x.there} thenName={x.thenName} second={second} />
             <div className="nb-cardbtns">

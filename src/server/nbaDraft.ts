@@ -187,19 +187,29 @@ function prefFile(): PreferenceFile {
   return { never: [], avoid: [], like: [] }
 }
 
+/** The league whose own lists apply: a mock or a -test replay reads its real league's (Hoops-only likes in a Hoops mock). */
+function prefLeague(leagueId: string): string {
+  return load().leagues.find((l) => l.id === leagueId)?.mock?.baseId ?? leagueId.replace(/-test$/, '')
+}
+
 function tagsFor(leagueId: string): Map<string, PrefTag> {
-  return resolvePreferences(prefFile(), leagueId, load().index).tags
+  return resolvePreferences(prefFile(), prefLeague(leagueId), load().index).tags
 }
 
 /** Tags are written by name, so the file stays readable and survives a player-id change. */
-function setTag(playerId: string, tag: PrefTag | null) {
+/**
+ * One tag per player per scope: every league's shared lists, or (with `league`) that league's own, which add to the
+ * shared ones. Clearing a shared tag leaves league tags alone, and the other way round.
+ */
+function setTag(playerId: string, tag: PrefTag | null, league: string | null = null) {
   const p = load().players.find((x) => x.id === playerId)
   if (!p) return false
   const file = prefFile()
   const lists: PrefTag[] = ['never', 'avoid', 'like']
   const index = load().index
-  for (const t of lists) file[t] = (file[t] ?? []).filter((n) => index.resolve(n, null) !== playerId)
-  if (tag) file[tag] = [...(file[tag] ?? []), p.name]
+  const target = league ? ((file.leagues ??= {})[league] ??= {}) : file
+  for (const t of lists) target[t] = (target[t] ?? []).filter((n) => index.resolve(n, null) !== playerId)
+  if (tag) target[tag] = [...(target[tag] ?? []), p.name]
   mkdirSync(STATE_DIR, { recursive: true })
   writeFileSync(PREFS, JSON.stringify(file, null, 1))
   for (const s of sessions.values()) s.dirty = true
@@ -699,7 +709,8 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
     case 'tag': {
       const tag = data.tag == null ? null : String(data.tag)
       if (tag != null && !['never', 'avoid', 'like'].includes(tag)) { json(res, 400, { error: 'tag is never, avoid, like or null' }); return true }
-      const ok = setTag(String(data.playerId), tag as PrefTag | null)
+      // `leagueOnly`: this league's own list (for a mock, its real league's), not every league's.
+      const ok = setTag(String(data.playerId), tag as PrefTag | null, data.leagueOnly ? prefLeague(s.league.id) : null)
       json(res, ok ? 200 : 400, { ok })
       return true
     }
