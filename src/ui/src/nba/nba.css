@@ -346,3 +346,4 @@ div.nb-cat { cursor: default; }
 .vc.nb-fillcard .rk { color: var(--blue); }
 .nb-fillnote { font-size: 0.75rem; color: var(--blue); line-height: 1.4; }
 .nb-tag.nb-filltag { background: rgba(90,160,255,.18); color: var(--blue); margin: 0 0.35rem 0 0; }
+.nb-tag.nb-myrank { background: rgba(255,176,0,.16); color: var(--amber); }

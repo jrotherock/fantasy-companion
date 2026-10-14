@@ -101,6 +101,8 @@ export interface Prepared {
    * disagree with that round (simMarks).
    */
   draftRank: Map<string, { rank: number; mark: SimMark | null; sim: { delta: number; err: number } | null }>
+  /** Your ranking for this league (preferences `order`), by id: breaks the cards' near-ties (orderTiebreak). Set by the caller. */
+  myOrder: string[]
 }
 
 /** data/nba/draft-rank/<league>.json, as written by scripts/nba-draft-rank.ts. */
@@ -250,7 +252,7 @@ export function prepare(
       return Math.max(0, (Date.parse(back) - Date.parse(start)) / (7 * 86_400_000))
     },
     calendar: injuries ? calendarOf(injuries.teamDates) : null,
-    teams: new Map(), context: () => null, draftRank: new Map(),
+    teams: new Map(), context: () => null, draftRank: new Map(), myOrder: [],
   }
   if (draftRankFile) {
     // Past the top few the simulations cannot tell most players apart (error bars of ±2 weeks in 100 against
@@ -644,6 +646,8 @@ export interface TiedPlayer {
   behind: number
   /** The top card: the app's own pick. */
   appPick: boolean
+  /** Where he sits on your ranking (preferences `order`), 1 = first; null when he is not on it. */
+  myRank: number | null
   /** His best categories, those where my roster is short first; of those, the ones it is short in; where he costs. */
   adds: Cat[]
   fills: Cat[]
@@ -762,7 +766,7 @@ export interface DraftView {
   }
   advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; context: PlayerContext | null;
     /** Tagged avoid: his score carries the handicap (handicapAvoided). */
-    avoided: boolean; bestBuild: BestBuild | null
+    avoided: boolean; bestBuild: BestBuild | null; myRank: number | null
     /** Which of my roster's weak categories he would help, from my first pick on. */
     fits: Cat[]
     /** Which of its strong ones he would add to: leaning in rather than covering. */
@@ -788,6 +792,8 @@ export interface DraftView {
   playoffNote: string | null
   /** The ★ moved by the sims' tiebreak: whom it went to, over whom, and by how much in the simulations. */
   simPick: SimPick | null
+  /** Your ranking took the star among near-ties (preferences `order`). */
+  orderPick: OrderPick | null
   /** Every team in the room, measured from its picks so far; null before any pick. */
   liveRoom: RoomRow[] | null
   /** My roster's close categories (35-65%), nearest a coin flip first, and whose they are ("Shai's" after one pick). */
@@ -1018,6 +1024,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   let rawById = new Map<string, any>()
   let playoffNote: string | null = null
   let simPick: SimPick | null = null
+  let orderPick: OrderPick | null = null
   if (spot) {
     // Off the clock the question is who will be there at my pick, so anyone more likely gone than not is left out.
     const there = (id: string) => onClock || survives(prep.adp(id), myNext!, prep.league.adpSpread, overall) >= 0.5
@@ -1055,6 +1062,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       stacks: prep.cats ? stacksOf(contribution(prep.cats.byId.get(a.id)!)) : [],
       hurts: prep.cats ? hurtsOf(contribution(prep.cats.byId.get(a.id)!)) : [],
       avoided: tags.get(a.id) === 'avoid',
+      myRank: prep.myOrder.includes(a.id) ? prep.myOrder.indexOf(a.id) + 1 : null,
     }
   }
 
@@ -1211,6 +1219,9 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     // Tested with nothing locked: a punt changes what each player is worth, and the first-pick sims knew no punts.
     const st = d.locks.length ? { advice: takeNow, note: null } : simTiebreak(prep, takeNow, advice, (a) => urgencyOf(a.canWait, a.survives))
     if (st.note) { takeNow = st.advice; simPick = st.note; playoffNote = null }
+    // Your ranking has the last word among near-ties, the sims' included.
+    const ot = orderTiebreak(prep, takeNow, advice, (a) => urgencyOf(a.canWait, a.survives))
+    if (ot.note) { takeNow = ot.advice; orderPick = ot.note; simPick = null; playoffNote = null }
   }
 
   // Never the same player twice on the cards, whatever reordered them: the screen keys cards by player.
@@ -1299,7 +1310,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
             id: a.id, name: a.name, team: a.team, positions: a.positions, behind: best - a.score, appPick: a.id === head.id,
             adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName, scarce: scarceFor(a), injuryHistory: a.injuryHistory,
             preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base), there: a.there, tag: a.tag,
-            simEven: extras.includes(a),
+            simEven: extras.includes(a), myRank: a.myRank,
           })),
       }
     }
@@ -1329,7 +1340,9 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       if (!first3.length) return []
       const urg = (a: { id: string }) => urgencyOf(wait(a.id), back(a.id))
       const ordered = playoffTiebreak(first3.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), margin, urg, (a) => (wait(a.id) ? 1 : back(a.id))).advice
-      return d.locks.length ? ordered : simTiebreak(prep, ordered, ranked.map((a) => ({ ...a, playoff: prep.playoff(a.id) })), urg).advice
+      const pool = ranked.map((a) => ({ ...a, playoff: prep.playoff(a.id) }))
+      const st = d.locks.length ? ordered : simTiebreak(prep, ordered, pool, urg).advice
+      return orderTiebreak(prep, st, pool, urg).advice
     })()
     const top = order[0] ?? ranked[0]
     const depth = onClock || myNext - overall <= 2 ? QUEUE_NEAR : QUEUE_FAR
@@ -1354,6 +1367,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     mock: L.mock ?? null,
     playoffNote,
     simPick,
+    orderPick,
     weakSpots,
     strongSpots,
     liveRoom: d.picks.length ? liveRoom(prep, d, teams, slot) : null,
@@ -1749,6 +1763,34 @@ export function simTiebreak<T extends { id: string; name: string; score: number 
   return {
     advice: [best.a, ...cards.filter((x) => x.id !== best.a.id)].slice(0, Math.max(cards.length, 1)),
     note: { pick: best.a.name, over: top.name, gain: best.s.delta - ts.delta },
+  }
+}
+
+export interface OrderPick { pick: string; over: string; behind: number }
+
+/**
+ * Your ranking (preferences `order`) breaks near-ties: among the equally urgent players within the near-tie band of
+ * the best card (0.06 categories a week; 25% of the top score in points), the one highest on your list takes the
+ * star, over listed and unlisted players alike. Never further than the band: a player your list ranks first but the
+ * cards rate clearly lower stays where the cards put him, and his card says where he sits on your list. Your view of
+ * a player's numbers belongs in `adjust`, which the cards then score.
+ */
+export function orderTiebreak<T extends { id: string; name: string; score: number }>(
+  prep: Prepared, cards: T[], pool: T[], urgency: (a: T) => number,
+): { advice: T[]; note: OrderPick | null } {
+  const top = cards[0]
+  if (!top || !prep.myOrder.length) return { advice: cards, note: null }
+  const u = urgency(top)
+  const best = Math.max(...[top, ...pool].filter((a) => urgency(a) === u).map((a) => a.score))
+  const band = prep.cats ? SIM_TIE : Math.abs(best) * SIM_TIE_POINTS
+  const rankOf = (id: string) => { const i = prep.myOrder.indexOf(id); return i < 0 ? Infinity : i }
+  const pick = [top, ...pool]
+    .filter((a) => urgency(a) === u && best - a.score <= band && (a as { tag?: string | null }).tag !== 'avoid' && rankOf(a.id) < Infinity)
+    .sort((x, y) => rankOf(x.id) - rankOf(y.id))[0]
+  if (!pick || pick.id === top.id) return { advice: cards, note: null }
+  return {
+    advice: [pick, ...cards.filter((x) => x.id !== pick.id)].slice(0, Math.max(cards.length, 1)),
+    note: { pick: pick.name, over: top.name, behind: best - pick.score },
   }
 }
 

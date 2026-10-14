@@ -30,7 +30,7 @@ import { analyseMocks, type MockRecord } from '../nba/tendencies.js'
 import { adpSpread, backtest, fetchHistory, historyStatus, opponentReport } from './nbaHistory.js'
 import { addManual, emptyDraft, ingestYahoo, myPicks, setLocks, setSlot, undoManual, type StoredDraft, type YahooRow } from '../nba/session.js'
 import { nextPickFor, slotFor } from '../kernel/snake.js'
-import { resolvePreferences, type PreferenceFile, type PrefTag } from '../nba/preferences.js'
+import { applyAdjustments, resolvePreferences, type PreferenceFile, type PrefTag } from '../nba/preferences.js'
 import { CATS, type Cat } from '../nba/value.js'
 import type { NbaPlayer } from '../nba/types.js'
 
@@ -314,12 +314,21 @@ function injuryInputs(): InjuryInputs {
   return { returns, teamDates: datesByTeam(), today: new Date().toISOString().slice(0, 10) }
 }
 
-/** Revalue every open draft: injuries or a return date changed. */
+/** A league's draft numbers: the projections with your own view of a few players (preferences `adjust`) in place,
+ * and your ranking (`order`), both from the real league's lists, so a mock reads them too. */
+function prepFor(league: NbaLeague, inj = injuryInputs()): Prepared {
+  const { players, noise, index } = load()
+  const mine = resolvePreferences(prefFile(), prefLeague(league.id), index)
+  const prep = prepare(league, applyAdjustments(players, mine.adjust), noise, adpFor, schedule(), inj, notesByTeam(), draftRankFor(league))
+  prep.myOrder = mine.order
+  return prep
+}
+
+/** Revalue every open draft: injuries, a return date or your own view changed. */
 function reprepare() {
-  const { players, noise } = load()
   const inj = injuryInputs()
   for (const s of sessions.values()) {
-    s.prep = prepare(s.league, players, noise, adpFor, schedule(), inj, notesByTeam(), draftRankFor(s.league))
+    s.prep = prepFor(s.league, inj)
     s.dirty = true
   }
 }
@@ -386,7 +395,7 @@ function session(id: string): Session | null {
   const league = leagues.find((l) => l.id === id)
   if (!league) return null
   const draft: StoredDraft = existsSync(fileOf(id)) ? JSON.parse(readFileSync(fileOf(id), 'utf8')) : emptyDraft(id)
-  const s: Session = { league, prep: prepare(league, players, noise, adpFor, schedule(), injuryInputs(), notesByTeam(), draftRankFor(league)), draft, view: null, dirty: true }
+  const s: Session = { league, prep: prepFor(league), draft, view: null, dirty: true }
   sessions.set(id, s)
   return s
 }
@@ -704,6 +713,36 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
       const date = data.date == null || data.date === '' ? null : String(data.date)
       if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) { json(res, 400, { error: 'date is YYYY-MM-DD' }); return true }
       json(res, setReturn(String(data.playerId), date) ? 200 : 400, { ok: true })
+      return true
+    }
+    case 'order': {
+      // Your ranking for this league (for a mock, its real league): names, first = most wanted; [] clears it.
+      const names = Array.isArray(data.names) ? data.names.map(String) : null
+      if (!names) { json(res, 400, { error: 'names is a list of player names' }); return true }
+      const file = prefFile()
+      const lists = ((file.leagues ??= {})[prefLeague(s.league.id)] ??= {})
+      if (names.length) lists.order = names; else delete lists.order
+      mkdirSync(STATE_DIR, { recursive: true })
+      writeFileSync(PREFS, JSON.stringify(file, null, 1))
+      reprepare()
+      const unknown = resolvePreferences(file, prefLeague(s.league.id), load().index).unresolved
+      json(res, 200, { ok: true, order: names, unknown })
+      return true
+    }
+    case 'adjust': {
+      // Your expected per-game stats for one player in this league ({ast: 4.8, fgPct: 0.465}); null clears them.
+      const p = load().players.find((x) => x.id === String(data.playerId))
+      if (!p) { json(res, 400, { error: 'unknown player' }); return true }
+      const stats = data.stats == null ? null : Object.fromEntries(Object.entries(data.stats).map(([k, v]) => [k, Number(v)]).filter(([, v]) => Number.isFinite(v as number)))
+      const file = prefFile()
+      const lists = ((file.leagues ??= {})[prefLeague(s.league.id)] ??= {})
+      const adjust = { ...(lists.adjust ?? {}) }
+      if (stats && Object.keys(stats).length) adjust[p.name] = stats as Record<string, number>; else delete adjust[p.name]
+      if (Object.keys(adjust).length) lists.adjust = adjust; else delete lists.adjust
+      mkdirSync(STATE_DIR, { recursive: true })
+      writeFileSync(PREFS, JSON.stringify(file, null, 1))
+      reprepare()
+      json(res, 200, { ok: true, player: p.name, stats })
       return true
     }
     case 'tag': {

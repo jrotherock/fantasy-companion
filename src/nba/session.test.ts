@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs'
 import { addManual, emptyDraft, ingestYahoo, undoManual } from './session.js'
 import { NameIndex } from './join.js'
 import { draftOrder, parseDraftResults, parseTeams } from './yahooDraft.js'
-import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf, puntTipFor, emptySeatShare, seatFillFor, simTiebreak, stashNote } from './plan.js'
+import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf, puntTipFor, emptySeatShare, seatFillFor, simTiebreak, orderTiebreak, stashNote } from './plan.js'
+import { applyAdjustments, resolvePreferences } from './preferences.js'
 import { adpFor } from './draft.js'
 
 const index = new NameIndex([
@@ -159,6 +160,49 @@ test("the sims' tiebreak moves the star only within its band (0.06, or 25% in po
   // Points: the band is a share of the top score (25%), so a player well behind in points can still take it.
   const pts = simTiebreak({ cats: null, draftRank: prep.draftRank } as any, [p('a', 1000), p('b', 900)], [p('a', 1000), p('b', 900), p('e', 700)], () => 0)
   assert.equal(pts.advice[0].id, 'b', 'e is 30% back: outside; b, 10% back and ahead in the sims, takes it')
+})
+
+test('your ranking takes the star among near-ties only, over the sims and unlisted players alike', () => {
+  const prep: any = { cats: {}, myOrder: ['t', 'm', 'e'] }
+  const p = (id: string, score: number, urgent = 0, tag: string | null = null) => ({ id, name: id.toUpperCase(), score, urgent, tag })
+  // Your view: Haliburton (h, unlisted here) tops the cards, Maxey and Tatum within 0.05.
+  const cards = [p('h', 5), p('m', 4.955), p('t', 4.95)]
+  const r = orderTiebreak(prep, cards, [...cards, p('e', 4.93)], (a) => a.urgent)
+  assert.equal(r.advice[0].id, 't', 'Tatum, first on your list and 0.05 back, takes it')
+  assert.equal(r.note?.over, 'H')
+  assert.ok(Math.abs(r.note!.behind - 0.05) < 1e-9)
+  assert.equal(r.advice.length, 3)
+  // Too far back: the cards stand.
+  const far = [p('m', 5), p('t', 4.86)]
+  assert.equal(orderTiebreak(prep, far, far, () => 0).note, null, 'Tatum 0.14 back stays behind Maxey')
+  // Less urgent (likely back next turn): not this pick's choice.
+  assert.equal(orderTiebreak(prep, [p('m', 5)], [p('m', 5), p('t', 4.99, 1)], (a) => a.urgent).note, null)
+  // An avoid never takes it, and an empty list changes nothing.
+  assert.equal(orderTiebreak(prep, [p('m', 5)], [p('m', 5), p('t', 4.99, 0, 'avoid')], () => 0).note, null)
+  assert.equal(orderTiebreak({ cats: {}, myOrder: [] } as any, cards, cards, () => 0).note, null)
+  // Already first on your list: no note.
+  assert.equal(orderTiebreak(prep, [p('t', 5), p('m', 4.99)], [p('t', 5), p('m', 4.99)], () => 0).note, null)
+})
+
+test('a league view: its own order and expected stats, kept out of other leagues', () => {
+  const idx = new NameIndex([{ id: 'm', name: 'Tyrese Maxey', team: 'PHI' }, { id: 't', name: 'Jayson Tatum', team: 'BOS' }])
+  const file = { leagues: { 'nba-hoops': { order: ['Jayson Tatum', 'Tyrese Maxey', 'Nobody Here'], adjust: { 'Tyrese Maxey': { ast: 4.8, fgPct: 0.45 } } } } }
+  const hoops = resolvePreferences(file, 'nba-hoops', idx)
+  assert.deepEqual(hoops.order, ['t', 'm'])
+  assert.deepEqual(hoops.unresolved, ['Nobody Here'])
+  const other = resolvePreferences(file, 'nba-harker', idx)
+  assert.deepEqual(other.order, [])
+  assert.equal(other.adjust.size, 0)
+  const players: any[] = [
+    { id: 'm', name: 'Tyrese Maxey', projection: { perGame: { pts: 25.8, ast: 5.9 }, shooting: { fgPct: 0.467, ftPct: 0.887 } } },
+    { id: 't', name: 'Jayson Tatum', projection: { perGame: { pts: 26.4, ast: 5.5 }, shooting: { fgPct: 0.451 } } },
+  ]
+  const out = applyAdjustments(players, hoops.adjust)
+  assert.equal(out[0].projection!.perGame.ast, 4.8)
+  assert.equal(out[0].projection!.perGame.pts, 25.8, 'what you did not set stays')
+  assert.equal(out[0].projection!.shooting.fgPct, 0.45, 'fgPct goes to shooting')
+  assert.equal(players[0].projection.perGame.ast, 5.9, 'the shared players are not changed in place')
+  assert.equal(out[1], players[1], 'others untouched')
 })
 
 test('a late returner is an IL stash while the league has IL seats free, and says so when they are taken', () => {

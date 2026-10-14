@@ -292,7 +292,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
             // A tap on a phone toggles the preview; the Mark drafted button stops its own click.
             onClick={() => a.preview && setPreviewId(previewId === a.id ? null : a.id)}>
             <span className="rk">{extra ? `FILLS YOUR ${fill!.seat} SPOT` : <>{i + 1}{i === 0 && onClock ? ' · TAKE' : ''}</>}</span>
-            <span className="nm">{a.name}{a.tag === 'like' && <span className="nb-tag nb-like">like</span>}{a.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
+            <span className="nm">{a.name}{a.myRank != null && <span className="nb-tag nb-myrank" title="Where he sits on your own ranking for this league">your #{a.myRank}</span>}{a.tag === 'like' && <span className="nb-tag nb-like">like</span>}{a.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
             <span className="sub">{a.team} · {a.positions.join(', ')}{a.injuryHistory && <InjuryTag h={a.injuryHistory} />}</span>
             <div className="nb-reason">
               {reasons(a.contrib, locks)}
@@ -375,6 +375,11 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
         </div>
       )}
       {view.playoffNote && <div className="nb-ponote">{view.playoffNote}</div>}
+      {view.orderPick && (
+        <div className="nb-ponote" title="Your ranking for this league breaks near-ties: within 0.06 categories a week of the best card, among players equally likely to be gone, the one highest on your list takes the star.">
+          ★ <b>{view.orderPick.pick}</b> over {view.orderPick.over}: your ranking, {view.orderPick.behind < 0.0005 ? 'and the best score' : `${view.league.scoring === 'categories' ? view.orderPick.behind.toFixed(3) : Math.round(view.orderPick.behind)} behind the best card, inside the near-tie range`}.
+        </div>
+      )}
       {view.simPick && (
         <div className="nb-ponote" title="Within 0.06 of the top card, the star goes to the player the first-pick simulations rate higher: in simulated seasons this won about 4 more weeks in 100 than the cards' own order.">
           ★ <b>{view.simPick.pick}</b> over {view.simPick.over}: as close on the cards, and ahead in simulated seasons ({view.simPick.gain.toFixed(1)} more weeks won in 100).
@@ -544,6 +549,7 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
             onMouseEnter={() => setPreviewId(x.id)} onMouseLeave={() => setPreviewId(null)}
             onClick={() => setPreviewId(previewId === x.id ? null : x.id)}>
             <span className="nm">{x.appPick && <span className="nb-apppick" title="The app's own pick">★ </span>}{x.name}
+              {x.myRank != null && <span className="nb-tag nb-myrank" title="Where he sits on your own ranking for this league">your #{x.myRank}</span>}
               {x.tag === 'like' && <span className="nb-tag nb-like">like</span>}{x.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}
               {x.simEven && <span className="nb-tag nb-simeven" title={`${x.behind.toFixed(2)} behind on the cards, but even with the pick in simulated seasons: taking him tested as good as the cards' choice`}>even in sims</span>}</span>
             <span className="sub" title={x.behind < 0.0005 ? 'The best score in the group' : `${x.behind.toFixed(3)} categories a week behind the best: noise`}>{x.team} · {x.positions.join(', ')}{x.injuryHistory && <InjuryTag h={x.injuryHistory} />}</span>

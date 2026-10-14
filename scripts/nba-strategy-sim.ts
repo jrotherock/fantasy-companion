@@ -56,7 +56,8 @@ for (const spec of (arg('override') ?? '').split(';').filter(Boolean)) {
   const [name, stats] = spec.split(':')
   const p = rawPlayers.find((x) => x.name === name.trim())
   if (!p?.projection) throw new Error(`--override: no projected player ${name}`)
-  for (const kv of stats.split(',')) { const [k, v] = kv.split('='); (p.projection.perGame as any)[k.trim()] = Number(v) }
+  // fgPct and ftPct are shooting; everything else is a per-game stat.
+  for (const kv of stats.split(',')) { const [k, v] = kv.split('=').map((x) => x.trim()); ((k === 'fgPct' || k === 'ftPct' ? p.projection.shooting : p.projection.perGame) as any)[k] = Number(v) }
 }
 const players: NbaPlayer[] = (() => {
   const games = JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games as { date: string; home: string; away: string }[]
