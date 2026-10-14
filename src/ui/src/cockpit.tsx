@@ -554,7 +554,7 @@ interface Detail {
         in: { id: string; name: string; pos: string | null; projected: number | null }
         out: { id: string; name: string; pos: string | null; projected: number | null
                injuryStatus: string | null } | null
-        slot: string; gain: number; reason: 'points' | 'out' | 'empty'; close?: boolean
+        slot: string; gain: number; reason: 'points' | 'out' | 'bye' | 'empty'; close?: boolean
         /** Nobody read the outgoing man's projection, so there is no gain to state. */
         unknownOut?: boolean
       }[]
@@ -3167,6 +3167,9 @@ function Advice({ advice }: { advice: NonNullable<Detail['roster']>['advice'] })
                   for <b>{s.out.name}</b>
                   {s.reason === 'out'
                     ? <span className="ckadvwhy out">ruled {(s.out.injuryStatus ?? 'out').toLowerCase()}</span>
+                    /* Not an injury and not a judgement: his club is away. */
+                    : s.reason === 'bye'
+                    ? <span className="ckadvwhy out">on bye</span>
                     : s.out.projected == null
                       /* Not nought: nobody read it. Printing 0.0 made a gap look
                          like a player projected to score nothing. */

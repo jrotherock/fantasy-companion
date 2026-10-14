@@ -454,6 +454,9 @@ export function emptySeatShare(prep: Prepared, ids: string[], draws = 6): Map<st
   return out
 }
 
+/** The plan line names players ranked on the board no more than this many places past my next pick. */
+export const PLAN_RANK_SLACK = 5
+
 /** Out this many weeks of the season or fewer: no IL-stash advice on his card. */
 export const STASH_WEEKS = 2
 
@@ -1228,7 +1231,11 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   takeNow = takeNow.filter((a, i) => takeNow.findIndex((x) => x.id === a.id) === i)
   // What each card would do to the build tiles: my roster with him added, as the tiles measure it.
   if (prep.cats) takeNow = takeNow.map((a) => ({ ...a, preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base) }))
-  const canWait = advice.filter((a) => a.canWait && !takeNow.some((t) => t.id === a.id)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
+  // Only those worth taking at that pick: on the board no more than PLAN_RANK_SLACK places past it (2026-10-13: Derrick
+  // White, 27th, was named for pick 13 because he would surely last; he is a late-3rd-round pick).
+  const boardRank = new Map(board.map((r) => [r.id, r.rank]))
+  const worthAtNext = (id: string) => nextAfter == null || (boardRank.get(id) ?? Infinity) <= nextAfter + PLAN_RANK_SLACK
+  const canWait = advice.filter((a) => a.canWait && !takeNow.some((t) => t.id === a.id) && worthAtNext(a.id)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
   const lastCard = takeNow.at(-1)
   const closeMargin = prep.cats ? 0.02 : Math.abs(takeNow[0]?.score ?? 0) * 0.01
   const alsoClose = !lastCard ? [] : advice

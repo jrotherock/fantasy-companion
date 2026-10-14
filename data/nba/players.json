@@ -1,5 +1,5 @@
 {
- "built": "2026-10-11T04:09:23.588Z",
+ "built": "2026-10-14T04:00:10.594Z",
  "season": 2026,
  "players": [
   {
@@ -1459,11 +1459,7 @@
    ],
    "age": 26,
    "yearsExp": 5,
-   "injury": {
-    "status": "DTD",
-    "body": "Ankle",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "6404",
     "rank": 10,
@@ -3012,6 +3008,7 @@
    "team": "HOU",
    "positions": [
     "PG",
+    "SF",
     "SG"
    ],
    "age": 23,
@@ -4631,11 +4628,7 @@
    ],
    "age": 29,
    "yearsExp": 9,
-   "injury": {
-    "status": "DTD",
-    "body": "Neck",
-    "notes": "Soreness"
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "5769",
     "rank": 30,
@@ -4797,7 +4790,11 @@
    ],
    "age": 24,
    "yearsExp": 3,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Quadriceps",
+    "notes": "Bruise"
+   },
    "yahoo": {
     "yahooId": "6692",
     "rank": 31,
@@ -5118,11 +5115,7 @@
    ],
    "age": 37,
    "yearsExp": 17,
-   "injury": {
-    "status": "DTD",
-    "body": "Ankle",
-    "notes": "Soreness"
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "4563",
     "rank": 33,
@@ -5451,11 +5444,7 @@
    ],
    "age": 23,
    "yearsExp": 3,
-   "injury": {
-    "status": "DTD",
-    "body": "Leg",
-    "notes": "Bruise"
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "10104",
     "rank": 35,
@@ -5942,11 +5931,7 @@
    ],
    "age": 25,
    "yearsExp": 4,
-   "injury": {
-    "status": "DTD",
-    "body": "Finger",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "6712",
     "rank": 38,
@@ -9529,11 +9514,7 @@
    ],
    "age": 28,
    "yearsExp": 7,
-   "injury": {
-    "status": "DTD",
-    "body": "Wrist",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "6025",
     "rank": 61,
@@ -9977,13 +9958,9 @@
     "PF",
     "SF"
    ],
-   "age": 21,
+   "age": 22,
    "yearsExp": 2,
-   "injury": {
-    "status": "DTD",
-    "body": "Ankle",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "10265",
     "rank": 64,
@@ -11044,6 +11021,7 @@
    "name": "Julius Randle",
    "team": "BKN",
    "positions": [
+    "C",
     "PF"
    ],
    "age": 31,
@@ -13886,11 +13864,7 @@
    ],
    "age": 24,
    "yearsExp": 5,
-   "injury": {
-    "status": "DTD",
-    "body": "Shoulder",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "6571",
     "rank": 90,
@@ -14465,7 +14439,8 @@
    "name": "Ja Morant",
    "team": "POR",
    "positions": [
-    "PG"
+    "PG",
+    "SG"
    ],
    "age": 27,
    "yearsExp": 7,
@@ -14629,11 +14604,7 @@
    ],
    "age": 25,
    "yearsExp": 5,
-   "injury": {
-    "status": "DTD",
-    "body": "Illness",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "6516",
     "rank": 95,
@@ -16004,11 +15975,7 @@
    ],
    "age": 28,
    "yearsExp": 8,
-   "injury": {
-    "status": "DTD",
-    "body": "Ankle",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "5856",
     "rank": 104,
@@ -16979,7 +16946,7 @@
    "age": 27,
    "yearsExp": 7,
    "injury": {
-    "status": "Out",
+    "status": "DTD",
     "body": "Hamstring",
     "notes": null
    },
@@ -17143,7 +17110,11 @@
    ],
    "age": 26,
    "yearsExp": 4,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Undisclosed",
+    "notes": null
+   },
    "yahoo": {
     "yahooId": "6721",
     "rank": 111,
@@ -20500,6 +20471,7 @@
    "name": "Quentin Grimes",
    "team": "LAL",
    "positions": [
+    "SF",
     "SG"
    ],
    "age": 26,
@@ -20992,11 +20964,7 @@
    ],
    "age": 28,
    "yearsExp": 7,
-   "injury": {
-    "status": "DTD",
-    "body": "Ankle",
-    "notes": "Sprain"
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "6174",
     "rank": 137,
@@ -21159,11 +21127,7 @@
    ],
    "age": 26,
    "yearsExp": 6,
-   "injury": {
-    "status": "DTD",
-    "body": "Hip",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "6433",
     "rank": 138,
@@ -24648,9 +24612,9 @@
    "age": 23,
    "yearsExp": 1,
    "injury": {
-    "status": "DTD",
+    "status": "Out",
     "body": "Knee",
-    "notes": null
+    "notes": "Dislocated"
    },
    "yahoo": {
     "yahooId": "10496",
@@ -25233,11 +25197,7 @@
    ],
    "age": 26,
    "yearsExp": 6,
-   "injury": {
-    "status": "DTD",
-    "body": "Foot",
-    "notes": "Soreness"
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "6402",
     "rank": 165,
@@ -27132,7 +27092,11 @@
    ],
    "age": 31,
    "yearsExp": 8,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Knee",
+    "notes": "Soreness"
+   },
    "yahoo": {
     "yahooId": "6032",
     "rank": 177,
@@ -28292,7 +28256,7 @@
    "positions": [
     "PG"
    ],
-   "age": 19,
+   "age": 20,
    "yearsExp": 1,
    "injury": null,
    "yahoo": {
@@ -30473,7 +30437,11 @@
    ],
    "age": 26,
    "yearsExp": 2,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Undisclosed",
+    "notes": null
+   },
    "yahoo": {
     "yahooId": "10280",
     "rank": 199,
@@ -30895,7 +30863,11 @@
    ],
    "age": 24,
    "yearsExp": 1,
-   "injury": null,
+   "injury": {
+    "status": "Out",
+    "body": "Calf",
+    "notes": "Strain"
+   },
    "yahoo": {
     "yahooId": "10510",
     "rank": 202,
@@ -31232,7 +31204,7 @@
    "yearsExp": 8,
    "injury": {
     "status": "DTD",
-    "body": "Lower Body",
+    "body": "Lower Leg",
     "notes": null
    },
    "yahoo": {
@@ -35494,7 +35466,7 @@
    "yearsExp": 5,
    "injury": {
     "status": "DTD",
-    "body": "Undisclosed",
+    "body": "Knee",
     "notes": null
    },
    "yahoo": {
@@ -35962,11 +35934,7 @@
    ],
    "age": 22,
    "yearsExp": 3,
-   "injury": {
-    "status": "DTD",
-    "body": "Hip",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "10122",
     "rank": 237,
@@ -36716,7 +36684,11 @@
    ],
    "age": 21,
    "yearsExp": 0,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Coach's Decision",
+    "notes": null
+   },
    "yahoo": {
     "yahooId": "10576",
     "rank": 242,
@@ -36883,11 +36855,7 @@
    ],
    "age": 20,
    "yearsExp": 0,
-   "injury": {
-    "status": "DTD",
-    "body": "Groin",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "10570",
     "rank": 244,
@@ -40350,7 +40318,11 @@
    ],
    "age": 23,
    "yearsExp": 3,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Undisclosed",
+    "notes": null
+   },
    "yahoo": {
     "yahooId": "10103",
     "rank": 268,
@@ -40652,7 +40624,11 @@
    ],
    "age": 30,
    "yearsExp": 6,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Elbow",
+    "notes": "Soreness"
+   },
    "yahoo": {
     "yahooId": "6452",
     "rank": 270,
@@ -40816,8 +40792,8 @@
    "yearsExp": 5,
    "injury": {
     "status": "DTD",
-    "body": "Undisclosed",
-    "notes": null
+    "body": "Foot",
+    "notes": "Bruise"
    },
    "yahoo": {
     "yahooId": "6552",
@@ -42768,7 +42744,11 @@
    ],
    "age": 25,
    "yearsExp": 6,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Undisclosed",
+    "notes": null
+   },
    "yahoo": {
     "yahooId": "6397",
     "rank": 285,
@@ -48194,11 +48174,7 @@
    ],
    "age": 26,
    "yearsExp": 4,
-   "injury": {
-    "status": "DTD",
-    "body": "Coach's Decision",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "6704",
     "rank": 324,
@@ -48675,7 +48651,7 @@
    "injury": {
     "status": "DTD",
     "body": "Ankle",
-    "notes": null
+    "notes": "Sprain"
    },
    "yahoo": null,
    "lines": {
@@ -48915,7 +48891,7 @@
    "injury": {
     "status": "DTD",
     "body": "Undisclosed",
-    "notes": null
+    "notes": "Bruise"
    },
    "yahoo": null,
    "lines": {
@@ -49491,7 +49467,11 @@
    ],
    "age": 20,
    "yearsExp": 1,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Coach's Decision",
+    "notes": null
+   },
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -50554,7 +50534,11 @@
    ],
    "age": 20,
    "yearsExp": 1,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Ankle",
+    "notes": null
+   },
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -56464,7 +56448,7 @@
    "age": 25,
    "yearsExp": 2,
    "injury": {
-    "status": "DTD",
+    "status": "GTD",
     "body": "Undisclosed",
     "notes": "Bruise"
    },
@@ -58007,11 +57991,7 @@
    ],
    "age": 31,
    "yearsExp": 7,
-   "injury": {
-    "status": "DTD",
-    "body": "Illness",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -59506,7 +59486,7 @@
     "SF",
     "SG"
    ],
-   "age": 24,
+   "age": 25,
    "yearsExp": 2,
    "injury": null,
    "yahoo": null,
@@ -60093,11 +60073,7 @@
    ],
    "age": 21,
    "yearsExp": 1,
-   "injury": {
-    "status": "DTD",
-    "body": "Hamstring",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -61873,7 +61849,11 @@
    ],
    "age": 25,
    "yearsExp": 2,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Undisclosed",
+    "notes": null
+   },
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -62972,11 +62952,7 @@
    ],
    "age": 26,
    "yearsExp": 3,
-   "injury": {
-    "status": "DTD",
-    "body": "Teeth",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -63466,7 +63442,7 @@
   {
    "id": "2478",
    "name": "Caleb Houstan",
-   "team": "NOP",
+   "team": null,
    "positions": [
     "SF",
     "SG"
@@ -63920,7 +63896,7 @@
   {
    "id": "2473",
    "name": "Christian Koloko",
-   "team": "NOP",
+   "team": null,
    "positions": [
     "C"
    ],
@@ -67388,11 +67364,7 @@
    ],
    "age": 29,
    "yearsExp": 8,
-   "injury": {
-    "status": "DTD",
-    "body": "Coach's Decision",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -69981,7 +69953,11 @@
    ],
    "age": 26,
    "yearsExp": 1,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Hip",
+    "notes": null
+   },
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -70299,7 +70275,7 @@
   {
    "id": "4823",
    "name": "Tyler Burton",
-   "team": null,
+   "team": "GSW",
    "positions": [
     "PF",
     "SF"

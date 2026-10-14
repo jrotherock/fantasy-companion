@@ -47,6 +47,12 @@ export interface PivotMan {
   starter: boolean
   /** Kickoff of his game in ms, or null where the schedule does not say. */
   kickoff: number | null
+  /**
+   * His club is away this week, so he is not cover for anybody. Told
+   * explicitly rather than inferred from a missing kickoff, which also means
+   * "the schedule could not be read" and would throw away real cover.
+   */
+  onBye?: boolean | null
 }
 
 export interface Cover {
@@ -166,7 +172,8 @@ function canSitIn(flex: number, him: PivotMan, slots: Slot[], starters: PivotMan
 
 export function pivotPlans(slots: Slot[], squad: PivotMan[], now: number): Pivot[] {
   const starters = squad.filter((m) => m.starter)
-  const bench = squad.filter((m) => !m.starter && !cannotPlay(m.injuryStatus))
+  // Nor a man on his bye: he cannot cover a doubtful starter either.
+  const bench = squad.filter((m) => !m.starter && !cannotPlay(m.injuryStatus) && !m.onBye)
   const out: Pivot[] = []
 
   for (const him of starters) {

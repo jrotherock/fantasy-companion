@@ -22,6 +22,17 @@ export interface Candidate {
   /** Whether the manager currently has them in the lineup. */
   starter: boolean
   /**
+   * His club is not playing this week.
+   *
+   * A bye and a ruling out are the same fact to a lineup — the slot cannot be
+   * filled — but only the ruling out was ever told to the optimiser, which
+   * left the projection as the sole defence against recommending a man with
+   * no game. That defence fails: Yahoo stops printing a figure for a man on
+   * his bye, the capture keeps the last real one rather than let a nought
+   * erase it, and the board advised starting a back whose club was away.
+   */
+  onBye?: boolean | null
+  /**
    * This week's expert consensus rank within his position, lower being better.
    * Consulted only between two players the projections cannot separate.
    */
@@ -61,7 +72,7 @@ export interface Swap {
   slot: string
   /** Points gained by making this one change. */
   gain: number
-  reason: 'points' | 'out' | 'empty'
+  reason: 'points' | 'out' | 'bye' | 'empty'
   /** Inside the noise: a difference the projections cannot actually see. */
   close: boolean
   /**
@@ -204,7 +215,16 @@ const CANNOT_PLAY = /^(OUT|DOUBTFUL|DTD-OUT|IR|SUS|SUSP|PUP|NA|DNR|COV|NFI)$/i
 
 export const cannotPlay = (s: string | null | undefined) => !!s && CANNOT_PLAY.test(s.trim())
 
-const value = (c: Candidate) => (cannotPlay(c.injuryStatus) ? 0 : (c.projected ?? 0))
+/**
+ * He cannot be fielded this week, by designation or by calendar.
+ *
+ * The one week a rostered starter genuinely is projected for nought is the
+ * week his club does not play, and every rule here that used to ask only
+ * about an injury has to ask about both.
+ */
+export const idle = (c: Candidate) => cannotPlay(c.injuryStatus) || !!c.onBye
+
+const value = (c: Candidate) => (idle(c) ? 0 : (c.projected ?? 0))
 
 /** Expand a league's slot counts into the individual slots of a lineup. */
 export function slotsFor(
@@ -234,6 +254,14 @@ const eligibleFor = (slot: Slot, c: Candidate) =>
  * know nothing of the league's own scoring.
  */
 export function better(a: Candidate, b: Candidate): number {
+  /*
+   * Before the arithmetic: a man who cannot take the field loses to one who
+   * can, however the rest of it reads. Both are worth nought, so the points
+   * cannot separate them and the tiebreaks below would — on a stale
+   * consensus rank, which is how a bye week gets promoted into a lineup.
+   */
+  const ia = idle(a), ib = idle(b)
+  if (ia !== ib) return ia ? 1 : -1
   const d = value(b) - value(a)
   if (Math.abs(d) >= COIN_FLIP) return d
   // The consensus first: it is a whole second opinion rather than one input to
@@ -399,20 +427,23 @@ export function advise(
     }
     const out = outIdx >= 0 ? benched.splice(outIdx, 1)[0] : null
     // Nothing to measure against: he is not projected at nought, he is unread.
-    const unknownOut = !!out && out.projected == null && !cannotPlay(out.injuryStatus)
+    // A man who cannot be fielded is neither — his nought is the answer.
+    const unknownOut = !!out && out.projected == null && !idle(out)
     swaps.push({
       in: inc,
       out,
       slot: slots[slotIdx].name,
       gain: value(inc) - (out ? value(out) : 0),
-      reason: out && cannotPlay(out.injuryStatus) ? 'out' : out ? 'points' : 'empty',
+      reason: out && cannotPlay(out.injuryStatus) ? 'out'
+        : out?.onBye ? 'bye'
+        : out ? 'points' : 'empty',
       ...(unknownOut ? { unknownOut } : {}),
       // A player who cannot take the field is never a close call, whatever the
       // arithmetic says about the man replacing him — nor is one nobody can
       // measure, where the arithmetic is against a blank.
       close:
         !unknownOut &&
-        !(out && cannotPlay(out.injuryStatus)) &&
+        !(out && idle(out)) &&
         value(inc) - (out ? value(out) : 0) < COIN_FLIP,
     })
   }
@@ -438,7 +469,9 @@ export function advise(
     const rival = squad
       .filter((c) =>
         !started.has(c.id) && !c.locked &&
-        eligibleFor(slots[idx], c) && !cannotPlay(c.injuryStatus))
+        // Nor a man with no game: a bye is not a disagreement between
+        // signals, it is a fixture list.
+        eligibleFor(slots[idx], c) && !idle(c))
       .sort((a, b) => value(b) - value(a))[0]
     if (!rival) continue
     const gap = Math.abs(value(keep) - value(rival))

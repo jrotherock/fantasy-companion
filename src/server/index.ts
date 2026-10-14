@@ -2228,6 +2228,22 @@ const server = createServer(async (req, res) => {
       /** Players Yahoo did not print a projection for, read from Sleeper instead. */
       let filled = 0
       for (const p of roster.players) {
+        /*
+         * His club is away: nought, and from no model.
+         *
+         * Yahoo stops printing a figure for a man on his bye, and the capture
+         * merge keeps the last real one rather than let a nought erase it —
+         * right while a game runs, wrong across a week turn. So last week's
+         * number survived into the bye, counted as Yahoo's own, and the board
+         * advised starting a back whose club was not playing. The optimiser
+         * now knows a bye on its own account; this stops the figure being
+         * printed on his row and added into the side's projected total too.
+         */
+        if (p.byeWeek != null && p.byeWeek === week) {
+          p.projected = 0
+          p.projectedFrom = null
+          continue
+        }
         if (yahooLeague) {
           /*
            * Yahoo's own numbers, and where Yahoo printed none, Sleeper's —
@@ -2418,6 +2434,7 @@ const server = createServer(async (req, res) => {
             id: p.id, name: p.name, pos: p.pos, projected: p.projected ?? null,
             injuryStatus: p.injuryStatus ?? null, starter: !!p.starter,
             kickoff: p.team ? kickAt.get(club(p.team)) ?? null : null,
+            onBye: p.byeWeek != null && p.byeWeek === week,
             // Sleeper states the slot, and so does the Yahoo API; only a
             // capture written by the sensor leaves it unknown.
             slot: p.slot ?? null,
@@ -2434,6 +2451,8 @@ const server = createServer(async (req, res) => {
             injuryStatus: p.injuryStatus, starter: p.starter,
             weekRank: p.weekRank ?? null, dvpRank: p.dvpRank ?? null,
             role: p.role ?? null, roleOf: p.roleOf ?? null,
+            // His club is away this week, so no projection of his applies.
+            onBye: p.byeWeek != null && p.byeWeek === week,
             // Kicked off means settled: no move can reach him now.
             locked: p.game === 'playing' || p.game === 'done',
           })),

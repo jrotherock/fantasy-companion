@@ -467,3 +467,61 @@ test('a cascade charges the man who actually leaves, not nothing', () => {
     `what is decisive cannot exceed what is on the table (${a.decisive} vs ${a.gain})`)
   assert.ok(Math.abs(a.gain - 3.42) < 0.01, `13.53+12.53+10.71 against 13.53+10.71+9.11 (got ${a.gain})`)
 })
+
+test('a man whose club is away is never the advice, whatever his projection says', () => {
+  /*
+   * The one the board got wrong. Aaron Jones was on Minnesota's week-six bye;
+   * Yahoo stops printing a figure for a man on his bye, and the capture merge
+   * keeps the last real one rather than let a nought erase it — correct while
+   * a game runs, wrong across a week turn. So last week's 26.6 survived into
+   * the bye, outprojected the back actually playing, and the card said
+   * "26.6 points on your bench / Start Aaron Jones over David Montgomery at
+   * RB". The projection was the only thing standing between the optimiser and
+   * that advice, and a projection is exactly what a bye corrupts.
+   */
+  const slots = slotsFor({ RB: 1 }, [])
+  const out = advise(slots, [
+    { id: 'mont', name: 'David Montgomery', pos: 'RB', projected: 12.39,
+      starter: true, injuryStatus: null },
+    { id: 'jones', name: 'Aaron Jones', pos: 'RB', projected: 26.6,
+      starter: false, injuryStatus: null, onBye: true },
+  ])
+  assert.deepEqual(out.swaps, [])
+  assert.equal(out.gain, 0, 'nothing is on the table: he has no game')
+  assert.deepEqual(out.closeCalls, [], 'nor is a fixture list a disagreement')
+})
+
+test('a bye in the lineup is a slot to fill, named as a bye and not an injury', () => {
+  // The other direction: he is the one starting, and the bench man playing
+  // this week is worth his whole projection rather than the difference.
+  const slots = slotsFor({ RB: 1 }, [])
+  const out = advise(slots, [
+    { id: 'jones', name: 'Aaron Jones', pos: 'RB', projected: 26.6,
+      starter: true, injuryStatus: null, onBye: true },
+    { id: 'mont', name: 'David Montgomery', pos: 'RB', projected: 12.39,
+      starter: false, injuryStatus: null },
+  ])
+  assert.equal(out.swaps.length, 1)
+  assert.equal(out.swaps[0].in.name, 'David Montgomery')
+  assert.equal(out.swaps[0].reason, 'bye', 'he was not ruled out; his club is away')
+  assert.equal(out.swaps[0].gain.toFixed(2), '12.39')
+  assert.equal(out.swaps[0].close, false)
+  assert.equal(out.swaps[0].unknownOut, undefined,
+    'a bye is not an unread projection — nought is the answer')
+})
+
+test('a bye does not win a tie on a stale consensus rank', () => {
+  /*
+   * Both worth nought, so the points cannot separate them and the tiebreaks
+   * decide — on a rank published for a week the man is not playing in. The
+   * one who can take the field wins before the arithmetic is reached.
+   */
+  const slots = slotsFor({ RB: 1 }, [])
+  const best = bestLineup(slots, [
+    { id: 'away', name: 'A Bye Back', pos: 'RB', projected: null,
+      starter: false, injuryStatus: null, onBye: true, weekRank: 4 },
+    { id: 'here', name: 'A Playing Back', pos: 'RB', projected: null,
+      starter: true, injuryStatus: null, weekRank: 40 },
+  ])
+  assert.equal(best.get(0)?.name, 'A Playing Back')
+})

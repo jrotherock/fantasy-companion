@@ -1,9 +1,44 @@
 {
- "built": "2026-10-11T04:09:23.598Z",
+ "built": "2026-10-14T04:00:10.606Z",
  "source": "https://www.cbssports.com/nba/injuries/",
  "injuries": [
   {
-   "name": "Nickeil Alexander-Walker",
+   "name": "Luguentz Dort",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Aaron Wiggins",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Onyeka Okongwu",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Jalen Johnson",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Dyson Daniels",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "CJ McCollum",
    "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
@@ -12,13 +47,6 @@
   {
    "name": "Keshon Gilbert",
    "injury": "Knee",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Dorian Finney-Smith",
-   "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -45,13 +73,6 @@
    "outForSeason": false
   },
   {
-   "name": "Ron Harper Jr.",
-   "injury": "Shoulder",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
    "name": "Devin Carter",
    "injury": "Illness",
    "text": "Game Time Decision",
@@ -59,8 +80,8 @@
    "outForSeason": false
   },
   {
-   "name": "Michael Porter Jr.",
-   "injury": "Wrist",
+   "name": "Ron Harper Jr.",
+   "injury": "Shoulder",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -80,22 +101,15 @@
    "outForSeason": false
   },
   {
-   "name": "Day'Ron Sharpe",
-   "injury": "Shoulder",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Brandon Miller",
-   "injury": "Leg",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
    "name": "Christian Anderson",
    "injury": "Ankle",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Grayson Allen",
+   "injury": "Knee",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -129,20 +143,6 @@
    "outForSeason": false
   },
   {
-   "name": "Matas Buzelis",
-   "injury": "Ankle",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Jaylin Sellers",
-   "injury": "Back",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
    "name": "Zach Collins",
    "injury": "Toe",
    "text": "Game Time Decision",
@@ -150,15 +150,15 @@
    "outForSeason": false
   },
   {
-   "name": "Jalen Smith",
-   "injury": "Foot",
+   "name": "Isaac Okoro",
+   "injury": "Undisclosed",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
   },
   {
-   "name": "Tre Jones",
-   "injury": "Hip",
+   "name": "Jaylin Sellers",
+   "injury": "Back",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -179,21 +179,21 @@
   },
   {
    "name": "Khalifa Diop",
-   "injury": "Undisclosed",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "James Harden",
-   "injury": "Ankle",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Santi Aldama",
    "injury": "Knee",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Sam Merrill",
+   "injury": "Elbow",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Morez Johnson Jr.",
+   "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -213,15 +213,8 @@
    "outForSeason": false
   },
   {
-   "name": "Caleb Martin",
-   "injury": "Illness",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "PJ Washington",
-   "injury": "Ankle",
+   "name": "Santi Aldama",
+   "injury": "Knee",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -242,6 +235,20 @@
   },
   {
    "name": "Jalen Duren",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Draymond Green",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Al Horford",
    "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
@@ -269,6 +276,27 @@
    "outForSeason": false
   },
   {
+   "name": "Alperen Sengun",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Steven Adams",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Fred VanVleet",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
    "name": "Kevin Durant",
    "injury": "Not Injury Related",
    "text": "Game Time Decision",
@@ -276,8 +304,22 @@
    "outForSeason": false
   },
   {
-   "name": "Tyrese Haliburton",
-   "injury": "Ankle",
+   "name": "Jarace Walker",
+   "injury": "Undisclosed",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Aaron Nesmith",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Andrew Nembhard",
+   "injury": "Undisclosed",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -297,15 +339,15 @@
    "outForSeason": false
   },
   {
-   "name": "Kobe Sanders",
-   "injury": "Hip",
+   "name": "Bradley Beal",
+   "injury": "Knee",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
   },
   {
-   "name": "Bradley Beal",
-   "injury": "Knee",
+   "name": "Kobe Sanders",
+   "injury": "Hip",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -339,6 +381,13 @@
    "outForSeason": false
   },
   {
+   "name": "Ziaire Williams",
+   "injury": "Foot",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
    "name": "Collin Sexton",
    "injury": "Lower Leg",
    "text": "Game Time Decision",
@@ -346,8 +395,22 @@
    "outForSeason": false
   },
   {
-   "name": "Ziaire Williams",
-   "injury": "Foot",
+   "name": "Luka Doncic",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Adou Thiero",
+   "injury": "Undisclosed",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Cameron Carr",
+   "injury": "Undisclosed",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -361,20 +424,6 @@
   },
   {
    "name": "Dalton Knecht",
-   "injury": "Undisclosed",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Walker Kessler",
-   "injury": "Finger",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Cameron Carr",
    "injury": "Undisclosed",
    "text": "Game Time Decision",
    "returnDate": null,
@@ -395,13 +444,6 @@
    "outForSeason": false
   },
   {
-   "name": "Bam Adebayo",
-   "injury": "Rest",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
    "name": "Davion Mitchell",
    "injury": "Rest",
    "text": "Game Time Decision",
@@ -409,8 +451,8 @@
    "outForSeason": false
   },
   {
-   "name": "Kylor Kelley",
-   "injury": "Calf",
+   "name": "Bam Adebayo",
+   "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -423,7 +465,7 @@
    "outForSeason": false
   },
   {
-   "name": "Klay Thompson",
+   "name": "Andrew Wiggins",
    "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
@@ -437,8 +479,15 @@
    "outForSeason": false
   },
   {
-   "name": "Andrew Wiggins",
+   "name": "Klay Thompson",
    "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Kylor Kelley",
+   "injury": "Calf",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -458,8 +507,22 @@
    "outForSeason": false
   },
   {
+   "name": "Kasparas Jakucionis",
+   "injury": "Coach's Decision",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
    "name": "Nate Ament",
    "injury": "Ankle",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Brayden Burries",
+   "injury": "Coach's Decision",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -472,36 +535,22 @@
    "outForSeason": false
   },
   {
-   "name": "LaMelo Ball",
-   "injury": "Rest",
+   "name": "Terrence Shannon Jr.",
+   "injury": "Undisclosed",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
   },
   {
-   "name": "Ayo Dosunmu",
-   "injury": "Rest",
+   "name": "Rocco Zikarsky",
+   "injury": "Undisclosed",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
   },
   {
-   "name": "Anthony Edwards",
-   "injury": "Rest",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Jaden McDaniels",
-   "injury": "Rest",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Rudy Gobert",
-   "injury": "Rest",
+   "name": "Enrique Freeman",
+   "injury": "Shoulder",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -521,29 +570,50 @@
    "outForSeason": false
   },
   {
-   "name": "Drew Eubanks",
-   "injury": "Coach's Decision",
+   "name": "Jalen Brunson",
+   "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
   },
   {
-   "name": "Ochai Agbaji",
-   "injury": "Coach's Decision",
+   "name": "Mikal Bridges",
+   "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
   },
   {
-   "name": "Kevin McCullar Jr.",
-   "injury": "Coach's Decision",
+   "name": "Karl-Anthony Towns",
+   "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
   },
   {
-   "name": "Isaiah Hartenstein",
-   "injury": "Ankle",
+   "name": "OG Anunoby",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Josh Hart",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Otega Oweh",
+   "injury": "Lower Leg",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Chet Holmgren",
+   "injury": "Quadriceps",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -556,22 +626,8 @@
    "outForSeason": false
   },
   {
-   "name": "Shai Gilgeous-Alexander",
-   "injury": "Rest",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
    "name": "Jaylin Williams",
    "injury": "Heel",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Alex Caruso",
-   "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -591,57 +647,8 @@
    "outForSeason": false
   },
   {
-   "name": "Jared McCain",
-   "injury": "Rest",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Jalen Williams",
-   "injury": "Rest",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Cason Wallace",
-   "injury": "Rest",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Kenrich Williams",
-   "injury": "Rest",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Chet Holmgren",
-   "injury": "Quadriceps",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
    "name": "Anthony Black",
    "injury": "Ankle",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Noah Penda",
-   "injury": "Hamstring",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Jalen Suggs",
-   "injury": "Illness",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -654,6 +661,13 @@
    "outForSeason": false
   },
   {
+   "name": "Nikola Vucevic",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
    "name": "Izaiyah Nelson",
    "injury": "Ankle",
    "text": "Game Time Decision",
@@ -661,7 +675,14 @@
    "outForSeason": false
   },
   {
-   "name": "LeBron James",
+   "name": "Anfernee Simons",
+   "injury": "Hamstring",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Jaylen Brown",
    "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
@@ -675,10 +696,17 @@
    "outForSeason": false
   },
   {
-   "name": "Jaylen Brown",
+   "name": "LeBron James",
    "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Ariel Hukporti",
+   "injury": "Achilles",
+   "text": "Expected to be out until at least Oct 1",
+   "returnDate": "2026-10-01",
    "outForSeason": false
   },
   {
@@ -693,20 +721,6 @@
    "injury": "Back",
    "text": "Game Time Decision",
    "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Anfernee Simons",
-   "injury": "Undisclosed",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Ariel Hukporti",
-   "injury": "Achilles",
-   "text": "Expected to be out until at least Oct 1",
-   "returnDate": "2026-10-01",
    "outForSeason": false
   },
   {
@@ -738,6 +752,13 @@
    "outForSeason": false
   },
   {
+   "name": "Chris Youngblood",
+   "injury": "Calf",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
    "name": "Shaedon Sharpe",
    "injury": "Knee",
    "text": "Expected to be out until at least Mar 2",
@@ -745,7 +766,7 @@
    "outForSeason": false
   },
   {
-   "name": "Dylan Cardwell",
+   "name": "De'Andre Hunter",
    "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
@@ -759,6 +780,27 @@
    "outForSeason": false
   },
   {
+   "name": "Ben Simmons",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Dylan Cardwell",
+   "injury": "Calf",
+   "text": "Expected to be out until at least Oct 29",
+   "returnDate": "2026-10-29",
+   "outForSeason": false
+  },
+  {
+   "name": "Darius Acuff Jr.",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
    "name": "Domantas Sabonis",
    "injury": "Undisclosed",
    "text": "Game Time Decision",
@@ -766,8 +808,50 @@
    "outForSeason": false
   },
   {
+   "name": "Zach LaVine",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
    "name": "Maxime Raynaud",
    "injury": "Knee",
+   "text": "Expected to be out until at least Oct 25",
+   "returnDate": "2026-10-25",
+   "outForSeason": false
+  },
+  {
+   "name": "Tobias Harris",
+   "injury": "Calf",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Victor Wembanyama",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Devin Vassell",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Dylan Harper",
+   "injury": "Rest",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Stephon Castle",
+   "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -780,8 +864,8 @@
    "outForSeason": false
   },
   {
-   "name": "Maliq Brown",
-   "injury": "Back",
+   "name": "Carter Bryant",
+   "injury": "Ankle",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -801,27 +885,6 @@
    "outForSeason": false
   },
   {
-   "name": "Alijah Martin",
-   "injury": "Knee",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Trayce Jackson-Davis",
-   "injury": "Teeth",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Allen Graves",
-   "injury": "Groin",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
    "name": "Nate Bittle",
    "injury": "Foot",
    "text": "Game Time Decision",
@@ -829,15 +892,22 @@
    "outForSeason": false
   },
   {
-   "name": "Chucky Hepburn",
-   "injury": "Hamstring",
+   "name": "Trey Jemison",
+   "injury": "Undisclosed",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
   },
   {
-   "name": "Kawhi Leonard",
-   "injury": "Not Injury Related",
+   "name": "Jamison Battle",
+   "injury": "Undisclosed",
+   "text": "Game Time Decision",
+   "returnDate": null,
+   "outForSeason": false
+  },
+  {
+   "name": "Blake Hinson",
+   "injury": "Hip",
    "text": "Game Time Decision",
    "returnDate": null,
    "outForSeason": false
@@ -857,21 +927,7 @@
    "outForSeason": false
   },
   {
-   "name": "Lauri Markkanen",
-   "injury": "Neck",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Brice Sensabaugh",
-   "injury": "Hip",
-   "text": "Game Time Decision",
-   "returnDate": null,
-   "outForSeason": false
-  },
-  {
-   "name": "Tre Mann",
+   "name": "Anthony Davis",
    "injury": "Rest",
    "text": "Game Time Decision",
    "returnDate": null,
