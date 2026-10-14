@@ -186,7 +186,7 @@ test('your ranking takes the star among near-ties only, over the sims and unlist
 
 test('a league view: its own order and expected stats, kept out of other leagues', () => {
   const idx = new NameIndex([{ id: 'm', name: 'Tyrese Maxey', team: 'PHI' }, { id: 't', name: 'Jayson Tatum', team: 'BOS' }])
-  const file = { leagues: { 'nba-hoops': { order: ['Jayson Tatum', 'Tyrese Maxey', 'Nobody Here'], adjust: { 'Tyrese Maxey': { ast: 4.8, fgPct: 0.45 } } } } }
+  const file = { leagues: { 'nba-hoops': { order: ['Jayson Tatum', 'Tyrese Maxey', 'Nobody Here'], adjust: { 'Tyrese Maxey': { ast: 4.8, fgPct: 0.45, fga: 18 } } } } }
   const hoops = resolvePreferences(file, 'nba-hoops', idx)
   assert.deepEqual(hoops.order, ['t', 'm'])
   assert.deepEqual(hoops.unresolved, ['Nobody Here'])
@@ -201,6 +201,8 @@ test('a league view: its own order and expected stats, kept out of other leagues
   assert.equal(out[0].projection!.perGame.ast, 4.8)
   assert.equal(out[0].projection!.perGame.pts, 25.8, 'what you did not set stays')
   assert.equal(out[0].projection!.shooting.fgPct, 0.45, 'fgPct goes to shooting')
+  assert.equal((out[0].projection!.shooting as any).fga, 18, 'so do attempts')
+  assert.equal((out[0].projection!.perGame as any).fga, undefined)
   assert.equal(players[0].projection.perGame.ast, 5.9, 'the shared players are not changed in place')
   assert.equal(out[1], players[1], 'others untouched')
 })

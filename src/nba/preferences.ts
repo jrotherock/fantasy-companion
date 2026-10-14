@@ -19,8 +19,8 @@
  * view, which the shared lists cannot (it is a 9-cat view or a points view):
  * `order`, your ranking of a few players, which breaks the cards' near-ties
  * (plan.ts orderTiebreak); and `adjust`, per-game stats you expect instead of
- * the projection's ({"Tyrese Maxey": {"ast": 4.8}}; fgPct and ftPct are the
- * shooting percentages), which every card, tile and path then reads.
+ * the projection's ({"Tyrese Maxey": {"ast": 4.8}}; fgPct, ftPct, fga and fta are
+ * shooting), which every card, tile and path then reads.
  */
 import { NameIndex } from './join.js'
 import type { NbaPlayer } from './types.js'
@@ -76,7 +76,8 @@ export function resolvePreferences(file: PreferenceFile | null, leagueId: string
   return { tags, unresolved, order, adjust }
 }
 
-const SHOOTING = new Set(['fgPct', 'ftPct'])
+// Shooting: the percentages and the attempts that weight them.
+const SHOOTING = new Set(['fgPct', 'ftPct', 'fga', 'fta'])
 
 /** The players with your expected stats in place of the projection's; everyone else untouched. */
 export function applyAdjustments(players: NbaPlayer[], adjust: Map<string, Record<string, number>>): NbaPlayer[] {
