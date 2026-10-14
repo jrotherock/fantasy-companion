@@ -176,6 +176,43 @@ export async function weeklyProjections(season: string, week: number): Promise<P
 }
 
 /**
+ * His level over several weeks, with a bye left out.
+ *
+ * A nought earned by the calendar says nothing about the player. Averaged in,
+ * it marks every man whose bye falls soon as worse than he is; read as the
+ * whole answer — one week, on the bye itself — it marks him as worth nothing
+ * at all, which is how two top-twelve backs on their bye made their manager
+ * read as the weakest at the position in his league. The bye is returned
+ * separately because it is worth knowing on its own account.
+ *
+ * The window is however many tables are handed in, `tables[0]` being
+ * `fromWeek`. A week that could not be read is skipped rather than counted as
+ * nought, for the same reason.
+ */
+export function levelOver(
+  tables: (Projections | null)[],
+  id: PlayerId,
+  pos: string | null | undefined,
+  league: { scoring?: Record<string, number> } | null,
+  fromWeek: number,
+  byeWeek: number | null,
+): { outlook: number | null; byeIn: number | null } {
+  const vals = tables.flatMap((t, i) => {
+    if (!t || (byeWeek != null && byeWeek === fromWeek + i)) return []
+    const v = projFor(t, id, pos, league)
+    return v == null ? [] : [v]
+  })
+  return {
+    outlook: vals.length
+      ? Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2))
+      : null,
+    byeIn: byeWeek != null && byeWeek >= fromWeek && byeWeek < fromWeek + tables.length
+      ? byeWeek
+      : null,
+  }
+}
+
+/**
  * One player's projection under a league's own scoring.
  *
  * Lived in the request handler until the home screen needed it too: the tile

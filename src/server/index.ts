@@ -54,7 +54,7 @@ import type { Alert } from './alerts.js'
 import { evaluate, PLANNING } from './rules.js'
 import { survivalAlert } from './survival.js'
 import { practiceReport } from './nflverse.js'
-import { weeklyProjections, projFor } from './projections.js'
+import { weeklyProjections, projFor, levelOver} from './projections.js'
 import { refreshAvailability } from './availability.js'
 import { weeklyRanks } from './weeklyRanks.js'
 import { forecast } from './weather.js'
@@ -1905,25 +1905,47 @@ const server = createServer(async (req, res) => {
        * own rules, which is what a comparison between them needs.
        */
       const state = await nflStateNow()
+      const season = String(state?.season ?? new Date().getFullYear())
       const wk = currentWeek(state)
-      const proj = await weeklyProjections(String(state?.season ?? new Date().getFullYear()), wk)
+      const proj = await weeklyProjections(season, wk)
+      /*
+       * And the weeks after it, because a trade is not a lineup.
+       *
+       * Scored on one week alone, a man on his bye is worth nought — so two
+       * top-twelve backs away on the same Sunday read as the weakest running
+       * backs in the league, the finder announced a need at the position, and
+       * the offers it made were answers to the calendar rather than to the
+       * roster. A trade is kept for the rest of the season; the level over
+       * the next few weeks is the nearest honest measure of it, and the one
+       * the wire is already ranked by.
+       */
+      const ahead = await Promise.all(
+        Array.from({ length: HORIZON - 1 }, (_, i) =>
+          weeklyProjections(season, wk + i + 1).catch(() => null)),
+      )
       /*
        * Sleeper hands over ids and the Yahoo store hands over players; either
        * way the finder sees the same shape, with every projection scored here.
+       *
+       * Scored here and nowhere else: a figure that arrived with the squad is
+       * one week of somebody else's model, and averaging a level against a
+       * single week is worse than either. Yahoo's API publishes none per
+       * player anyway — see `squadsFrom` — so this is the only number there
+       * has ever been, now asked for over three weeks instead of one.
        */
+      const level = (id: string, pos: string | null | undefined) =>
+        levelOver([proj, ...ahead], id, pos ?? playerMap.get(id)?.pos,
+          session?.league as any, wk, playerMap.get(id)?.byeWeek ?? null).outlook
       const toSquad = (r: any) => r.players ? ({
         ...r,
-        players: r.players.map((x: any) => ({
-          ...x,
-          projected: x.projected ?? projFor(proj, x.id, x.pos ?? playerMap.get(x.id)?.pos, session?.league as any),
-        })),
+        players: r.players.map((x: any) => ({ ...x, projected: level(x.id, x.pos) })),
       }) : ({
         teamId: r.teamId, manager: r.manager,
         players: r.playerIds.map((id: string) => {
           const p = playerMap.get(id)
           return {
             id, name: p?.name ?? id, pos: p?.pos ?? null,
-            projected: projFor(proj, id, p?.pos, session?.league as any),
+            projected: level(id, p?.pos),
           }
         }),
       })
@@ -3236,24 +3258,13 @@ const server = createServer(async (req, res) => {
       const scored = (id: string, pos: string | null | undefined) =>
         projFor(projections, id, pos ?? playerMap.get(id)?.pos, l)
       /*
-       * His level over the horizon, with a bye left out: a nought earned by
-       * the calendar says nothing about the player, and averaging it in would
-       * mark every man whose bye falls soon as worse than he is. The bye is
-       * reported instead, because it is worth knowing on its own.
+       * His level over the horizon, with a bye left out — see `levelOver`,
+       * which the trade finder reads too, because "how good is this man" must
+       * not have two answers in one app.
        */
-      const over = (id: string, pos: string | null | undefined) => {
-        const bye = playerMap.get(id)?.byeWeek ?? null
-        const vals = [projections, ...ahead].flatMap((t, i) => {
-          if (!t || (bye != null && bye === week + i)) return []
-          const v = projFor(t, id, pos ?? playerMap.get(id)?.pos, l)
-          return v == null ? [] : [v]
-        })
-        const byeIn = bye != null && bye >= week && bye < week + HORIZON ? bye : null
-        return {
-          outlook: vals.length ? Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2)) : null,
-          byeIn,
-        }
-      }
+      const over = (id: string, pos: string | null | undefined) =>
+        levelOver([projections, ...ahead], id, pos ?? playerMap.get(id)?.pos, l,
+          week, playerMap.get(id)?.byeWeek ?? null)
       /**
        * Everything a row can say about a man beyond this week's number.
        *
