@@ -454,6 +454,11 @@ export function emptySeatShare(prep: Prepared, ids: string[], draws = 6): Map<st
   return out
 }
 
+/** The filler takes the star (categories): his seat empty on more than this share of nights... */
+export const FILL_STAR_EMPTY = 0.30
+/** ...and no further than this behind the best card, in categories a week. */
+export const FILL_STAR_CLOSE = 0.03
+
 /** The plan line names players ranked on the board no more than this many places past my next pick. */
 export const PLAN_RANK_SLACK = 5
 
@@ -736,6 +741,8 @@ export interface DraftView {
   seatFill: SeatFill | null
   /** The filler's own card, shown beside the three when he is not on them (null when he is, or there is none). */
   seatFillCard: DraftView['advice'][number] | null
+  /** The filler is the star: close to the best card and his seat empty most nights (FILL_STAR_*). */
+  fillStar: boolean
   /** Every card will likely be back at my next pick: nothing on them is about to go. */
   idle: boolean
   /** On such a turn, the best player near the top who will likely be gone by my next pick. */
@@ -1246,10 +1253,26 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   const seatFill = seatFillFor(prep, mine, (mine.length >= 8 ? scoredAll : advice).filter((x) => tags.get(x.id) !== 'never' && tags.get(x.id) !== 'avoid'), idle, d.locks, takeNow[0]?.id ?? null)
   // The filler as a full card beside the three, when he is not one of them already.
   const fillRaw = seatFill && !takeNow.some((t) => t.id === seatFill.id) ? rawById.get(seatFill.id) : null
-  const seatFillCard = !fillRaw ? null : (() => {
+  let seatFillCard = !fillRaw ? null : (() => {
     const c = cardOf(fillRaw)
     return prep.cats ? { ...c, preview: winChances(strengthOf(prep, [...mine, c.id]), mine.length + 1, prep.cats.base) } : c
   })()
+  // The filler takes the star when his seat sits empty on FILL_STAR_EMPTY of nights, he is within FILL_STAR_CLOSE of
+  // the best card, and my last pick was not itself a filler (the user's rule of thumb, 2026-10-13). Categories only:
+  // 800 simulated Hoops drafts, +0.28 ± 0.57 weeks won per 100 against the cards, empty-seat nights 8.6% → 7.7%;
+  // within 0.06 instead it was -0.05, and a second filler in a row cost wins in the replays.
+  const lastWasFiller = mine.length >= 2 && (() => {
+    const before = emptySeatShare(prep, mine.slice(0, -1)), after = emptySeatShare(prep, mine)
+    return [...before].some(([seat, v]) => v > FILL_STAR_EMPTY && v - (after.get(seat) ?? 0) >= SEAT_FILL_GAIN)
+  })()
+  const fillStar = !!(prep.cats && seatFill && takeNow.length && takeNow[0].id !== seatFill.id &&
+    seatFill.before > FILL_STAR_EMPTY && seatFill.behind <= FILL_STAR_CLOSE && !lastWasFiller)
+  if (fillStar) {
+    const card = takeNow.find((t) => t.id === seatFill!.id) ?? seatFillCard!
+    takeNow = [card, ...takeNow.filter((t) => t.id !== seatFill!.id)].slice(0, 3)
+    seatFillCard = null
+    simPick = null; orderPick = null; playoffNote = null
+  }
   const wontLast = !idle ? null : (() => {
     const top = takeNow[0].score
     const margin = prep.cats ? WONT_LAST_MARGIN : Math.abs(top) * 0.02
@@ -1363,6 +1386,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     alsoClose,
     seatFill,
     seatFillCard: seatFillCard && prep.cats ? { ...seatFillCard, scarce: scarceFor(seatFillCard) } : seatFillCard,
+    fillStar,
     idle,
     wontLast,
     tied,

@@ -286,12 +286,12 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
     const isFill = fill?.id === a.id
     const extra = fillCard?.id === a.id
     return (
-          <div key={a.id} className={`vc ${i === 0 ? 'sel' : ''}${previewId === a.id ? ' nb-previewing' : ''}${a.scarce ? ' nb-scarcecard' : ''}${extra ? ' nb-fillcard' : ''}`}
+          <div key={a.id} className={`vc ${i === 0 ? 'sel' : ''}${previewId === a.id ? ' nb-previewing' : ''}${a.scarce ? ' nb-scarcecard' : ''}${extra ? ' nb-fillcard' : ''}${i === 0 && isFill && view.fillStar ? ' nb-fillstar' : ''}`}
 
             onMouseEnter={() => a.preview && setPreviewId(a.id)} onMouseLeave={() => setPreviewId(null)}
             // A tap on a phone toggles the preview; the Mark drafted button stops its own click.
             onClick={() => a.preview && setPreviewId(previewId === a.id ? null : a.id)}>
-            <span className="rk">{extra ? `FILLS YOUR ${fill!.seat} SPOT` : <>{i + 1}{i === 0 && onClock ? ' · TAKE' : ''}</>}</span>
+            <span className="rk">{extra ? `FILLS YOUR ${fill!.seat} SPOT` : <>{i + 1}{i === 0 && onClock ? ' · TAKE' : ''}{i === 0 && isFill && view.fillStar ? ` · FILLS YOUR ${fill!.seat} SPOT` : ''}</>}</span>
             <span className="nm">{a.name}{a.myRank != null && <span className="nb-tag nb-myrank" title="Where he sits on your own ranking for this league">your #{a.myRank}</span>}{a.tag === 'like' && <span className="nb-tag nb-like">like</span>}{a.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
             <span className="sub">{a.team} · {a.positions.join(', ')}{a.injuryHistory && <InjuryTag h={a.injuryHistory} />}</span>
             <div className="nb-reason">
@@ -375,6 +375,11 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
         </div>
       )}
       {view.playoffNote && <div className="nb-ponote">{view.playoffNote}</div>}
+      {view.fillStar && view.seatFill && (
+        <div className="nb-ponote nb-fillnote-line" title="The filler takes the star when his spot sits empty on 30%+ of nights, he is within 0.03 categories a week of the best card, and your last pick was not a filler. In 800 simulated drafts this did as well as the cards (+0.3 weeks won per 100, ±0.6) and left fewer empty nights.">
+          ★ <b>{view.seatFill.name}</b> fills your {view.seatFill.seat} spot: empty {Math.round(view.seatFill.before * 100)}% of nights, {Math.round(view.seatFill.after * 100)}% with him, and only {view.seatFill.behind.toFixed(3)} behind the best card. A good time to fill it.
+        </div>
+      )}
       {view.orderPick && (
         <div className="nb-ponote" title="Your ranking for this league breaks near-ties: within 0.06 categories a week of the best card, among players equally likely to be gone, the one highest on your list takes the star.">
           ★ <b>{view.orderPick.pick}</b> over {view.orderPick.over}: your ranking, {view.orderPick.behind < 0.0005 ? 'and the best score' : `${view.league.scoring === 'categories' ? view.orderPick.behind.toFixed(3) : Math.round(view.orderPick.behind)} behind the best card, inside the near-tie range`}.
