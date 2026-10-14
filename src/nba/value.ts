@@ -79,11 +79,22 @@ export function fantasyPoints(p: NbaPlayer, weights: PointsLeague['points']): nu
   return fp
 }
 
+/** The wire the replacement line is read from: two players per team, each projected to play most of the season. */
+export const WIRE_PER_TEAM = 2
+export const WIRE_MIN_GAMES = 60
+
 /**
- * The replacement line is the per-game output of the first player left over
- * once every roster is full. Per game rather than per season because lineups
- * are set daily: a missed game is filled from the wire, so what a player is
- * worth is how much better his games are than a streamer's.
+ * The replacement line is what a streamer scores: the average per-game output
+ * of the best players left over once every roster is full (two per team), of
+ * those projected for 60+ games, since a player hurt half the year is not who
+ * you stream. Per game rather than per season because lineups are set daily: a
+ * missed game is filled from the wire, so what a player is worth is how much
+ * better his games are than a streamer's.
+ *
+ * It used to be the single first player left over, which jumped with whoever
+ * landed there: on 2026-10-13 one fringe big's CBS return date moved that spot
+ * from Aaron Gordon (27.8 fp/g, 59 games) to Cason Wallace (21.7, 76 games) and
+ * reordered 145 of Harker's top 160. The average moved 22.1 → 22.3.
  */
 export function pointsValues(players: NbaPlayer[], league: PointsLeague): { rows: PointsRow[]; replacementFpg: number } {
   const base = players.filter((p) => p.projection).map((p) => {
@@ -93,7 +104,10 @@ export function pointsValues(players: NbaPlayer[], league: PointsLeague): { rows
   })
   const spots = league.teams * rosterSpots(league.roster)
   const bySeason = [...base].sort((a, b) => b.season - a.season)
-  const replacementFpg = bySeason[spots]?.fpg ?? 0
+  const left = bySeason.slice(spots)
+  const healthy = left.filter((x) => x.games.gp >= WIRE_MIN_GAMES)
+  const wire = (healthy.length ? healthy : left).slice(0, Math.max(1, league.teams * WIRE_PER_TEAM))
+  const replacementFpg = wire.length ? wire.reduce((n, x) => n + x.fpg, 0) / wire.length : 0
 
   const rows = base
     .map(({ p, fpg, games, season }) => ({

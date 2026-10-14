@@ -35,12 +35,25 @@ test('fantasy points follow the league\'s own weights', () => {
 
 test('points value is per-game margin over the replacement line times games', () => {
   const league = { teams: 2, roster: { C: 1, BN: 1, IL: 1 }, points: { pts: 1 } }
-  // Four roster spots (IL does not count), so the fifth best sets the line.
-  const ps = [30, 25, 20, 15, 10, 5].map((pts, i) => player(`p${i}`, { pts }, { gp: 60, gpShare: null }))
+  // Four roster spots (IL does not count); the line is the average of the next four (two per team): 10, 5, 4, 1.
+  const ps = [30, 25, 20, 15, 10, 5, 4, 1, 0].map((pts, i) => player(`p${i}`, { pts }, { gp: 60, gpShare: null }))
   const { rows, replacementFpg } = pointsValues(ps, league)
-  assert.equal(replacementFpg, 10)
+  assert.equal(replacementFpg, 5)
   assert.equal(rows[0].id, 'p0')
-  assert.equal(rows[0].value, (30 - 10) * 60)
+  assert.equal(rows[0].value, (30 - 5) * 60)
+})
+
+test('the replacement line is the healthy wire, and one fringe player moving barely shifts it', () => {
+  const league = { teams: 2, roster: { C: 2 }, points: { pts: 1 } }
+  const top = [40, 38, 36, 34].map((pts, i) => player(`t${i}`, { pts }, { gp: 70, gpShare: null }))
+  // Left over: a hurt scorer (not streamable) and four healthy regulars.
+  const wire = [player('hurt', { pts: 30 }, { gp: 40, gpShare: null }), ...[20, 19, 18, 17].map((pts, i) => player(`w${i}`, { pts }, { gp: 75, gpShare: null }))]
+  const line = pointsValues([...top, ...wire], league).replacementFpg
+  assert.equal(line, (20 + 19 + 18 + 17) / 4, 'the hurt scorer is not who you stream')
+  // A fringe starter slips below the cut (a return date): the line moves a little, not to his number.
+  const slipped = [...top.slice(0, 3), player('t3', { pts: 34 }, { gp: 30, gpShare: null }), ...wire]
+  const moved = pointsValues(slipped, league).replacementFpg
+  assert.ok(Math.abs(moved - line) < 1.5, `line ${line} → ${moved}`)
 })
 
 test('a durable player outranks a better one who will miss half the season in points', () => {
