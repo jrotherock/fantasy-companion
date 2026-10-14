@@ -50,6 +50,14 @@ const ROOM: AdpSpread = (() => { const [a, b] = (arg('room-spread') ?? '2,0.18')
 
 // Players starting the season hurt are valued on the games after their return, as the app values them (CBS dates).
 const rawPlayers: NbaPlayer[] = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+// `--override "Tyrese Maxey:ast=4.8,stl=1.3,blk=0.45,to=1.9"`: a what-if projection (per-game stats; ';' between
+// players), used by the cards and the room and played out in the season alike.
+for (const spec of (arg('override') ?? '').split(';').filter(Boolean)) {
+  const [name, stats] = spec.split(':')
+  const p = rawPlayers.find((x) => x.name === name.trim())
+  if (!p?.projection) throw new Error(`--override: no projected player ${name}`)
+  for (const kv of stats.split(',')) { const [k, v] = kv.split('='); (p.projection.perGame as any)[k.trim()] = Number(v) }
+}
 const players: NbaPlayer[] = (() => {
   const games = JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games as { date: string; home: string; away: string }[]
   const teamDates: Record<string, string[]> = {}
