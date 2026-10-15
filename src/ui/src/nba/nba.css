@@ -359,3 +359,6 @@ div.nb-cat { cursor: default; }
 .nb-cov-ok { color: var(--green, #46a758); }
 .nb-cov-mute { color: var(--dim); }
 .nb-cov-note { font-size: 0.75rem; }
+.nb-tag.nb-hr { background: rgba(255,176,0,.10); color: var(--dim); margin-left: 0.35rem; }
+.nb-tag.nb-hr-over { background: rgba(255,176,0,.22); color: var(--amber); }
+.nb-hrline { color: var(--amber); font-size: 0.85rem; margin: 0.15rem 0 0.35rem; }

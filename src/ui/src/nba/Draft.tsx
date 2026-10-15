@@ -294,7 +294,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
             onClick={() => a.preview && setPreviewId(previewId === a.id ? null : a.id)}>
             <span className="rk">{extra ? `FILLS YOUR ${fill!.seat} SPOT` : <>{i + 1}{i === 0 && onClock ? ' · TAKE' : ''}{i === 0 && isFill && view.fillStar ? ` · FILLS YOUR ${fill!.seat} SPOT` : ''}</>}</span>
             <span className="nm">{a.name}{a.myRank != null && <span className="nb-tag nb-myrank" title="Where he sits on your own ranking for this league">your #{a.myRank}</span>}{a.tag === 'like' && <span className="nb-tag nb-like">like</span>}{a.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
-            <span className="sub">{a.team} · {a.positions.join(', ')}{a.injuryHistory && <InjuryTag h={a.injuryHistory} />}</span>
+            <span className="sub">{a.team} · {a.positions.join(', ')}{a.injuryHistory && <InjuryTag h={a.injuryHistory} />}{a.healthRisk && <HealthTag view={view} h={a.healthRisk} />}</span>
             <div className="nb-reason">
               {reasons(a.contrib, locks)}
               {a.fpg != null && <span>{a.fpg.toFixed(1)} fp/g</span>}
@@ -334,6 +334,9 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
       </div>
       <StaleFeed view={view} />
       <Verdict view={view} second={second} />
+      {cards[0]?.healthRisk && view.healthRisks.names.length >= view.healthRisks.limit && (
+        <div className="nb-hrline">{cards[0].name} would be your {ordinal(view.healthRisks.names.length + 1)} health risk (you have {view.healthRisks.names.map((n) => n.split(' ').at(-1)).join(', ')}). Suggested limit: {view.healthRisks.limit}.</div>
+      )}
       <PuntTipLine view={view} act={act} />
       {stale ? (
         <div className="nb-queue nb-queue-stale">
@@ -466,6 +469,29 @@ function PuntTipLine({ view, act }: { view: DraftView; act: Act }) {
   )
 }
 
+/** A health risk on a card: amber once he would take my roster past the suggested limit. */
+function HealthTag({ view, h }: { view: DraftView; h: { games: number; lost: boolean } }) {
+  const have = view.healthRisks.names.length
+  const over = have >= view.healthRisks.limit
+  const why = `Projected ${h.games} games${h.lost ? '; missed most of last season' : ''}. Health risks miss games in stretches, and two out at once cost the most; your IL holds only so many.`
+  return <span className={`nb-tag nb-hr${over ? ' nb-hr-over' : ''}`} title={over ? `${why} You have ${view.healthRisks.names.join(', ')}. Suggested limit: ${view.healthRisks.limit}.` : why}>
+    {over ? `${ordinal(have + 1)} health risk` : 'health risk'}
+  </span>
+}
+
+/** The roster's health risks, on the coverage strip; looking at a flagged card shows the count with him. */
+function HealthCount({ view, adding }: { view: DraftView; adding: boolean }) {
+  const { names, limit } = view.healthRisks
+  if (!names.length && !adding) return null
+  const n = names.length
+  const over = (x: number) => (x > limit ? ' nb-cov-low' : x === limit ? ' nb-cov-mid' : '')
+  return (
+    <span className={`nb-cov${over(adding ? n + 1 : n)}`} title={`Players projected for ${'≤'}60 games or coming off a lost season. Suggested limit: ${limit}.${names.length ? ' Yours: ' + names.join(', ') + '.' : ''}`}>
+      <b>HEALTH RISKS</b> {n}{adding && <> → <b>{n + 1}</b></>}{names.length > 0 && <span className="nb-dim"> ({names.map((x) => x.split(' ').at(-1)).join(', ')})</span>}
+    </span>
+  )
+}
+
 /** The card being looked at, wherever it shows: the three, the tied group, or the filler's own card. */
 function previewOf(view: DraftView, id: string | null) {
   if (!id) return null
@@ -480,7 +506,7 @@ const COVERAGE_FROM = 5
  * Nightly coverage: for each starting spot, the share of game nights my roster as drafted can fill it. Looking at a
  * card shows what he would change ("SF 46% → 88%"), so a gap is weighed while picking, not after.
  */
-function Coverage({ view, preview }: { view: DraftView; preview: { name: string; coverage?: Record<string, number> | null } | null }) {
+function Coverage({ view, preview }: { view: DraftView; preview: { name: string; coverage?: Record<string, number> | null; healthRisk?: unknown } | null }) {
   const cov = view.coverage
   if (!cov) return null
   const young = view.roster.length < COVERAGE_FROM
@@ -499,6 +525,7 @@ function Coverage({ view, preview }: { view: DraftView; preview: { name: string;
           </span>
         )
       })}
+      <HealthCount view={view} adding={!!(preview as { healthRisk?: unknown } | null)?.healthRisk} />
       {young && <span className="nb-dim nb-cov-note">fills in as you draft</span>}
     </div>
   )
@@ -605,7 +632,7 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
               {x.myRank != null && <span className="nb-tag nb-myrank" title="Where he sits on your own ranking for this league">your #{x.myRank}</span>}
               {x.tag === 'like' && <span className="nb-tag nb-like">like</span>}{x.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}
               {x.simEven && <span className="nb-tag nb-simeven" title={`${x.behind.toFixed(2)} behind on the cards, but even with the pick in simulated seasons: taking him tested as good as the cards' choice`}>even in sims</span>}</span>
-            <span className="sub" title={x.behind < 0.0005 ? 'The best score in the group' : `${x.behind.toFixed(3)} categories a week behind the best: noise`}>{x.team} · {x.positions.join(', ')}{x.injuryHistory && <InjuryTag h={x.injuryHistory} />}</span>
+            <span className="sub" title={x.behind < 0.0005 ? 'The best score in the group' : `${x.behind.toFixed(3)} categories a week behind the best: noise`}>{x.team} · {x.positions.join(', ')}{x.injuryHistory && <InjuryTag h={x.injuryHistory} />}{x.healthRisk && <HealthTag view={view} h={x.healthRisk} />}</span>
             {x.appPick && view.takeNow[0]?.tiebreak && <span className="nb-tiedwhy" title={`The app's pick on a playoff tiebreak: ${view.takeNow[0].playoff} games in your playoff weeks`}>{view.takeNow[0].playoff} PO g</span>}
             <div className="nb-tiedfit">
               {x.adds.map((c) => x.fills.includes(c) || x.scarce?.cat === c

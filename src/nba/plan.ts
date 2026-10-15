@@ -91,6 +91,8 @@ export interface Prepared {
   weeksOut: (id: string) => number
   /** The season's game days (sampled), for counting starts; null without a schedule. */
   calendar: Calendar | null
+  /** The most recent season in the players' histories: "last season" for the health-risk flag. */
+  lastSeason: number
   /** The 240 check by team (teamLoad.ts). */
   teams: Map<string, TeamLoad>
   /** A player's projection against last season's, and who joined his team. */
@@ -252,6 +254,7 @@ export function prepare(
       return Math.max(0, (Date.parse(back) - Date.parse(start)) / (7 * 86_400_000))
     },
     calendar: injuries ? calendarOf(injuries.teamDates) : null,
+    lastSeason: Math.max(0, ...players.flatMap((p) => (p.history ?? []).map((h) => h.season))),
     teams: new Map(), context: () => null, draftRank: new Map(), myOrder: [],
   }
   if (draftRankFile) {
@@ -668,6 +671,7 @@ export interface TiedPlayer {
   appPick: boolean
   /** Where he sits on your ranking (preferences `order`), 1 = first; null when he is not on it. */
   myRank: number | null
+  healthRisk: HealthRisk | null
   /** Nightly coverage with him added (see DraftView.coverage). */
   coverage?: Record<string, number> | null
   /** His best categories, those where my roster is short first; of those, the ones it is short in; where he costs. */
@@ -762,6 +766,8 @@ export interface DraftView {
    * game nights my players can fill it (1 less emptySeatShare). Null without a schedule.
    */
   coverage: Record<string, number> | null
+  /** My roster's health risks (healthRiskOf) and the suggested limit. */
+  healthRisks: { names: string[]; limit: number }
   /** Undervalued players likely still there at my following pick (categories only): see BARGAIN_*. */
   bargains: { at: number; players: { id: string; name: string; rank: number; adp: number; there: number }[] } | null
   /** Every card will likely be back at my next pick: nothing on them is about to go. */
@@ -797,7 +803,7 @@ export interface DraftView {
   }
   advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; context: PlayerContext | null;
     /** Tagged avoid: his score carries the handicap (handicapAvoided). */
-    avoided: boolean; bestBuild: BestBuild | null; myRank: number | null
+    avoided: boolean; bestBuild: BestBuild | null; myRank: number | null; healthRisk: HealthRisk | null
     /** Nightly coverage with him added: each starting seat type's share of game nights filled (see coverage). */
     coverage?: Record<string, number> | null
     /** Which of my roster's weak categories he would help, from my first pick on. */
@@ -930,6 +936,26 @@ export const READ_FROM = 1
 export const MIN_GAMES = 10
 
 const gamesOf = (prep: Prepared, id: string) => prep.cats?.byId.get(id)?.games.gp ?? prep.points?.byId.get(id)?.games.gp ?? 0
+
+/**
+ * A health risk (2026-10-15, after RotoBaller's "Health Bucket"): projected for HEALTH_RISK_GAMES or fewer, or
+ * coming off a season mostly lost (under HEALTH_RISK_LOST games, two years or more in the league). The values
+ * already charge for expected missed games; what they miss is two such players out at once, in stretches, with
+ * only so many IL seats. So the room counts them on my roster and says when a card would take me past
+ * HEALTH_RISK_LIMIT. Information only: the star does not move.
+ */
+export const HEALTH_RISK_GAMES = 60
+export const HEALTH_RISK_LOST = 25
+export const HEALTH_RISK_LIMIT = 1
+export interface HealthRisk { games: number; lost: boolean }
+export function healthRiskOf(prep: Prepared, id: string): HealthRisk | null {
+  const p = prep.players.get(id)
+  if (!p) return null
+  const games = Math.round(gamesOf(prep, id))
+  const last = (p.history ?? []).find((h) => h.season === prep.lastSeason)
+  const lost = (p.yearsExp ?? 0) >= 2 && (!last || last.gp < HEALTH_RISK_LOST)
+  return games > 0 && (games <= HEALTH_RISK_GAMES || lost) ? { games, lost } : null
+}
 
 function canTakeFor(prep: Prepared, mine: string[], tags: Map<string, PrefTag>): CanTake {
   const have = mine.map(prep.positions)
@@ -1090,6 +1116,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       playoff: prep.playoff(a.id),
       returnNote: stashNote(prep, prep.returnNote(a.id), hurtOnRoster, a.id),
       injuryHistory: injuryHistoryOf(prep, a.id),
+      healthRisk: healthRiskOf(prep, a.id),
       bestBuild: bestBuildOf(prep, a.id),
       fits: prep.cats ? fitsOf(contribution(prep.cats.byId.get(a.id)!)) : [],
       stacks: prep.cats ? stacksOf(contribution(prep.cats.byId.get(a.id)!)) : [],
@@ -1377,7 +1404,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
         players: shown
           .map(({ a, fit }) => ({
             id: a.id, name: a.name, team: a.team, positions: a.positions, behind: best - a.score, appPick: a.id === head.id,
-            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName, scarce: scarceFor(a), injuryHistory: a.injuryHistory,
+            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName, scarce: scarceFor(a), injuryHistory: a.injuryHistory, healthRisk: a.healthRisk,
             preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base), there: a.there, tag: a.tag,
             simEven: extras.includes(a), myRank: a.myRank, coverage: coverageWith(a.id),
           })),
@@ -1422,6 +1449,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   return {
     takeNow: takeNow.map((a) => ({ ...a, coverage: coverageWith(a.id) })),
     coverage: coverageOf(mine),
+    healthRisks: { names: mine.filter((x) => healthRiskOf(prep, x)).map((x) => p(x).name), limit: HEALTH_RISK_LIMIT },
     bargains,
     canWait,
     alsoClose,

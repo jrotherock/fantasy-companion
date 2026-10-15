@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { addManual, emptyDraft, ingestYahoo, undoManual } from './session.js'
 import { NameIndex } from './join.js'
 import { draftOrder, parseDraftResults, parseTeams } from './yahooDraft.js'
-import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf, puntTipFor, emptySeatShare, seatFillFor, simTiebreak, orderTiebreak, stashNote } from './plan.js'
+import { buildView, checkScoring, compareView, playoffTiebreak, prepare, urgencyOf, injuryHistoryOf, puntTipFor, emptySeatShare, seatFillFor, simTiebreak, orderTiebreak, stashNote, healthRiskOf } from './plan.js'
 import { applyAdjustments, resolvePreferences } from './preferences.js'
 import { adpFor } from './draft.js'
 
@@ -216,6 +216,18 @@ test('a league view: its own order and expected stats, kept out of other leagues
   assert.equal(g[0].projection!.gp, 60)
   assert.equal(g[0].projection!.gpSource, 'you', 'your games are taken as given, not blended with history')
   assert.equal((g[0].projection!.perGame as any).gp, undefined)
+})
+
+test('a health risk: 60 games or fewer, or a season mostly lost', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
+  const id = (n: string) => players.find((p: any) => p.name === n).id
+  assert.ok(healthRiskOf(hoops, id('Ja Morant')), 'about 50 games')
+  assert.equal(healthRiskOf(hoops, id('Trae Young'))?.lost, true, 'played under 25 games last season')
+  assert.equal(healthRiskOf(hoops, id('Tyrese Maxey')), null)
+  assert.equal(healthRiskOf(hoops, id('Cooper Flagg')), null, 'a second-year player with a full rookie season')
 })
 
 test('a late returner is an IL stash while the league has IL seats free, and says so when they are taken', () => {
