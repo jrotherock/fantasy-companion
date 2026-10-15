@@ -185,6 +185,10 @@ test('your ranking takes the star among near-ties only, over the sims and unlist
   assert.equal(orderTiebreak({ cats: {}, myOrder: [] } as any, cards, cards, () => 0).note, null)
   // Already first on your list: no note.
   assert.equal(orderTiebreak(prep, [p('t', 5), p('m', 4.99)], [p('t', 5), p('m', 4.99)], () => 0).note, null)
+  // Points: within 5% of the best card only (the sims' 25% would lift a listed player over clearly better ones).
+  const pts: any = { cats: null, myOrder: ['g'] }
+  assert.equal(orderTiebreak(pts, [p('b', 1000)], [p('b', 1000), p('g', 960)], () => 0).advice[0].id, 'g', '4% back: your pick')
+  assert.equal(orderTiebreak(pts, [p('b', 1000)], [p('b', 1000), p('g', 900)], () => 0).note, null, '10% back: the cards stand')
 })
 
 test('a league view: its own order and expected stats, kept out of other leagues', () => {
@@ -208,6 +212,10 @@ test('a league view: its own order and expected stats, kept out of other leagues
   assert.equal((out[0].projection!.perGame as any).fga, undefined)
   assert.equal(players[0].projection.perGame.ast, 5.9, 'the shared players are not changed in place')
   assert.equal(out[1], players[1], 'others untouched')
+  const g = applyAdjustments([{ id: 'p', name: 'Paul George', projection: { perGame: { pts: 17 }, shooting: {}, gp: 63, gpSource: 'fantasypros' } }] as any, new Map([['p', { gp: 60, pts: 18 }]]))
+  assert.equal(g[0].projection!.gp, 60)
+  assert.equal(g[0].projection!.gpSource, 'you', 'your games are taken as given, not blended with history')
+  assert.equal((g[0].projection!.perGame as any).gp, undefined)
 })
 
 test('a late returner is an IL stash while the league has IL seats free, and says so when they are taken', () => {

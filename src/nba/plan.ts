@@ -1838,6 +1838,9 @@ export function simTiebreak<T extends { id: string; name: string; score: number 
   }
 }
 
+/** Points leagues: your ranking breaks ties within this share of the best card's score (categories: SIM_TIE). */
+export const ORDER_TIE_POINTS = 0.05
+
 export interface OrderPick { pick: string; over: string; behind: number }
 
 /**
@@ -1854,7 +1857,8 @@ export function orderTiebreak<T extends { id: string; name: string; score: numbe
   if (!top || !prep.myOrder.length) return { advice: cards, note: null }
   const u = urgency(top)
   const best = Math.max(...[top, ...pool].filter((a) => urgency(a) === u).map((a) => a.score))
-  const band = prep.cats ? SIM_TIE : Math.abs(best) * SIM_TIE_POINTS
+  // Points: a tighter band than the sims' (25%), or a short list would lift its player over clearly better ones.
+  const band = prep.cats ? SIM_TIE : Math.abs(best) * ORDER_TIE_POINTS
   const rankOf = (id: string) => { const i = prep.myOrder.indexOf(id); return i < 0 ? Infinity : i }
   const pick = [top, ...pool]
     .filter((a) => urgency(a) === u && best - a.score <= band && (a as { tag?: string | null }).tag !== 'avoid' && rankOf(a.id) < Infinity)

@@ -20,7 +20,7 @@
  * `order`, your ranking of a few players, which breaks the cards' near-ties
  * (plan.ts orderTiebreak); and `adjust`, per-game stats you expect instead of
  * the projection's ({"Tyrese Maxey": {"ast": 4.8}}; fgPct, ftPct, fga and fta are
- * shooting), which every card, tile and path then reads.
+ * shooting; gp sets games played, taken as given), which every card, tile and path then reads.
  */
 import { NameIndex } from './join.js'
 import type { NbaPlayer } from './types.js'
@@ -86,7 +86,9 @@ export function applyAdjustments(players: NbaPlayer[], adjust: Map<string, Recor
     const a = adjust.get(p.id)
     if (!a || !p.projection) return p
     const perGame: Record<string, number> = { ...p.projection.perGame }, shooting: Record<string, number | null> = { ...p.projection.shooting }
-    for (const [k, v] of Object.entries(a)) if (Number.isFinite(v)) (SHOOTING.has(k) ? shooting : perGame)[k] = v
-    return { ...p, projection: { ...p.projection, perGame: perGame as unknown as typeof p.projection.perGame, shooting: shooting as unknown as typeof p.projection.shooting } }
+    // Games are the projection's own field, taken as given (not blended with the player's history).
+    for (const [k, v] of Object.entries(a)) if (Number.isFinite(v) && k !== 'gp') (SHOOTING.has(k) ? shooting : perGame)[k] = v
+    const games = Number.isFinite(a.gp) ? { gp: a.gp, gpSource: 'you' as const } : {}
+    return { ...p, projection: { ...p.projection, ...games, perGame: perGame as unknown as typeof p.projection.perGame, shooting: shooting as unknown as typeof p.projection.shooting } }
   })
 }

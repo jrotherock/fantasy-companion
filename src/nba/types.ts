@@ -57,7 +57,8 @@ export interface YahooRank {
   status: string
 }
 
-export type GpSource = 'fantasypros' | 'history' | 'default' | 'injury'
+/** 'you': games set in a league's own view (preferences `adjust`), taken as given rather than blended with history. */
+export type GpSource = 'fantasypros' | 'history' | 'default' | 'injury' | 'you'
 
 export interface Projection {
   perGame: PerGame

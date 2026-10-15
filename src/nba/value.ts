@@ -24,7 +24,7 @@ export const TEAM_GAMES = 82
 
 export interface Games {
   gp: number
-  how: 'blend' | 'projection' | 'history' | 'default' | 'injury'
+  how: 'blend' | 'projection' | 'history' | 'default' | 'injury' | 'you'
 }
 
 /**
@@ -41,6 +41,8 @@ export function effectiveGames(p: NbaPlayer): Games {
   if (proj.gpSource === 'history') return { gp: proj.gp, how: 'history' }
   // Already counted from his return date and his team's remaining schedule (see plan.ts).
   if (proj.gpSource === 'injury') return { gp: proj.gp, how: 'injury' }
+  // Your own number (a league view): as given.
+  if (proj.gpSource === 'you') return { gp: Math.min(TEAM_GAMES, proj.gp), how: 'you' }
   return { gp: proj.gp, how: 'default' }
 }
 
