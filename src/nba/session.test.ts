@@ -134,6 +134,9 @@ test('a starting spot nobody can fill is flagged, with the steady player near th
   const one = emptySeatShare(hoops, [...guards, id('Myles Turner')]).get('C')!
   const two = emptySeatShare(hoops, [...guards, id('Myles Turner'), id('Brook Lopez')]).get('C')!
   assert.ok(one > 0.3 && one < 0.8 && two < one, `one center ${one}, two ${two}`)
+  // Adding anyone never empties a seat he cannot touch (sampled draws used to: Buzelis read PG 70% → 66%).
+  const before = emptySeatShare(hoops, [...guards, id('Myles Turner')]), after = emptySeatShare(hoops, [...guards, id('Myles Turner'), id('Matas Buzelis')])
+  for (const [seat, v] of before) assert.ok(after.get(seat)! <= v + 1e-12, `${seat}: ${v} → ${after.get(seat)}`)
   const advice = [{ id: id('Jamal Murray'), name: 'Jamal Murray', score: 5 }, { id: id('Myles Turner'), name: 'Myles Turner', score: 4.98 }]
   const f = seatFillFor(hoops, guards, advice)
   assert.equal(f?.name, 'Myles Turner')

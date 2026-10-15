@@ -350,3 +350,12 @@ div.nb-cat { cursor: default; }
 .vc.nb-fillstar { border-color: var(--blue); border-width: 2px; background: linear-gradient(155deg, rgba(90,160,255,.22), var(--surface)); }
 .vc.nb-fillstar .rk { color: var(--blue); }
 .nb-fillnote-line { color: var(--blue); }
+.nb-coverage { display: flex; flex-wrap: wrap; gap: 0.35rem 0.6rem; align-items: baseline; margin: 0.5rem 0; font-size: 0.8rem; }
+.nb-coverage .vlabel { margin-right: 0.2rem; }
+.nb-cov { font-family: var(--mono); font-variant-numeric: tabular-nums; padding: 1px 6px; border-radius: 4px; background: var(--surface); border: 1px solid var(--line, #2b3340); }
+.nb-cov b { font-weight: 600; }
+.nb-cov-low { color: var(--red, #e5484d); border-color: currentColor; }
+.nb-cov-mid { color: var(--amber); }
+.nb-cov-ok { color: var(--green, #46a758); }
+.nb-cov-mute { color: var(--dim); }
+.nb-cov-note { font-size: 0.75rem; }

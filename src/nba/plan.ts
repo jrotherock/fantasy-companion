@@ -427,11 +427,11 @@ export const SEAT_FILL_COST = 3
  * can fill it play that night than there are seats needing them (a C seat: none of my centers
  * plays; with two C seats, fewer than two). A G or F seat counts the guards or forwards needed
  * for the PG and SG (or SF and PF) seats too. Over the season's sampled game days, each player
- * plays with his chance of playing (projected games of 82), a fixed set of draws so the same
- * roster always reads the same. The user's rule (2026-10-11): never an empty seat if anything
+ * plays with his chance of playing (projected games of 82), combined exactly, so adding a
+ * player never lowers a seat's coverage. The user's rule (2026-10-11): never an empty seat if anything
  * can be done about it. Scored starts as a whole tested even in the sims, so this is a flag.
  */
-export function emptySeatShare(prep: Prepared, ids: string[], draws = 6): Map<string, number> {
+export function emptySeatShare(prep: Prepared, ids: string[]): Map<string, number> {
   const out = new Map<string, number>()
   const cal = prep.calendar
   if (!cal) return out
@@ -441,16 +441,23 @@ export function emptySeatShare(prep: Prepared, ids: string[], draws = 6): Map<st
     return { seat: s, acc, need: seats.filter((t) => ACCEPTS[t]!.every((x) => acc.has(x))).length }
   })
   const men = ids.map((id) => ({ pos: seatPositionsOf(prep.positions(id)), team: prep.players.get(id)?.team ?? null, play: Math.min(1, gamesOf(prep, id) / 82) }))
-  let seed = 7
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
-  const short = types.map(() => 0)
-  let nights = 0
-  for (const day of cal.days) for (let k = 0; k < draws; k++) {
-    const on = men.filter((m) => m.team && day.has(m.team) && rnd() < m.play)
-    types.forEach((t, i) => { if (on.filter((m) => m.pos.some((x) => t.acc.has(x))).length < t.need) short[i]++ })
-    nights++
-  }
-  types.forEach((t, i) => { if (nights) out.set(t.seat, short[i] / nights) })
+  // Exactly, not by sampling: on each day, the chance fewer eligible players play than the seats need, each
+  // playing with his own chance. Sampled draws shifted when a player was added, so a card could seem to empty a
+  // seat it cannot touch (2026-10-14: Buzelis showed PG 70% → 66%).
+  types.forEach((t) => {
+    let short = 0
+    for (const day of cal.days) {
+      let dist = [1]
+      for (const m of men) {
+        if (!m.team || !day.has(m.team) || !m.pos.some((x) => t.acc.has(x))) continue
+        const n = dist.map(() => 0).concat(0)
+        dist.forEach((v, i) => { n[i] += v * (1 - m.play); n[i + 1] += v * m.play })
+        dist = n
+      }
+      short += dist.slice(0, t.need).reduce((a, b) => a + b, 0)
+    }
+    out.set(t.seat, cal.days.length ? short / cal.days.length : 0)
+  })
   return out
 }
 
@@ -656,6 +663,8 @@ export interface TiedPlayer {
   appPick: boolean
   /** Where he sits on your ranking (preferences `order`), 1 = first; null when he is not on it. */
   myRank: number | null
+  /** Nightly coverage with him added (see DraftView.coverage). */
+  coverage?: Record<string, number> | null
   /** His best categories, those where my roster is short first; of those, the ones it is short in; where he costs. */
   adds: Cat[]
   fills: Cat[]
@@ -743,6 +752,11 @@ export interface DraftView {
   seatFillCard: DraftView['advice'][number] | null
   /** The filler is the star: close to the best card and his seat empty most nights (FILL_STAR_*). */
   fillStar: boolean
+  /**
+   * Nightly coverage of my roster as drafted: for each starting seat type (PG, SG, G, SF, PF, F, C), the share of
+   * game nights my players can fill it (1 less emptySeatShare). Null without a schedule.
+   */
+  coverage: Record<string, number> | null
   /** Every card will likely be back at my next pick: nothing on them is about to go. */
   idle: boolean
   /** On such a turn, the best player near the top who will likely be gone by my next pick. */
@@ -777,6 +791,8 @@ export interface DraftView {
   advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; context: PlayerContext | null;
     /** Tagged avoid: his score carries the handicap (handicapAvoided). */
     avoided: boolean; bestBuild: BestBuild | null; myRank: number | null
+    /** Nightly coverage with him added: each starting seat type's share of game nights filled (see coverage). */
+    coverage?: Record<string, number> | null
     /** Which of my roster's weak categories he would help, from my first pick on. */
     fits: Cat[]
     /** Which of its strong ones he would add to: leaning in rather than covering. */
@@ -1251,6 +1267,10 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   // Nothing on the cards about to go: the cheapest turn to fill a need, or to take someone who will not be back.
   const idle = takeNow.length > 0 && takeNow.every((a) => a.canWait) && !takeNow[0].thenName
   const seatFill = seatFillFor(prep, mine, (mine.length >= 8 ? scoredAll : advice).filter((x) => tags.get(x.id) !== 'never' && tags.get(x.id) !== 'avoid'), idle, d.locks, takeNow[0]?.id ?? null)
+  // Nightly coverage: each seat type's share of game nights filled, for my roster and with each card added.
+  const coverageOf = (ids: string[]): Record<string, number> | null =>
+    prep.calendar ? Object.fromEntries([...emptySeatShare(prep, ids)].map(([seat, empty]) => [seat, 1 - empty])) : null
+  const coverageWith = (id: string) => coverageOf([...mine, id])
   // The filler as a full card beside the three, when he is not one of them already.
   const fillRaw = seatFill && !takeNow.some((t) => t.id === seatFill.id) ? rawById.get(seatFill.id) : null
   let seatFillCard = !fillRaw ? null : (() => {
@@ -1340,7 +1360,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
             id: a.id, name: a.name, team: a.team, positions: a.positions, behind: best - a.score, appPick: a.id === head.id,
             adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName, scarce: scarceFor(a), injuryHistory: a.injuryHistory,
             preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base), there: a.there, tag: a.tag,
-            simEven: extras.includes(a), myRank: a.myRank,
+            simEven: extras.includes(a), myRank: a.myRank, coverage: coverageWith(a.id),
           })),
       }
     }
@@ -1381,11 +1401,12 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   }
 
   return {
-    takeNow,
+    takeNow: takeNow.map((a) => ({ ...a, coverage: coverageWith(a.id) })),
+    coverage: coverageOf(mine),
     canWait,
     alsoClose,
     seatFill,
-    seatFillCard: seatFillCard && prep.cats ? { ...seatFillCard, scarce: scarceFor(seatFillCard) } : seatFillCard,
+    seatFillCard: !seatFillCard ? null : { ...seatFillCard, scarce: prep.cats ? scarceFor(seatFillCard) : null, coverage: coverageWith(seatFillCard.id) },
     fillStar,
     idle,
     wontLast,

@@ -146,7 +146,8 @@ function Screen({ id }: { id: string }) {
               <Notice view={view} />
               <Take view={view} act={act} previewId={previewId} setPreviewId={setPreviewId} pins={pins} pin={pin} comparePair={(a, b) => setPins([a, b])} />
               {pins.length > 0 && <Compare id={id} view={view} act={act} pins={pins} pin={pin} clear={() => setPins([])} />}
-              {cats && <Build view={view} act={act} preview={view.takeNow.find((a) => a.id === previewId) ?? view.tied?.players.find((x) => x.id === previewId) ?? null} />}
+              <Coverage view={view} preview={previewOf(view, previewId)} />
+              {cats && <Build view={view} act={act} preview={previewOf(view, previewId)} />}
             </>}
       </div>
       {view.league.slot != null && (
@@ -452,6 +453,44 @@ function PuntTipLine({ view, act }: { view: DraftView; act: Act }) {
         <button className="btn primary" onClick={() => act('locks', { locks: [tip.cat] })}>Lock {cat}</button>
         <button className="nb-link" onClick={hide}>Not now</button>
       </span>
+    </div>
+  )
+}
+
+/** The card being looked at, wherever it shows: the three, the tied group, or the filler's own card. */
+function previewOf(view: DraftView, id: string | null) {
+  if (!id) return null
+  return view.takeNow.find((a) => a.id === id) ?? view.tied?.players.find((x) => x.id === id)
+    ?? (view.seatFillCard?.id === id ? view.seatFillCard : null) ?? null
+}
+
+/** Below this many players a roster is too young for coverage to mean much: shown, but muted. */
+const COVERAGE_FROM = 5
+
+/**
+ * Nightly coverage: for each starting spot, the share of game nights my roster as drafted can fill it. Looking at a
+ * card shows what he would change ("SF 46% → 88%"), so a gap is weighed while picking, not after.
+ */
+function Coverage({ view, preview }: { view: DraftView; preview: { name: string; coverage?: Record<string, number> | null } | null }) {
+  const cov = view.coverage
+  if (!cov) return null
+  const young = view.roster.length < COVERAGE_FROM
+  const pct = (x: number) => Math.round(x * 100)
+  const tone = (x: number) => (young ? 'nb-cov-mute' : x < 0.6 ? 'nb-cov-low' : x < 0.85 ? 'nb-cov-mid' : 'nb-cov-ok')
+  const next = preview?.coverage ?? null
+  return (
+    <div className="nb-coverage" title="Share of game nights each starting spot can be filled by your roster as drafted, counting each player's chance to play. Look at a card to see what he would change.">
+      <span className="vlabel">NIGHTLY COVERAGE{next && preview ? ` WITH ${preview.name.split(' ').at(-1)!.toUpperCase()}` : ''}</span>
+      {Object.entries(cov).map(([seat, x]) => {
+        const y = next?.[seat]
+        const moved = y != null && Math.abs(y - x) >= 0.01
+        return (
+          <span key={seat} className={`nb-cov ${tone(moved ? y! : x)}`}>
+            <b>{seat}</b> {pct(x)}%{moved && <> → <b>{pct(y!)}%</b></>}
+          </span>
+        )
+      })}
+      {young && <span className="nb-dim nb-cov-note">fills in as you draft</span>}
     </div>
   )
 }
