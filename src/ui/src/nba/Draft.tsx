@@ -375,6 +375,15 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
             : view.canWait.length > 0 && next ? <> → {view.canWait.map((w, i) => <span key={w.name}>{i ? ', ' : ''}{w.name} <span className="nb-dim">{pct(w.survives)}</span></span>)} — likely still there at pick {next.overall}</> : null}
         </div>
       )}
+      {view.bargains && (
+        <div className="nb-plan nb-bargains" title="Ranked on the board a round or more ahead of Yahoo's average draft position, and likely still there at your following pick: the room usually lets them fall, so plan to take one later rather than reaching now.">
+          <span className="vlabel">BARGAINS</span>{' '}
+          {view.bargains.players.map((b, i) => (
+            <span key={b.id}>{i ? ' · ' : ''}<b>{b.name}</b> <span className="nb-dim">our #{b.rank}, ADP {Math.round(b.adp)}, {pct(b.there)}</span></span>
+          ))}
+          <span className="nb-dim"> — likely still there at pick {view.bargains.at}</span>
+        </div>
+      )}
       {view.playoffNote && <div className="nb-ponote">{view.playoffNote}</div>}
       {view.fillStar && view.seatFill && (
         <div className="nb-ponote nb-fillnote-line" title="The filler takes the star when his spot sits empty on 30%+ of nights, he is within 0.03 categories a week of the best card, and your last pick was not a filler. In 800 simulated drafts this did as well as the cards (+0.3 weeks won per 100, ±0.6) and left fewer empty nights.">

@@ -466,6 +466,11 @@ export const FILL_STAR_EMPTY = 0.30
 /** ...and no further than this behind the best card, in categories a week. */
 export const FILL_STAR_CLOSE = 0.03
 
+/** A bargain is ranked on the board at least this many rounds ahead of his Yahoo ADP... */
+export const BARGAIN_ROUNDS = 1
+/** ...and at least this likely to be there at the pick after this one. */
+export const BARGAIN_THERE = 0.6
+
 /** The plan line names players ranked on the board no more than this many places past my next pick. */
 export const PLAN_RANK_SLACK = 5
 
@@ -757,6 +762,8 @@ export interface DraftView {
    * game nights my players can fill it (1 less emptySeatShare). Null without a schedule.
    */
   coverage: Record<string, number> | null
+  /** Undervalued players likely still there at my following pick (categories only): see BARGAIN_*. */
+  bargains: { at: number; players: { id: string; name: string; rank: number; adp: number; there: number }[] } | null
   /** Every card will likely be back at my next pick: nothing on them is about to go. */
   idle: boolean
   /** On such a turn, the best player near the top who will likely be gone by my next pick. */
@@ -1259,6 +1266,18 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   const boardRank = new Map(board.map((r) => [r.id, r.rank]))
   const worthAtNext = (id: string) => nextAfter == null || (boardRank.get(id) ?? Infinity) <= nextAfter + PLAN_RANK_SLACK
   const canWait = advice.filter((a) => a.canWait && !takeNow.some((t) => t.id === a.id) && worthAtNext(a.id)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
+  // Bargains (categories only, 2026-10-14): on the board a round or more ahead of Yahoo's ADP, likely still there at the
+  // pick after this one, and not on the cards. The undervalued players to plan around, not reach for: the room
+  // usually lets them fall, so the edge is waiting for them.
+  const bargains = !prep.cats || nextAfter == null || myNext == null ? null : (() => {
+    const players = board
+      .filter((r) => r.takenAt == null && r.adp != null && r.tag !== 'never' && r.adp - r.rank >= teams * BARGAIN_ROUNDS && !takeNow.some((t) => t.id === r.id))
+      .map((r) => ({ id: r.id, name: r.name, rank: r.rank, adp: r.adp!, there: nextAfter === myNext + 1 ? 1 : survives(prep.adp(r.id), nextAfter, prep.league.adpSpread, myNext) }))
+      .filter((x) => x.there >= BARGAIN_THERE)
+      .sort((a, b) => a.rank - b.rank)
+      .slice(0, 3)
+    return players.length ? { at: nextAfter, players } : null
+  })()
   const lastCard = takeNow.at(-1)
   const closeMargin = prep.cats ? 0.02 : Math.abs(takeNow[0]?.score ?? 0) * 0.01
   const alsoClose = !lastCard ? [] : advice
@@ -1403,6 +1422,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   return {
     takeNow: takeNow.map((a) => ({ ...a, coverage: coverageWith(a.id) })),
     coverage: coverageOf(mine),
+    bargains,
     canWait,
     alsoClose,
     seatFill,
