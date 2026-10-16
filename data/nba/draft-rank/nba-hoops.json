@@ -1,415 +1,415 @@
 {
- "built": "2026-10-11T04:59:31.642114Z",
- "method": "Blend of two first-pick tests (2026-10-07 and 2026-10-11, the second on refreshed projections and the Hoops-measured room spread 2+0.12): each player forced as my first pick in the same rooms (slots 5 and 10), the rest drafted by the cards and by a neutral best-value drafter; delta is weeks won in 100 against the app's own first pick, averaged over both drafters and both runs. err is two standard errors of that average.",
+ "built": "2026-10-16T04:21:08.552582Z",
+ "method": "Blend of the 2026-10-11 blended rank (two first-pick tests, 2026-10-07 and 2026-10-11) with a new 2026-10-15 first-pick test on refreshed projections (room spread 2+0.12): each player forced as my first pick in the same rooms (slots 5 and 10), the rest drafted by the cards and by a neutral best-value drafter; delta is weeks won in 100 against the app's own first pick, the average of the previous rank and the new run. err is sqrt(e1^2+e2^2)/2.",
  "tierGap": 1.5,
  "players": [
   {
    "name": "Nikola Joki\u0107",
-   "delta": 7.79,
-   "err": 1.06,
+   "delta": 8.02,
+   "err": 0.83,
    "tier": 1
   },
   {
    "name": "Shai Gilgeous-Alexander",
-   "delta": 5.71,
-   "err": 0.98,
+   "delta": 5.5,
+   "err": 0.75,
    "tier": 2
   },
   {
    "name": "Victor Wembanyama",
-   "delta": 3.77,
-   "err": 1.1,
-   "tier": 3
+   "delta": 4.08,
+   "err": 0.84,
+   "tier": 2
   },
   {
    "name": "Tyrese Maxey",
-   "delta": -0.4,
-   "err": 0.93,
-   "tier": 4
+   "delta": -0.39,
+   "err": 0.71,
+   "tier": 3
   },
   {
    "name": "Luka Don\u010di\u0107",
-   "delta": -0.96,
-   "err": 1.09,
-   "tier": 4
+   "delta": -0.85,
+   "err": 0.8,
+   "tier": 3
   },
   {
    "name": "Donovan Mitchell",
-   "delta": -1.98,
-   "err": 1.09,
-   "tier": 5
-  },
-  {
-   "name": "Kevin Durant",
-   "delta": -2.08,
-   "err": 1.12,
-   "tier": 5
+   "delta": -2.12,
+   "err": 0.82,
+   "tier": 4
   },
   {
    "name": "Karl-Anthony Towns",
-   "delta": -2.18,
-   "err": 1.16,
-   "tier": 5
+   "delta": -2.33,
+   "err": 0.86,
+   "tier": 4
+  },
+  {
+   "name": "Kevin Durant",
+   "delta": -2.33,
+   "err": 0.85,
+   "tier": 4
   },
   {
    "name": "Jamal Murray",
-   "delta": -2.59,
-   "err": 1.04,
-   "tier": 5
-  },
-  {
-   "name": "Scottie Barnes",
-   "delta": -2.75,
-   "err": 1.14,
-   "tier": 5
+   "delta": -2.46,
+   "err": 0.8,
+   "tier": 4
   },
   {
    "name": "Cade Cunningham",
-   "delta": -2.78,
-   "err": 1.1,
-   "tier": 5
+   "delta": -2.56,
+   "err": 0.84,
+   "tier": 4
+  },
+  {
+   "name": "Scottie Barnes",
+   "delta": -2.59,
+   "err": 0.87,
+   "tier": 4
   },
   {
    "name": "James Harden",
-   "delta": -3.06,
-   "err": 1.14,
-   "tier": 5
+   "delta": -3.08,
+   "err": 0.87,
+   "tier": 4
   },
   {
    "name": "Kawhi Leonard",
-   "delta": -3.37,
-   "err": 0.98,
+   "delta": -3.35,
+   "err": 0.76,
+   "tier": 4
+  },
+  {
+   "name": "Jalen Johnson",
+   "delta": -3.68,
+   "err": 0.87,
+   "tier": 5
+  },
+  {
+   "name": "Anthony Edwards",
+   "delta": -3.81,
+   "err": 0.83,
+   "tier": 5
+  },
+  {
+   "name": "Evan Mobley",
+   "delta": -3.86,
+   "err": 0.88,
+   "tier": 5
+  },
+  {
+   "name": "Stephen Curry",
+   "delta": -3.94,
+   "err": 0.87,
+   "tier": 5
+  },
+  {
+   "name": "Devin Booker",
+   "delta": -3.98,
+   "err": 0.87,
    "tier": 5
   },
   {
    "name": "Bam Adebayo",
-   "delta": -3.63,
-   "err": 1.19,
-   "tier": 6
-  },
-  {
-   "name": "Anthony Edwards",
-   "delta": -3.75,
-   "err": 1.08,
-   "tier": 6
-  },
-  {
-   "name": "Jayson Tatum",
-   "delta": -3.92,
-   "err": 1.11,
-   "tier": 6
-  },
-  {
-   "name": "Evan Mobley",
-   "delta": -4.0,
-   "err": 1.17,
-   "tier": 6
-  },
-  {
-   "name": "Devin Booker",
-   "delta": -4.05,
-   "err": 1.17,
-   "tier": 6
-  },
-  {
-   "name": "Cooper Flagg",
-   "delta": -4.1,
-   "err": 1.1,
-   "tier": 6
+   "delta": -4.03,
+   "err": 0.88,
+   "tier": 5
   },
   {
    "name": "Tyrese Haliburton",
-   "delta": -4.1,
-   "err": 1.14,
-   "tier": 6
-  },
-  {
-   "name": "Jalen Johnson",
    "delta": -4.11,
-   "err": 1.13,
-   "tier": 6
+   "err": 0.83,
+   "tier": 5
   },
   {
-   "name": "Stephen Curry",
-   "delta": -4.12,
-   "err": 1.1,
-   "tier": 6
+   "name": "Jayson Tatum",
+   "delta": -4.11,
+   "err": 0.84,
+   "tier": 5
+  },
+  {
+   "name": "Cooper Flagg",
+   "delta": -4.21,
+   "err": 0.84,
+   "tier": 5
   },
   {
    "name": "Chet Holmgren",
-   "delta": -4.12,
-   "err": 1.15,
-   "tier": 6
-  },
-  {
-   "name": "Donovan Clingan",
-   "delta": -4.18,
-   "err": 1.17,
-   "tier": 6
-  },
-  {
-   "name": "Anthony Davis",
-   "delta": -4.36,
-   "err": 1.17,
-   "tier": 6
+   "delta": -4.43,
+   "err": 0.87,
+   "tier": 5
   },
   {
    "name": "Derrick White",
-   "delta": -4.44,
-   "err": 1.16,
-   "tier": 6
+   "delta": -4.51,
+   "err": 0.89,
+   "tier": 5
+  },
+  {
+   "name": "Donovan Clingan",
+   "delta": -4.58,
+   "err": 0.88,
+   "tier": 5
+  },
+  {
+   "name": "Anthony Davis",
+   "delta": -4.68,
+   "err": 0.91,
+   "tier": 5
+  },
+  {
+   "name": "LaMelo Ball",
+   "delta": -5.11,
+   "err": 0.87,
+   "tier": 5
   },
   {
    "name": "Jalen Duren",
-   "delta": -4.71,
-   "err": 1.11,
+   "delta": -5.12,
+   "err": 0.86,
+   "tier": 5
+  },
+  {
+   "name": "Trey Murphy",
+   "delta": -5.23,
+   "err": 0.86,
    "tier": 6
   },
   {
-   "name": "Dyson Daniels",
-   "delta": -4.88,
-   "err": 1.18,
+   "name": "Desmond Bane",
+   "delta": -5.26,
+   "err": 0.9,
    "tier": 6
   },
   {
    "name": "Amen Thompson",
-   "delta": -4.95,
-   "err": 1.17,
-   "tier": 6
-  },
-  {
-   "name": "LaMelo Ball",
-   "delta": -5.07,
-   "err": 1.15,
+   "delta": -5.29,
+   "err": 0.87,
    "tier": 6
   },
   {
    "name": "Austin Reaves",
-   "delta": -5.12,
-   "err": 1.17,
+   "delta": -5.38,
+   "err": 0.89,
    "tier": 6
   },
   {
-   "name": "Trey Murphy",
-   "delta": -5.17,
-   "err": 1.14,
-   "tier": 7
-  },
-  {
    "name": "Josh Giddey",
-   "delta": -5.22,
-   "err": 1.19,
-   "tier": 7
+   "delta": -5.43,
+   "err": 0.88,
+   "tier": 6
   },
   {
-   "name": "Onyeka Okongwu",
-   "delta": -5.33,
-   "err": 1.2,
-   "tier": 7
-  },
-  {
-   "name": "Desmond Bane",
-   "delta": -5.38,
-   "err": 1.18,
-   "tier": 7
-  },
-  {
-   "name": "Jalen Brunson",
-   "delta": -5.45,
-   "err": 1.13,
-   "tier": 7
+   "name": "Matas Buzelis",
+   "delta": -5.5,
+   "err": 1.38,
+   "tier": 6
   },
   {
    "name": "LeBron James",
-   "delta": -5.46,
-   "err": 1.18,
-   "tier": 7
+   "delta": -5.5,
+   "err": 0.89,
+   "tier": 6
+  },
+  {
+   "name": "Jalen Brunson",
+   "delta": -5.58,
+   "err": 0.89,
+   "tier": 6
+  },
+  {
+   "name": "Dyson Daniels",
+   "delta": -5.59,
+   "err": 0.9,
+   "tier": 6
   },
   {
    "name": "Domantas Sabonis",
-   "delta": -5.55,
-   "err": 1.17,
-   "tier": 7
+   "delta": -5.62,
+   "err": 0.89,
+   "tier": 6
   },
   {
    "name": "Alperen \u015eeng\u00fcn",
-   "delta": -5.62,
-   "err": 1.21,
-   "tier": 7
+   "delta": -5.67,
+   "err": 0.88,
+   "tier": 6
   },
   {
-   "name": "Kon Knueppel",
-   "delta": -5.69,
-   "err": 1.19,
-   "tier": 7
-  },
-  {
-   "name": "VJ Edgecombe",
-   "delta": -5.71,
-   "err": 1.19,
-   "tier": 7
-  },
-  {
-   "name": "Naz Reid",
-   "delta": -5.74,
-   "err": 1.14,
-   "tier": 7
-  },
-  {
-   "name": "Michael Porter",
-   "delta": -5.78,
-   "err": 1.17,
-   "tier": 7
+   "name": "Onyeka Okongwu",
+   "delta": -5.67,
+   "err": 0.91,
+   "tier": 6
   },
   {
    "name": "Deni Avdija",
-   "delta": -5.79,
-   "err": 1.19,
-   "tier": 7
-  },
-  {
-   "name": "Pascal Siakam",
-   "delta": -5.87,
-   "err": 1.2,
-   "tier": 7
-  },
-  {
-   "name": "Jalen Williams",
-   "delta": -6.1,
-   "err": 1.23,
-   "tier": 7
+   "delta": -6.05,
+   "err": 0.88,
+   "tier": 6
   },
   {
    "name": "Giannis Antetokounmpo",
+   "delta": -6.09,
+   "err": 0.86,
+   "tier": 6
+  },
+  {
+   "name": "Kon Knueppel",
    "delta": -6.1,
-   "err": 1.15,
-   "tier": 7
+   "err": 0.91,
+   "tier": 6
   },
   {
-   "name": "Payton Pritchard",
-   "delta": -6.14,
-   "err": 1.19,
-   "tier": 7
+   "name": "Naz Reid",
+   "delta": -6.13,
+   "err": 0.88,
+   "tier": 6
   },
   {
-   "name": "Nickeil Alexander-Walker",
-   "delta": -6.46,
-   "err": 1.17,
-   "tier": 7
+   "name": "Pascal Siakam",
+   "delta": -6.18,
+   "err": 0.89,
+   "tier": 6
   },
   {
-   "name": "Brandon Miller",
-   "delta": -6.53,
-   "err": 1.21,
-   "tier": 7
+   "name": "Michael Porter",
+   "delta": -6.24,
+   "err": 0.89,
+   "tier": 6
+  },
+  {
+   "name": "Jalen Williams",
+   "delta": -6.58,
+   "err": 0.89,
+   "tier": 6
   },
   {
    "name": "Jaren Jackson",
-   "delta": -6.54,
-   "err": 1.17,
-   "tier": 7
-  },
-  {
-   "name": "Jarrett Allen",
-   "delta": -6.54,
-   "err": 1.17,
-   "tier": 7
+   "delta": -6.62,
+   "err": 0.89,
+   "tier": 6
   },
   {
    "name": "Jaylen Brown",
-   "delta": -6.59,
-   "err": 1.18,
+   "delta": -6.65,
+   "err": 0.87,
+   "tier": 6
+  },
+  {
+   "name": "Nickeil Alexander-Walker",
+   "delta": -6.84,
+   "err": 0.89,
    "tier": 7
   },
   {
    "name": "OG Anunoby",
-   "delta": -6.61,
-   "err": 1.19,
+   "delta": -6.95,
+   "err": 0.91,
+   "tier": 7
+  },
+  {
+   "name": "Brandon Miller",
+   "delta": -7.0,
+   "err": 0.91,
+   "tier": 7
+  },
+  {
+   "name": "Jarrett Allen",
+   "delta": -7.08,
+   "err": 0.89,
    "tier": 7
   },
   {
    "name": "Lauri Markkanen",
-   "delta": -6.85,
-   "err": 1.17,
-   "tier": 8
+   "delta": -7.33,
+   "err": 0.87,
+   "tier": 7
   },
   {
    "name": "Darius Garland",
-   "delta": -7.2,
-   "err": 1.18,
-   "tier": 8
+   "delta": -7.54,
+   "err": 0.89,
+   "tier": 7
   },
   {
-   "name": "Damian Lillard",
-   "delta": -7.3,
-   "err": 1.14,
-   "tier": 8
-  },
-  {
-   "name": "Tyler Herro",
-   "delta": -7.3,
-   "err": 1.22,
-   "tier": 8
+   "name": "Ivica Zubac",
+   "delta": -7.7,
+   "err": 1.36,
+   "tier": 7
   },
   {
    "name": "Franz Wagner",
-   "delta": -7.45,
-   "err": 1.19,
-   "tier": 8
-  },
-  {
-   "name": "Mikal Bridges",
-   "delta": -7.67,
-   "err": 1.21,
-   "tier": 8
-  },
-  {
-   "name": "Jaden McDaniels",
-   "delta": -8.21,
-   "err": 1.2,
-   "tier": 8
-  },
-  {
-   "name": "Trae Young",
-   "delta": -8.23,
-   "err": 1.19,
-   "tier": 8
+   "delta": -7.8,
+   "err": 0.91,
+   "tier": 7
   },
   {
    "name": "Kyrie Irving",
-   "delta": -8.33,
-   "err": 1.21,
+   "delta": -8.24,
+   "err": 0.92,
+   "tier": 7
+  },
+  {
+   "name": "Trae Young",
+   "delta": -8.41,
+   "err": 0.89,
    "tier": 8
   },
   {
    "name": "Paolo Banchero",
-   "delta": -8.71,
-   "err": 1.24,
-   "tier": 9
+   "delta": -8.73,
+   "err": 0.91,
+   "tier": 8
+  },
+  {
+   "name": "Julius Randle",
+   "delta": -8.87,
+   "err": 1.38,
+   "tier": 8
   },
   {
    "name": "Cameron Boozer",
-   "delta": -8.76,
-   "err": 1.15,
-   "tier": 9
-  },
-  {
-   "name": "Stephon Castle",
-   "delta": -8.82,
-   "err": 1.17,
-   "tier": 9
+   "delta": -8.87,
+   "err": 0.88,
+   "tier": 8
   },
   {
    "name": "Keyonte George",
-   "delta": -9.09,
-   "err": 1.15,
-   "tier": 9
+   "delta": -8.96,
+   "err": 0.87,
+   "tier": 8
+  },
+  {
+   "name": "Stephon Castle",
+   "delta": -9.07,
+   "err": 0.88,
+   "tier": 8
   },
   {
    "name": "Walker Kessler",
-   "delta": -9.1,
-   "err": 1.2,
+   "delta": -9.27,
+   "err": 0.92,
+   "tier": 8
+  },
+  {
+   "name": "Brandon Ingram",
+   "delta": -9.71,
+   "err": 1.36,
+   "tier": 8
+  },
+  {
+   "name": "Zion Williamson",
+   "delta": -10.06,
+   "err": 1.36,
    "tier": 9
+  },
+  {
+   "name": "Dejounte Murray",
+   "delta": -12.46,
+   "err": 1.38,
+   "tier": 10
   }
  ]
 }

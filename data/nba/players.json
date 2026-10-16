@@ -1,5 +1,5 @@
 {
- "built": "2026-10-14T04:00:10.594Z",
+ "built": "2026-10-16T03:30:34.884Z",
  "season": 2026,
  "players": [
   {
@@ -3982,7 +3982,11 @@
    ],
    "age": 29,
    "yearsExp": 9,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Groin",
+    "notes": null
+   },
    "yahoo": {
     "yahooId": "5827",
     "rank": 26,
@@ -4324,7 +4328,7 @@
      "source": "sleeper",
      "perGame": {
       "min": 35,
-      "pts": 21.59,
+      "pts": 21.21,
       "reb": 5.42,
       "ast": 3.58,
       "stl": 1.26,
@@ -4334,9 +4338,9 @@
      },
      "shooting": {
       "fgPct": 0.463,
-      "ftPct": 0.881,
+      "ftPct": 0.878,
       "fga": 15.77,
-      "fta": 4.27
+      "fta": 3.85
      },
      "gp": null
     },
@@ -4364,7 +4368,7 @@
    "projection": {
     "perGame": {
      "min": 34.582,
-     "pts": 20.822,
+     "pts": 20.632,
      "reb": 5.285,
      "ast": 3.461,
      "stl": 1.24,
@@ -4374,9 +4378,9 @@
     },
     "shooting": {
      "fgPct": 0.468,
-     "ftPct": 0.884,
+     "ftPct": 0.882,
      "fga": 15.77,
-     "fta": 4.27
+     "fta": 3.85
     },
     "gp": 73,
     "gpSource": "fantasypros",
@@ -4484,7 +4488,7 @@
      "source": "sleeper",
      "perGame": {
       "min": 34.695,
-      "pts": 25.67,
+      "pts": 25.69,
       "reb": 3.26,
       "ast": 6.85,
       "stl": 0.83,
@@ -4494,7 +4498,7 @@
      },
      "shooting": {
       "fgPct": 0.475,
-      "ftPct": 0.835,
+      "ftPct": 0.84,
       "fga": 19.47,
       "fta": 5.56
      },
@@ -4524,7 +4528,7 @@
    "projection": {
     "perGame": {
      "min": 35.167,
-     "pts": 25.975,
+     "pts": 25.985,
      "reb": 3.263,
      "ast": 6.832,
      "stl": 0.848,
@@ -4534,7 +4538,7 @@
     },
     "shooting": {
      "fgPct": 0.474,
-     "ftPct": 0.834,
+     "ftPct": 0.837,
      "fga": 19.47,
      "fta": 5.56
     },
@@ -5463,10 +5467,10 @@
      "perGame": {
       "min": 33,
       "pts": 22.87,
-      "reb": 5.22,
+      "reb": 4.62,
       "ast": 3.96,
-      "stl": 1.04,
-      "blk": 0.69,
+      "stl": 1.16,
+      "blk": 0.74,
       "tpm": 3.38,
       "to": 2.63
      },
@@ -5503,10 +5507,10 @@
     "perGame": {
      "min": 32.918,
      "pts": 21.887,
-     "reb": 5.048,
+     "reb": 4.748,
      "ast": 3.706,
-     "stl": 1.02,
-     "blk": 0.681,
+     "stl": 1.08,
+     "blk": 0.706,
      "tpm": 3.416,
      "to": 2.616
     },
@@ -6272,8 +6276,8 @@
      "source": "sleeper",
      "perGame": {
       "min": 30.803,
-      "pts": 18.82,
-      "reb": 6.47,
+      "pts": 18.77,
+      "reb": 6.17,
       "ast": 2.06,
       "stl": 1.2,
       "blk": 1.67,
@@ -6282,7 +6286,7 @@
      },
      "shooting": {
       "fgPct": 0.473,
-      "ftPct": 0.81,
+      "ftPct": 0.799,
       "fga": 14.47,
       "fta": 4.32
      },
@@ -6312,8 +6316,8 @@
    "projection": {
     "perGame": {
      "min": 30.909,
-     "pts": 19.546,
-     "reb": 5.806,
+     "pts": 19.521,
+     "reb": 5.656,
      "ast": 2.016,
      "stl": 1.179,
      "blk": 1.464,
@@ -6322,7 +6326,7 @@
     },
     "shooting": {
      "fgPct": 0.472,
-     "ftPct": 0.802,
+     "ftPct": 0.796,
      "fga": 14.47,
      "fta": 4.32
     },
@@ -6432,20 +6436,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 30,
-      "pts": 21.4,
-      "reb": 4.21,
-      "ast": 4.19,
-      "stl": 1.05,
-      "blk": 0.39,
-      "tpm": 2.75,
-      "to": 1.68
+      "min": 33,
+      "pts": 23.57,
+      "reb": 4.62,
+      "ast": 4.62,
+      "stl": 1.15,
+      "blk": 0.42,
+      "tpm": 3.03,
+      "to": 1.85
      },
      "shooting": {
       "fgPct": 0.475,
-      "ftPct": 0.908,
-      "fga": 16.51,
-      "fta": 3.26
+      "ftPct": 0.913,
+      "fga": 18.17,
+      "fta": 3.58
      },
      "gp": null
     },
@@ -6472,20 +6476,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 32.522,
-     "pts": 22.642,
-     "reb": 4.344,
-     "ast": 4.508,
-     "stl": 1.141,
-     "blk": 0.412,
-     "tpm": 2.672,
-     "to": 1.826
+     "min": 34.022,
+     "pts": 23.727,
+     "reb": 4.549,
+     "ast": 4.723,
+     "stl": 1.191,
+     "blk": 0.427,
+     "tpm": 2.812,
+     "to": 1.911
     },
     "shooting": {
      "fgPct": 0.476,
-     "ftPct": 0.911,
-     "fga": 16.51,
-     "fta": 3.26
+     "ftPct": 0.914,
+     "fga": 18.17,
+     "fta": 3.58
     },
     "gp": 69,
     "gpSource": "fantasypros",
@@ -7199,20 +7203,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 32,
-      "pts": 17.72,
-      "reb": 3.84,
-      "ast": 6.09,
-      "stl": 1.06,
-      "blk": 0.19,
-      "tpm": 1.96,
-      "to": 3.07
+      "min": 33,
+      "pts": 20.33,
+      "reb": 3.97,
+      "ast": 6.28,
+      "stl": 1.09,
+      "blk": 0.21,
+      "tpm": 2.13,
+      "to": 2.81
      },
      "shooting": {
-      "fgPct": 0.448,
-      "ftPct": 0.863,
-      "fga": 12.16,
-      "fta": 5.64
+      "fgPct": 0.474,
+      "ftPct": 0.866,
+      "fga": 13.87,
+      "fta": 5.81
      },
      "gp": null
     },
@@ -7239,20 +7243,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 32.473,
-     "pts": 18.963,
-     "reb": 3.66,
-     "ast": 5.956,
-     "stl": 1.016,
-     "blk": 0.198,
-     "tpm": 2.158,
-     "to": 2.919
+     "min": 32.973,
+     "pts": 20.268,
+     "reb": 3.725,
+     "ast": 6.051,
+     "stl": 1.031,
+     "blk": 0.208,
+     "tpm": 2.243,
+     "to": 2.789
     },
     "shooting": {
-     "fgPct": 0.44,
-     "ftPct": 0.867,
-     "fga": 12.16,
-     "fta": 5.64
+     "fgPct": 0.453,
+     "ftPct": 0.868,
+     "fga": 13.87,
+     "fta": 5.81
     },
     "gp": 73,
     "gpSource": "fantasypros",
@@ -7847,20 +7851,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 33,
-      "pts": 24.24,
-      "reb": 5.75,
-      "ast": 4.24,
-      "stl": 1.16,
-      "blk": 0.37,
-      "tpm": 1.69,
-      "to": 2.12
+      "min": 32,
+      "pts": 23.32,
+      "reb": 5.44,
+      "ast": 3.83,
+      "stl": 1.12,
+      "blk": 0.36,
+      "tpm": 1.59,
+      "to": 2.05
      },
      "shooting": {
-      "fgPct": 0.485,
+      "fgPct": 0.48,
       "ftPct": 0.848,
-      "fga": 17.49,
-      "fta": 6.6
+      "fga": 16.97,
+      "fta": 6.39
      },
      "gp": null
     },
@@ -7887,20 +7891,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 33.201,
-     "pts": 23.259,
-     "reb": 5.667,
-     "ast": 4.245,
-     "stl": 1.184,
-     "blk": 0.366,
-     "tpm": 1.602,
-     "to": 2.081
+     "min": 32.701,
+     "pts": 22.799,
+     "reb": 5.512,
+     "ast": 4.04,
+     "stl": 1.164,
+     "blk": 0.361,
+     "tpm": 1.552,
+     "to": 2.046
     },
     "shooting": {
-     "fgPct": 0.478,
+     "fgPct": 0.476,
      "ftPct": 0.849,
-     "fga": 17.49,
-     "fta": 6.6
+     "fga": 16.97,
+     "fta": 6.39
     },
     "gp": 72,
     "gpSource": "fantasypros",
@@ -8487,20 +8491,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 30,
-      "pts": 14.51,
-      "reb": 11,
-      "ast": 2.21,
-      "stl": 0.49,
-      "blk": 1.01,
+      "min": 32,
+      "pts": 15.54,
+      "reb": 11.72,
+      "ast": 2.35,
+      "stl": 0.53,
+      "blk": 1.08,
       "tpm": 0,
-      "to": 1.56
+      "to": 1.67
      },
      "shooting": {
       "fgPct": 0.618,
-      "ftPct": 0.687,
-      "fga": 10.18,
-      "fta": 2.81
+      "ftPct": 0.712,
+      "fga": 10.85,
+      "fta": 2.99
      },
      "gp": null
     },
@@ -8527,20 +8531,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 30.615,
-     "pts": 15.093,
-     "reb": 10.959,
-     "ast": 2.362,
-     "stl": 0.481,
-     "blk": 1.025,
+     "min": 31.615,
+     "pts": 15.608,
+     "reb": 11.319,
+     "ast": 2.432,
+     "stl": 0.501,
+     "blk": 1.06,
      "tpm": 0,
-     "to": 1.51
+     "to": 1.565
     },
     "shooting": {
      "fgPct": 0.625,
-     "ftPct": 0.684,
-     "fga": 10.18,
-     "fta": 2.81
+     "ftPct": 0.697,
+     "fga": 10.85,
+     "fta": 2.99
     },
     "gp": 74,
     "gpSource": "fantasypros",
@@ -8742,19 +8746,19 @@
      "source": "sleeper",
      "perGame": {
       "min": 30,
-      "pts": 16.8,
-      "reb": 7.2,
-      "ast": 2.7,
-      "stl": 1.04,
-      "blk": 1.8,
+      "pts": 16.37,
+      "reb": 7.19,
+      "ast": 2.37,
+      "stl": 0.9,
+      "blk": 1.19,
       "tpm": 1.36,
-      "to": 1.8
+      "to": 1.51
      },
      "shooting": {
       "fgPct": 0.485,
-      "ftPct": 0.708,
+      "ftPct": 0.707,
       "fga": 13.51,
-      "fta": 3.29
+      "fta": 2.7
      },
      "gp": null
     },
@@ -8782,19 +8786,19 @@
    "projection": {
     "perGame": {
      "min": 29.021,
-     "pts": 15.956,
-     "reb": 7.065,
-     "ast": 2.621,
-     "stl": 0.881,
-     "blk": 1.796,
+     "pts": 15.741,
+     "reb": 7.06,
+     "ast": 2.456,
+     "stl": 0.811,
+     "blk": 1.491,
      "tpm": 1.249,
-     "to": 1.761
+     "to": 1.616
     },
     "shooting": {
      "fgPct": 0.471,
-     "ftPct": 0.697,
+     "ftPct": 0.696,
      "fga": 13.51,
-     "fta": 3.29
+     "fta": 2.7
     },
     "gp": 72,
     "gpSource": "fantasypros",
@@ -9693,19 +9697,19 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 32.194,
-      "pts": 11.42,
-      "reb": 6.44,
-      "ast": 5.47,
-      "stl": 2.38,
+      "min": 32,
+      "pts": 11.35,
+      "reb": 6.08,
+      "ast": 5.44,
+      "stl": 2.08,
       "blk": 0.54,
       "tpm": 0.6,
       "to": 1.85
      },
      "shooting": {
       "fgPct": 0.513,
-      "ftPct": 0.623,
-      "fga": 9.53,
+      "ftPct": 0.617,
+      "fga": 9.47,
       "fta": 1.67
      },
      "gp": null
@@ -9733,19 +9737,19 @@
    },
    "projection": {
     "perGame": {
-     "min": 32.526,
-     "pts": 11.561,
-     "reb": 6.233,
-     "ast": 5.326,
-     "stl": 2.222,
+     "min": 32.429,
+     "pts": 11.526,
+     "reb": 6.053,
+     "ast": 5.311,
+     "stl": 2.072,
      "blk": 0.497,
      "tpm": 0.547,
      "to": 1.782
     },
     "shooting": {
      "fgPct": 0.51,
-     "ftPct": 0.615,
-     "fga": 9.53,
+     "ftPct": 0.612,
+     "fga": 9.47,
      "fta": 1.67
     },
     "gp": 77,
@@ -9859,20 +9863,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 33.203,
-      "pts": 20.85,
-      "reb": 5.32,
-      "ast": 3.8,
-      "stl": 0.81,
-      "blk": 0.2,
-      "tpm": 3.73,
-      "to": 2.28
+      "min": 32,
+      "pts": 20.11,
+      "reb": 5.66,
+      "ast": 3.74,
+      "stl": 0.79,
+      "blk": 0.26,
+      "tpm": 3.6,
+      "to": 2.2
      },
      "shooting": {
       "fgPct": 0.471,
-      "ftPct": 0.869,
-      "fga": 15.2,
-      "fta": 3.2
+      "ftPct": 0.871,
+      "fga": 14.66,
+      "fta": 3.09
      },
      "gp": null
     },
@@ -9899,20 +9903,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 33.069,
-     "pts": 19.707,
-     "reb": 5.282,
-     "ast": 3.599,
-     "stl": 0.764,
-     "blk": 0.222,
-     "tpm": 3.589,
-     "to": 2.146
+     "min": 32.468,
+     "pts": 19.337,
+     "reb": 5.452,
+     "ast": 3.569,
+     "stl": 0.754,
+     "blk": 0.252,
+     "tpm": 3.524,
+     "to": 2.106
     },
     "shooting": {
      "fgPct": 0.47,
-     "ftPct": 0.868,
-     "fga": 15.2,
-     "fta": 3.2
+     "ftPct": 0.869,
+     "fga": 14.66,
+     "fta": 3.09
     },
     "gp": 78,
     "gpSource": "fantasypros",
@@ -9978,12 +9982,12 @@
      "source": "sleeper",
      "perGame": {
       "min": 32,
-      "pts": 18.55,
-      "reb": 6.3,
-      "ast": 2.37,
-      "stl": 0.87,
-      "blk": 1.58,
-      "tpm": 2.3,
+      "pts": 18.74,
+      "reb": 6.7,
+      "ast": 2.57,
+      "stl": 0.96,
+      "blk": 1.61,
+      "tpm": 2.49,
       "to": 2.2
      },
      "shooting": {
@@ -10018,12 +10022,12 @@
    "projection": {
     "perGame": {
      "min": 31.289,
-     "pts": 16.92,
-     "reb": 5.861,
-     "ast": 2.132,
-     "stl": 0.764,
-     "blk": 1.527,
-     "tpm": 2.17,
+     "pts": 17.015,
+     "reb": 6.061,
+     "ast": 2.232,
+     "stl": 0.809,
+     "blk": 1.542,
+     "tpm": 2.265,
      "to": 2.054
     },
     "shooting": {
@@ -10415,20 +10419,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 28.5,
-      "pts": 18.68,
-      "reb": 6.03,
-      "ast": 5.32,
-      "stl": 0.85,
-      "blk": 0.15,
-      "tpm": 2.74,
-      "to": 2.06
+      "min": 31,
+      "pts": 20.32,
+      "reb": 6.56,
+      "ast": 5.77,
+      "stl": 0.92,
+      "blk": 0.16,
+      "tpm": 2.98,
+      "to": 2.26
      },
      "shooting": {
       "fgPct": 0.436,
-      "ftPct": 0.923,
-      "fga": 13.77,
-      "fta": 4.27
+      "ftPct": 0.918,
+      "fga": 14.98,
+      "fta": 4.65
      },
      "gp": null
     },
@@ -10455,20 +10459,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 30.979,
-     "pts": 20.451,
-     "reb": 5.098,
-     "ast": 5.716,
-     "stl": 1.022,
-     "blk": 0.179,
-     "tpm": 2.842,
-     "to": 2.426
+     "min": 32.229,
+     "pts": 21.271,
+     "reb": 5.363,
+     "ast": 5.941,
+     "stl": 1.057,
+     "blk": 0.184,
+     "tpm": 2.962,
+     "to": 2.526
     },
     "shooting": {
      "fgPct": 0.435,
-     "ftPct": 0.922,
-     "fga": 13.77,
-     "fta": 4.27
+     "ftPct": 0.92,
+     "fga": 14.98,
+     "fta": 4.65
     },
     "gp": 72,
     "gpSource": "fantasypros",
@@ -10861,11 +10865,7 @@
    ],
    "age": 28,
    "yearsExp": 9,
-   "injury": {
-    "status": "DTD",
-    "body": "Undisclosed",
-    "notes": "Soreness"
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "5767",
     "rank": 70,
@@ -11526,20 +11526,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 25,
-      "pts": 12.89,
-      "reb": 8.75,
-      "ast": 0.96,
-      "stl": 0.85,
-      "blk": 1.31,
-      "tpm": 1.29,
-      "to": 1
+      "min": 26,
+      "pts": 13.4,
+      "reb": 9.11,
+      "ast": 1,
+      "stl": 0.89,
+      "blk": 1.36,
+      "tpm": 1.35,
+      "to": 1.04
      },
      "shooting": {
-      "fgPct": 0.528,
-      "ftPct": 0.721,
-      "fga": 10.01,
-      "fta": 1.4
+      "fgPct": 0.529,
+      "ftPct": 0.726,
+      "fga": 10.4,
+      "fta": 1.46
      },
      "gp": null
     },
@@ -11566,20 +11566,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 24.18,
-     "pts": 11.652,
-     "reb": 8.508,
-     "ast": 0.867,
-     "stl": 0.778,
-     "blk": 1.195,
-     "tpm": 1.158,
-     "to": 0.933
+     "min": 24.68,
+     "pts": 11.907,
+     "reb": 8.688,
+     "ast": 0.887,
+     "stl": 0.798,
+     "blk": 1.22,
+     "tpm": 1.188,
+     "to": 0.953
     },
     "shooting": {
      "fgPct": 0.53,
-     "ftPct": 0.724,
-     "fga": 10.01,
-     "fta": 1.4
+     "ftPct": 0.727,
+     "fga": 10.4,
+     "fta": 1.46
     },
     "gp": 75,
     "gpSource": "fantasypros",
@@ -11666,20 +11666,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 34,
-      "pts": 18.69,
-      "reb": 7.14,
-      "ast": 3.86,
-      "stl": 0.9,
-      "blk": 0.61,
-      "tpm": 2,
-      "to": 2.37
+      "min": 32,
+      "pts": 17.59,
+      "reb": 6.71,
+      "ast": 3.63,
+      "stl": 0.84,
+      "blk": 0.57,
+      "tpm": 1.89,
+      "to": 2.23
      },
      "shooting": {
-      "fgPct": 0.479,
-      "ftPct": 0.832,
-      "fga": 14.19,
-      "fta": 3.74
+      "fgPct": 0.478,
+      "ftPct": 0.83,
+      "fga": 13.36,
+      "fta": 3.53
      },
      "gp": null
     },
@@ -11706,20 +11706,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 30.635,
-     "pts": 16.311,
-     "reb": 6.462,
-     "ast": 3.308,
-     "stl": 0.781,
-     "blk": 0.528,
-     "tpm": 1.784,
-     "to": 2.043
+     "min": 29.635,
+     "pts": 15.761,
+     "reb": 6.247,
+     "ast": 3.193,
+     "stl": 0.751,
+     "blk": 0.508,
+     "tpm": 1.729,
+     "to": 1.973
     },
     "shooting": {
      "fgPct": 0.48,
-     "ftPct": 0.843,
-     "fga": 14.19,
-     "fta": 3.74
+     "ftPct": 0.842,
+     "fga": 13.36,
+     "fta": 3.53
     },
     "gp": 74,
     "gpSource": "fantasypros",
@@ -12732,18 +12732,18 @@
      "source": "sleeper",
      "perGame": {
       "min": 32,
-      "pts": 16.01,
+      "pts": 15.99,
       "reb": 7.36,
-      "ast": 2.55,
-      "stl": 1.12,
-      "blk": 1.11,
-      "tpm": 1.45,
+      "ast": 2.54,
+      "stl": 1.13,
+      "blk": 1.1,
+      "tpm": 1.44,
       "to": 2.03
      },
      "shooting": {
-      "fgPct": 0.48,
+      "fgPct": 0.479,
       "ftPct": 0.72,
-      "fga": 12.16,
+      "fga": 12.17,
       "fta": 4
      },
      "gp": null
@@ -12772,18 +12772,18 @@
    "projection": {
     "perGame": {
      "min": 32.12,
-     "pts": 15.992,
+     "pts": 15.982,
      "reb": 7.8,
-     "ast": 2.342,
-     "stl": 1.053,
-     "blk": 1.295,
-     "tpm": 1.145,
+     "ast": 2.337,
+     "stl": 1.058,
+     "blk": 1.29,
+     "tpm": 1.14,
      "to": 1.962
     },
     "shooting": {
-     "fgPct": 0.493,
+     "fgPct": 0.492,
      "ftPct": 0.733,
-     "fga": 12.16,
+     "fga": 12.17,
      "fta": 4
     },
     "gp": 75,
@@ -12832,20 +12832,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 34.103,
-      "pts": 21.88,
-      "reb": 5.57,
-      "ast": 4.31,
-      "stl": 0.78,
-      "blk": 0.69,
-      "tpm": 1.79,
-      "to": 2.65
+      "min": 32,
+      "pts": 20.55,
+      "reb": 5.24,
+      "ast": 4.04,
+      "stl": 0.75,
+      "blk": 0.65,
+      "tpm": 1.69,
+      "to": 2.49
      },
      "shooting": {
       "fgPct": 0.478,
-      "ftPct": 0.82,
-      "fga": 17.1,
-      "fta": 4.56
+      "ftPct": 0.822,
+      "fga": 16.05,
+      "fta": 4.27
      },
      "gp": null
     },
@@ -12872,20 +12872,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 34.13,
-     "pts": 21.62,
-     "reb": 5.613,
-     "ast": 4.186,
-     "stl": 0.781,
-     "blk": 0.681,
-     "tpm": 1.864,
-     "to": 2.638
+     "min": 33.078,
+     "pts": 20.955,
+     "reb": 5.448,
+     "ast": 4.051,
+     "stl": 0.766,
+     "blk": 0.661,
+     "tpm": 1.814,
+     "to": 2.558
     },
     "shooting": {
-     "fgPct": 0.482,
-     "ftPct": 0.819,
-     "fga": 17.1,
-     "fta": 4.56
+     "fgPct": 0.481,
+     "ftPct": 0.82,
+     "fga": 16.05,
+     "fta": 4.27
     },
     "gp": 64,
     "gpSource": "fantasypros",
@@ -12995,16 +12995,16 @@
      "source": "sleeper",
      "perGame": {
       "min": 34.707,
-      "pts": 15.93,
-      "reb": 6.09,
-      "ast": 4.55,
+      "pts": 16.21,
+      "reb": 4.51,
+      "ast": 3.12,
       "stl": 1.55,
-      "blk": 0.56,
-      "tpm": 1.96,
-      "to": 1.97
+      "blk": 0.41,
+      "tpm": 2.05,
+      "to": 1.73
      },
      "shooting": {
-      "fgPct": 0.438,
+      "fgPct": 0.444,
       "ftPct": 0.816,
       "fga": 13.53,
       "fta": 2.61
@@ -13035,16 +13035,16 @@
    "projection": {
     "perGame": {
      "min": 34.647,
-     "pts": 15.645,
-     "reb": 5.845,
-     "ast": 4.248,
+     "pts": 15.785,
+     "reb": 5.055,
+     "ast": 3.533,
      "stl": 1.448,
-     "blk": 0.533,
-     "tpm": 1.927,
-     "to": 1.852
+     "blk": 0.458,
+     "tpm": 1.972,
+     "to": 1.732
     },
     "shooting": {
-     "fgPct": 0.447,
+     "fgPct": 0.45,
      "ftPct": 0.818,
      "fga": 13.53,
      "fta": 2.61
@@ -13113,13 +13113,13 @@
      "source": "sleeper",
      "perGame": {
       "min": 31,
-      "pts": 16.7,
-      "reb": 4.8,
+      "pts": 16.68,
+      "reb": 4.81,
       "ast": 4.81,
       "stl": 1.17,
-      "blk": 0.52,
+      "blk": 0.51,
       "tpm": 1.17,
-      "to": 2.14
+      "to": 2.15
      },
      "shooting": {
       "fgPct": 0.507,
@@ -13153,13 +13153,13 @@
    "projection": {
     "perGame": {
      "min": 29.953,
-     "pts": 15.89,
-     "reb": 4.613,
+     "pts": 15.88,
+     "reb": 4.618,
      "ast": 4.752,
      "stl": 1.072,
-     "blk": 0.46,
+     "blk": 0.455,
      "tpm": 1.172,
-     "to": 1.983
+     "to": 1.988
     },
     "shooting": {
      "fgPct": 0.505,
@@ -13234,20 +13234,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 30.58,
-      "pts": 18.91,
-      "reb": 3.75,
-      "ast": 5.81,
-      "stl": 0.71,
-      "blk": 0.17,
-      "tpm": 2.61,
-      "to": 2.39
+      "min": 33,
+      "pts": 20.41,
+      "reb": 4.04,
+      "ast": 6.28,
+      "stl": 0.77,
+      "blk": 0.19,
+      "tpm": 2.83,
+      "to": 2.59
      },
      "shooting": {
-      "fgPct": 0.45,
+      "fgPct": 0.449,
       "ftPct": 0.853,
-      "fga": 14.12,
-      "fta": 4.23
+      "fga": 15.23,
+      "fta": 4.57
      },
      "gp": null
     },
@@ -13274,20 +13274,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 32.363,
-     "pts": 19.575,
-     "reb": 3.822,
-     "ast": 5.138,
-     "stl": 0.722,
-     "blk": 0.178,
-     "tpm": 2.798,
-     "to": 2.522
+     "min": 33.573,
+     "pts": 20.325,
+     "reb": 3.967,
+     "ast": 5.373,
+     "stl": 0.752,
+     "blk": 0.188,
+     "tpm": 2.908,
+     "to": 2.622
     },
     "shooting": {
      "fgPct": 0.447,
      "ftPct": 0.855,
-     "fga": 14.12,
-     "fta": 4.23
+     "fga": 15.23,
+     "fta": 4.57
     },
     "gp": 75,
     "gpSource": "fantasypros",
@@ -13396,20 +13396,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 30.563,
-      "pts": 15.34,
-      "reb": 3.89,
-      "ast": 5.69,
-      "stl": 1.08,
+      "min": 31.901,
+      "pts": 15.99,
+      "reb": 4.07,
+      "ast": 5.94,
+      "stl": 1.13,
       "blk": 0.1,
-      "tpm": 2.55,
-      "to": 1.52
+      "tpm": 2.65,
+      "to": 1.59
      },
      "shooting": {
-      "fgPct": 0.432,
+      "fgPct": 0.431,
       "ftPct": 0.84,
-      "fga": 12.13,
-      "fta": 2.75
+      "fga": 12.66,
+      "fta": 2.87
      },
      "gp": null
     },
@@ -13436,20 +13436,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 30.712,
-     "pts": 15.913,
-     "reb": 3.883,
-     "ast": 5.699,
-     "stl": 1.089,
+     "min": 31.381,
+     "pts": 16.238,
+     "reb": 3.973,
+     "ast": 5.824,
+     "stl": 1.114,
      "blk": 0.106,
-     "tpm": 2.532,
-     "to": 1.517
+     "tpm": 2.582,
+     "to": 1.552
     },
     "shooting": {
      "fgPct": 0.435,
      "ftPct": 0.839,
-     "fga": 12.13,
-     "fta": 2.75
+     "fga": 12.66,
+     "fta": 2.87
     },
     "gp": 72,
     "gpSource": "fantasypros",
@@ -13558,20 +13558,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 28,
-      "pts": 17.18,
-      "reb": 3.46,
-      "ast": 6.16,
-      "stl": 1.25,
-      "blk": 0.13,
-      "tpm": 2.55,
-      "to": 1.96
+      "min": 26.908,
+      "pts": 16.51,
+      "reb": 3.32,
+      "ast": 5.92,
+      "stl": 1.22,
+      "blk": 0.12,
+      "tpm": 2.45,
+      "to": 1.88
      },
      "shooting": {
       "fgPct": 0.495,
-      "ftPct": 0.876,
-      "fga": 12.07,
-      "fta": 3.07
+      "ftPct": 0.875,
+      "fga": 11.6,
+      "fta": 2.95
      },
      "gp": null
     },
@@ -13598,20 +13598,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 26.789,
-     "pts": 17.329,
-     "reb": 3.209,
-     "ast": 5.601,
-     "stl": 1.28,
-     "blk": 0.142,
-     "tpm": 2.43,
-     "to": 1.931
+     "min": 26.243,
+     "pts": 16.994,
+     "reb": 3.139,
+     "ast": 5.481,
+     "stl": 1.265,
+     "blk": 0.137,
+     "tpm": 2.38,
+     "to": 1.891
     },
     "shooting": {
      "fgPct": 0.487,
-     "ftPct": 0.874,
-     "fga": 12.07,
-     "fta": 3.07
+     "ftPct": 0.873,
+     "fga": 11.6,
+     "fta": 2.95
     },
     "gp": 71,
     "gpSource": "fantasypros",
@@ -13720,20 +13720,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 30.803,
-      "pts": 19.82,
-      "reb": 3.2,
-      "ast": 2.06,
-      "stl": 1.03,
+      "min": 32,
+      "pts": 20.59,
+      "reb": 3.32,
+      "ast": 2.14,
+      "stl": 1.08,
       "blk": 0.23,
-      "tpm": 2.58,
-      "to": 1.67
+      "tpm": 2.68,
+      "to": 1.73
      },
      "shooting": {
       "fgPct": 0.47,
-      "ftPct": 0.821,
-      "fga": 14.44,
-      "fta": 4.47
+      "ftPct": 0.822,
+      "fga": 15,
+      "fta": 4.65
      },
      "gp": null
     },
@@ -13760,20 +13760,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 31.645,
-     "pts": 20.68,
-     "reb": 3.242,
-     "ast": 2.206,
-     "stl": 1.035,
+     "min": 32.243,
+     "pts": 21.065,
+     "reb": 3.302,
+     "ast": 2.246,
+     "stl": 1.06,
      "blk": 0.237,
-     "tpm": 2.695,
-     "to": 1.801
+     "tpm": 2.745,
+     "to": 1.831
     },
     "shooting": {
      "fgPct": 0.471,
      "ftPct": 0.822,
-     "fga": 14.44,
-     "fta": 4.47
+     "fga": 15,
+     "fta": 4.65
     },
     "gp": 74,
     "gpSource": "fantasypros",
@@ -14460,20 +14460,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 28.707,
-      "pts": 16.93,
-      "reb": 3.16,
-      "ast": 5.74,
-      "stl": 1.07,
-      "blk": 0.26,
-      "tpm": 1.17,
-      "to": 3.47
+      "min": 30,
+      "pts": 17.72,
+      "reb": 3.3,
+      "ast": 6,
+      "stl": 1.12,
+      "blk": 0.28,
+      "tpm": 1.23,
+      "to": 3.62
      },
      "shooting": {
       "fgPct": 0.437,
-      "ftPct": 0.847,
-      "fga": 13.03,
-      "fta": 5.17
+      "ftPct": 0.848,
+      "fga": 13.62,
+      "fta": 5.4
      },
      "gp": null
     },
@@ -14500,20 +14500,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 29.048,
-     "pts": 18.715,
-     "reb": 3.455,
-     "ast": 6.196,
-     "stl": 1.084,
-     "blk": 0.283,
-     "tpm": 1.3,
-     "to": 3.499
+     "min": 29.694,
+     "pts": 19.11,
+     "reb": 3.525,
+     "ast": 6.326,
+     "stl": 1.109,
+     "blk": 0.293,
+     "tpm": 1.33,
+     "to": 3.574
     },
     "shooting": {
      "fgPct": 0.437,
      "ftPct": 0.845,
-     "fga": 13.03,
-     "fta": 5.17
+     "fga": 13.62,
+     "fta": 5.4
     },
     "gp": 72,
     "gpSource": "fantasypros",
@@ -14621,19 +14621,19 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 27.688,
-      "pts": 14.11,
-      "reb": 3.77,
+      "min": 27.7,
+      "pts": 14.12,
+      "reb": 3.75,
       "ast": 4.98,
-      "stl": 1.69,
+      "stl": 1.68,
       "blk": 0.75,
-      "tpm": 2.11,
+      "tpm": 2.12,
       "to": 2.55
      },
      "shooting": {
-      "fgPct": 0.431,
+      "fgPct": 0.432,
       "ftPct": 0.845,
-      "fga": 11.64,
+      "fga": 11.63,
       "fta": 2.33
      },
      "gp": null
@@ -14661,19 +14661,19 @@
    },
    "projection": {
     "perGame": {
-     "min": 27.572,
-     "pts": 13.769,
-     "reb": 3.721,
+     "min": 27.579,
+     "pts": 13.774,
+     "reb": 3.711,
      "ast": 4.633,
-     "stl": 1.616,
+     "stl": 1.611,
      "blk": 0.725,
-     "tpm": 2.041,
+     "tpm": 2.046,
      "to": 2.468
     },
     "shooting": {
      "fgPct": 0.431,
      "ftPct": 0.848,
-     "fga": 11.64,
+     "fga": 11.63,
      "fta": 2.33
     },
     "gp": 70,
@@ -14782,20 +14782,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 34.603,
-      "pts": 15.73,
-      "reb": 7.26,
-      "ast": 1.74,
-      "stl": 0.7,
-      "blk": 0.9,
-      "tpm": 2.23,
-      "to": 1.36
+      "min": 33.904,
+      "pts": 15.42,
+      "reb": 6.44,
+      "ast": 1.7,
+      "stl": 0.68,
+      "blk": 0.88,
+      "tpm": 2.19,
+      "to": 1.33
      },
      "shooting": {
-      "fgPct": 0.447,
+      "fgPct": 0.448,
       "ftPct": 0.793,
-      "fga": 12.66,
-      "fta": 2.75
+      "fga": 12.4,
+      "fta": 2.7
      },
      "gp": null
     },
@@ -14822,20 +14822,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 33.439,
-     "pts": 14.779,
-     "reb": 6.966,
-     "ast": 1.627,
-     "stl": 0.639,
-     "blk": 0.851,
-     "tpm": 2.135,
-     "to": 1.292
+     "min": 33.09,
+     "pts": 14.624,
+     "reb": 6.556,
+     "ast": 1.607,
+     "stl": 0.629,
+     "blk": 0.841,
+     "tpm": 2.115,
+     "to": 1.277
     },
     "shooting": {
      "fgPct": 0.449,
      "ftPct": 0.791,
-     "fga": 12.66,
-     "fta": 2.75
+     "fga": 12.4,
+     "fta": 2.7
     },
     "gp": 76,
     "gpSource": "fantasypros",
@@ -15089,7 +15089,11 @@
    ],
    "age": 31,
    "yearsExp": 9,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Undisclosed",
+    "notes": null
+   },
    "yahoo": {
     "yahooId": "5843",
     "rank": 98,
@@ -15831,20 +15835,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 28,
-      "pts": 16.97,
-      "reb": 3.07,
-      "ast": 2.81,
-      "stl": 0.63,
-      "blk": 0.18,
-      "tpm": 2.37,
-      "to": 1.96
+      "min": 33,
+      "pts": 19.99,
+      "reb": 3.63,
+      "ast": 3.3,
+      "stl": 0.75,
+      "blk": 0.21,
+      "tpm": 2.79,
+      "to": 2.31
      },
      "shooting": {
       "fgPct": 0.492,
-      "ftPct": 0.853,
-      "fga": 12.13,
-      "fta": 3.12
+      "ftPct": 0.848,
+      "fga": 14.3,
+      "fta": 3.69
      },
      "gp": null
     },
@@ -15871,20 +15875,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 30.543,
-     "pts": 18.342,
-     "reb": 3.306,
-     "ast": 3.026,
-     "stl": 0.686,
-     "blk": 0.197,
-     "tpm": 2.464,
-     "to": 2.123
+     "min": 33.043,
+     "pts": 19.852,
+     "reb": 3.586,
+     "ast": 3.271,
+     "stl": 0.746,
+     "blk": 0.212,
+     "tpm": 2.674,
+     "to": 2.298
     },
     "shooting": {
-     "fgPct": 0.497,
-     "ftPct": 0.848,
-     "fga": 12.13,
-     "fta": 3.12
+     "fgPct": 0.496,
+     "ftPct": 0.846,
+     "fga": 14.3,
+     "fta": 3.69
     },
     "gp": 70,
     "gpSource": "fantasypros",
@@ -15991,20 +15995,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 24.508,
-      "pts": 9.08,
-      "reb": 9.16,
-      "ast": 3.24,
-      "stl": 0.94,
-      "blk": 0.92,
+      "min": 26,
+      "pts": 9.66,
+      "reb": 9.74,
+      "ast": 3.45,
+      "stl": 1,
+      "blk": 0.97,
       "tpm": 0,
-      "to": 1.54
+      "to": 1.63
      },
      "shooting": {
-      "fgPct": 0.607,
-      "ftPct": 0.655,
-      "fga": 6.38,
-      "fta": 2.03
+      "fgPct": 0.608,
+      "ftPct": 0.654,
+      "fga": 6.78,
+      "fta": 2.17
      },
      "gp": null
     },
@@ -16031,20 +16035,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 24.846,
-     "pts": 9.406,
-     "reb": 9.087,
-     "ast": 3.268,
-     "stl": 0.942,
-     "blk": 0.847,
+     "min": 25.592,
+     "pts": 9.696,
+     "reb": 9.377,
+     "ast": 3.373,
+     "stl": 0.972,
+     "blk": 0.872,
      "tpm": 0,
-     "to": 1.587
+     "to": 1.632
     },
     "shooting": {
-     "fgPct": 0.609,
+     "fgPct": 0.61,
      "ftPct": 0.652,
-     "fga": 6.38,
-     "fta": 2.03
+     "fga": 6.78,
+     "fta": 2.17
     },
     "gp": 71,
     "gpSource": "fantasypros",
@@ -16153,20 +16157,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 27.88,
-      "pts": 12.85,
-      "reb": 5.49,
-      "ast": 3.81,
-      "stl": 1.09,
-      "blk": 0.2,
-      "tpm": 1.87,
-      "to": 1.48
+      "min": 29.867,
+      "pts": 13.77,
+      "reb": 5.87,
+      "ast": 4.09,
+      "stl": 1.16,
+      "blk": 0.21,
+      "tpm": 2,
+      "to": 1.59
      },
      "shooting": {
       "fgPct": 0.449,
-      "ftPct": 0.777,
-      "fga": 10.23,
-      "fta": 2.33
+      "ftPct": 0.775,
+      "fga": 10.96,
+      "fta": 2.49
      },
      "gp": null
     },
@@ -16193,20 +16197,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 28.788,
-     "pts": 13.419,
-     "reb": 5.422,
-     "ast": 3.797,
-     "stl": 1.146,
-     "blk": 0.201,
-     "tpm": 1.948,
-     "to": 1.55
+     "min": 29.781,
+     "pts": 13.879,
+     "reb": 5.612,
+     "ast": 3.937,
+     "stl": 1.181,
+     "blk": 0.206,
+     "tpm": 2.013,
+     "to": 1.605
     },
     "shooting": {
      "fgPct": 0.448,
      "ftPct": 0.781,
-     "fga": 10.23,
-     "fta": 2.33
+     "fga": 10.96,
+     "fta": 2.49
     },
     "gp": 79,
     "gpSource": "fantasypros",
@@ -16315,20 +16319,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 28.507,
-      "pts": 17.48,
-      "reb": 3.18,
-      "ast": 3.7,
-      "stl": 0.85,
-      "blk": 0.42,
-      "tpm": 2.51,
-      "to": 1.58
+      "min": 30,
+      "pts": 18.37,
+      "reb": 3.36,
+      "ast": 3.9,
+      "stl": 0.9,
+      "blk": 0.44,
+      "tpm": 2.63,
+      "to": 1.66
      },
      "shooting": {
-      "fgPct": 0.453,
-      "ftPct": 0.765,
-      "fga": 14.14,
-      "fta": 2.85
+      "fgPct": 0.452,
+      "ftPct": 0.763,
+      "fga": 14.88,
+      "fta": 3
      },
      "gp": null
     },
@@ -16355,20 +16359,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 29.615,
-     "pts": 18.181,
-     "reb": 3.202,
-     "ast": 3.817,
-     "stl": 0.826,
-     "blk": 0.44,
-     "tpm": 2.571,
-     "to": 1.672
+     "min": 30.362,
+     "pts": 18.626,
+     "reb": 3.292,
+     "ast": 3.917,
+     "stl": 0.851,
+     "blk": 0.45,
+     "tpm": 2.631,
+     "to": 1.712
     },
     "shooting": {
      "fgPct": 0.455,
      "ftPct": 0.759,
-     "fga": 14.14,
-     "fta": 2.85
+     "fga": 14.88,
+     "fta": 3
     },
     "gp": 76,
     "gpSource": "fantasypros",
@@ -16638,13 +16642,13 @@
      "source": "sleeper",
      "perGame": {
       "min": 31,
-      "pts": 15.08,
-      "reb": 3.65,
-      "ast": 3.72,
+      "pts": 15.1,
+      "reb": 3.63,
+      "ast": 3.73,
       "stl": 0.96,
       "blk": 0.37,
-      "tpm": 1.72,
-      "to": 1.54
+      "tpm": 1.73,
+      "to": 1.53
      },
      "shooting": {
       "fgPct": 0.491,
@@ -16678,13 +16682,13 @@
    "projection": {
     "perGame": {
      "min": 30.013,
-     "pts": 14.687,
-     "reb": 3.585,
-     "ast": 3.773,
+     "pts": 14.697,
+     "reb": 3.575,
+     "ast": 3.778,
      "stl": 0.98,
      "blk": 0.345,
-     "tpm": 1.687,
-     "to": 1.477
+     "tpm": 1.692,
+     "to": 1.472
     },
     "shooting": {
      "fgPct": 0.502,
@@ -16801,19 +16805,19 @@
      "source": "sleeper",
      "perGame": {
       "min": 32,
-      "pts": 12.35,
-      "reb": 5.35,
-      "ast": 2.21,
-      "stl": 1.24,
+      "pts": 12.34,
+      "reb": 5.34,
+      "ast": 2.22,
+      "stl": 1.23,
       "blk": 0.51,
-      "tpm": 2.24,
+      "tpm": 2.25,
       "to": 1.56
      },
      "shooting": {
       "fgPct": 0.444,
-      "ftPct": 0.718,
+      "ftPct": 0.716,
       "fga": 10.07,
-      "fta": 1.63
+      "fta": 1.62
      },
      "gp": null
     },
@@ -16841,19 +16845,19 @@
    "projection": {
     "perGame": {
      "min": 31.448,
-     "pts": 11.656,
-     "reb": 5.207,
-     "ast": 2.118,
-     "stl": 1.217,
+     "pts": 11.651,
+     "reb": 5.202,
+     "ast": 2.123,
+     "stl": 1.212,
      "blk": 0.515,
-     "tpm": 2.075,
+     "tpm": 2.08,
      "to": 1.501
     },
     "shooting": {
      "fgPct": 0.446,
-     "ftPct": 0.72,
+     "ftPct": 0.719,
      "fga": 10.07,
-     "fta": 1.63
+     "fta": 1.62
     },
     "gp": 77,
     "gpSource": "fantasypros",
@@ -17131,20 +17135,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 29.318,
-      "pts": 13.11,
-      "reb": 2.86,
-      "ast": 6.08,
-      "stl": 1.02,
-      "blk": 0.14,
-      "tpm": 1.32,
-      "to": 2
+      "min": 30,
+      "pts": 13.4,
+      "reb": 2.91,
+      "ast": 6.22,
+      "stl": 1.04,
+      "blk": 0.15,
+      "tpm": 1.34,
+      "to": 2.04
      },
      "shooting": {
-      "fgPct": 0.456,
+      "fgPct": 0.455,
       "ftPct": 0.814,
-      "fga": 10.45,
-      "fta": 2.79
+      "fga": 10.71,
+      "fta": 2.85
      },
      "gp": null
     },
@@ -17171,20 +17175,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 30.692,
-     "pts": 13.202,
-     "reb": 2.97,
-     "ast": 6.18,
-     "stl": 1.043,
-     "blk": 0.137,
-     "tpm": 1.3,
-     "to": 1.993
+     "min": 31.033,
+     "pts": 13.347,
+     "reb": 2.995,
+     "ast": 6.25,
+     "stl": 1.053,
+     "blk": 0.142,
+     "tpm": 1.31,
+     "to": 2.013
     },
     "shooting": {
      "fgPct": 0.461,
      "ftPct": 0.812,
-     "fga": 10.45,
-     "fta": 2.79
+     "fga": 10.71,
+     "fta": 2.85
     },
     "gp": 75,
     "gpSource": "fantasypros",
@@ -17291,20 +17295,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 29.764,
-      "pts": 9.28,
-      "reb": 2.64,
-      "ast": 7.14,
-      "stl": 1.22,
-      "blk": 0.38,
-      "tpm": 1.31,
-      "to": 1.64
+      "min": 32,
+      "pts": 9.99,
+      "reb": 2.83,
+      "ast": 7.68,
+      "stl": 1.31,
+      "blk": 0.4,
+      "tpm": 1.4,
+      "to": 1.76
      },
      "shooting": {
-      "fgPct": 0.464,
+      "fgPct": 0.463,
       "ftPct": 0.667,
-      "fga": 7.83,
-      "fta": 1.08
+      "fga": 8.43,
+      "fta": 1.17
      },
      "gp": null
     },
@@ -17331,20 +17335,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 28.855,
-     "pts": 9.033,
-     "reb": 2.533,
-     "ast": 6.483,
-     "stl": 1.097,
-     "blk": 0.29,
-     "tpm": 1.268,
-     "to": 1.58
+     "min": 29.973,
+     "pts": 9.388,
+     "reb": 2.628,
+     "ast": 6.753,
+     "stl": 1.142,
+     "blk": 0.3,
+     "tpm": 1.313,
+     "to": 1.64
     },
     "shooting": {
-     "fgPct": 0.476,
+     "fgPct": 0.475,
      "ftPct": 0.66,
-     "fga": 7.83,
-     "fta": 1.08
+     "fga": 8.43,
+     "fta": 1.17
     },
     "gp": 75,
     "gpSource": "fantasypros",
@@ -17456,7 +17460,7 @@
       "reb": 9.26,
       "ast": 0.87,
       "stl": 0.51,
-      "blk": 2.07,
+      "blk": 1.96,
       "tpm": 0.47,
       "to": 1.29
      },
@@ -17496,7 +17500,7 @@
      "reb": 7.074,
      "ast": 0.539,
      "stl": 0.359,
-     "blk": 1.646,
+     "blk": 1.591,
      "tpm": 0.36,
      "to": 1.096
     },
@@ -17665,20 +17669,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 27,
-      "pts": 11.13,
-      "reb": 10.44,
-      "ast": 4.02,
-      "stl": 1.15,
-      "blk": 0.76,
-      "tpm": 0.6,
-      "to": 2.42
+      "min": 25,
+      "pts": 10.3,
+      "reb": 9.66,
+      "ast": 3.72,
+      "stl": 1.06,
+      "blk": 0.72,
+      "tpm": 0.56,
+      "to": 2.24
      },
      "shooting": {
-      "fgPct": 0.502,
-      "ftPct": 0.609,
-      "fga": 8.62,
-      "fta": 3.07
+      "fgPct": 0.501,
+      "ftPct": 0.613,
+      "fga": 7.98,
+      "fta": 2.84
      },
      "gp": null
     },
@@ -17705,20 +17709,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 24.949,
-     "pts": 10.175,
-     "reb": 9.338,
-     "ast": 3.628,
-     "stl": 1.075,
-     "blk": 0.674,
-     "tpm": 0.543,
-     "to": 2.181
+     "min": 23.949,
+     "pts": 9.76,
+     "reb": 8.948,
+     "ast": 3.478,
+     "stl": 1.03,
+     "blk": 0.654,
+     "tpm": 0.523,
+     "to": 2.091
     },
     "shooting": {
-     "fgPct": 0.499,
-     "ftPct": 0.612,
-     "fga": 8.62,
-     "fta": 3.07
+     "fgPct": 0.498,
+     "ftPct": 0.614,
+     "fga": 7.98,
+     "fta": 2.84
     },
     "gp": 68,
     "gpSource": "fantasypros",
@@ -17969,7 +17973,7 @@
    "positions": [
     "C"
    ],
-   "age": 30,
+   "age": 31,
    "yearsExp": 10,
    "injury": null,
    "yahoo": {
@@ -17987,20 +17991,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 23.397,
-      "pts": 8.97,
-      "reb": 6.55,
-      "ast": 2.07,
-      "stl": 0.83,
-      "blk": 0.71,
+      "min": 27,
+      "pts": 10.33,
+      "reb": 7.57,
+      "ast": 2.4,
+      "stl": 0.95,
+      "blk": 0.82,
       "tpm": 0,
-      "to": 1.34
+      "to": 1.57
      },
      "shooting": {
-      "fgPct": 0.661,
-      "ftPct": 0.626,
-      "fga": 5.84,
-      "fta": 1.98
+      "fgPct": 0.659,
+      "ftPct": 0.627,
+      "fga": 6.75,
+      "fta": 2.28
      },
      "gp": null
     },
@@ -18027,20 +18031,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 25.302,
-     "pts": 10.443,
-     "reb": 7.317,
-     "ast": 2.202,
-     "stl": 0.88,
-     "blk": 0.89,
+     "min": 27.104,
+     "pts": 11.123,
+     "reb": 7.827,
+     "ast": 2.367,
+     "stl": 0.94,
+     "blk": 0.945,
      "tpm": 0,
-     "to": 1.427
+     "to": 1.542
     },
     "shooting": {
-     "fgPct": 0.66,
-     "ftPct": 0.627,
-     "fga": 5.84,
-     "fta": 1.98
+     "fgPct": 0.659,
+     "ftPct": 0.628,
+     "fga": 6.75,
+     "fta": 2.28
     },
     "gp": 72,
     "gpSource": "fantasypros",
@@ -18309,20 +18313,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 27,
-      "pts": 11.45,
-      "reb": 3.72,
-      "ast": 1,
-      "stl": 0.58,
-      "blk": 0.34,
-      "tpm": 1.55,
-      "to": 0.65
+      "min": 30,
+      "pts": 18.58,
+      "reb": 6,
+      "ast": 2.11,
+      "stl": 0.66,
+      "blk": 0.37,
+      "tpm": 2.22,
+      "to": 1.51
      },
      "shooting": {
-      "fgPct": 0.516,
-      "ftPct": 0.73,
-      "fga": 8.62,
-      "fta": 1.37
+      "fgPct": 0.464,
+      "ftPct": 0.753,
+      "fga": 14.71,
+      "fta": 3.6
      },
      "gp": null
     },
@@ -18349,20 +18353,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 28.673,
-     "pts": 12.105,
-     "reb": 3.933,
-     "ast": 1.04,
-     "stl": 0.65,
-     "blk": 0.363,
-     "tpm": 1.722,
-     "to": 0.672
+     "min": 30.173,
+     "pts": 15.67,
+     "reb": 5.073,
+     "ast": 1.595,
+     "stl": 0.69,
+     "blk": 0.378,
+     "tpm": 2.057,
+     "to": 1.102
     },
     "shooting": {
-     "fgPct": 0.518,
-     "ftPct": 0.731,
-     "fga": 8.62,
-     "fta": 1.37
+     "fgPct": 0.492,
+     "ftPct": 0.743,
+     "fga": 14.71,
+     "fta": 3.6
     },
     "gp": 75,
     "gpSource": "fantasypros",
@@ -18920,7 +18924,11 @@
    ],
    "age": 22,
    "yearsExp": 3,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Undisclosed",
+    "notes": null
+   },
    "yahoo": {
     "yahooId": "10107",
     "rank": 123,
@@ -18938,20 +18946,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 25.795,
-      "pts": 8.7,
-      "reb": 3.21,
-      "ast": 2.52,
-      "stl": 1.81,
-      "blk": 0.45,
-      "tpm": 1.3,
-      "to": 0.9
+      "min": 28.904,
+      "pts": 9.71,
+      "reb": 3.59,
+      "ast": 2.82,
+      "stl": 2.03,
+      "blk": 0.51,
+      "tpm": 1.45,
+      "to": 1.01
      },
      "shooting": {
-      "fgPct": 0.454,
-      "ftPct": 0.811,
-      "fga": 7.49,
-      "fta": 0.74
+      "fgPct": 0.452,
+      "ftPct": 0.798,
+      "fga": 8.38,
+      "fta": 0.84
      },
      "gp": null
     },
@@ -18978,20 +18986,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 26.066,
-     "pts": 8.454,
-     "reb": 3.099,
-     "ast": 2.468,
-     "stl": 1.827,
-     "blk": 0.42,
-     "tpm": 1.26,
-     "to": 0.885
+     "min": 27.621,
+     "pts": 8.959,
+     "reb": 3.289,
+     "ast": 2.618,
+     "stl": 1.937,
+     "blk": 0.45,
+     "tpm": 1.335,
+     "to": 0.94
     },
     "shooting": {
      "fgPct": 0.449,
-     "ftPct": 0.807,
-     "fga": 7.49,
-     "fta": 0.74
+     "ftPct": 0.801,
+     "fga": 8.38,
+     "fta": 0.84
     },
     "gp": 77,
     "gpSource": "fantasypros",
@@ -19422,20 +19430,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 26.308,
-      "pts": 13.66,
-      "reb": 3.46,
-      "ast": 3.94,
-      "stl": 1.29,
-      "blk": 0.31,
-      "tpm": 1.12,
-      "to": 1.48
+      "min": 28,
+      "pts": 14.54,
+      "reb": 3.67,
+      "ast": 4.19,
+      "stl": 1.37,
+      "blk": 0.33,
+      "tpm": 1.19,
+      "to": 1.57
      },
      "shooting": {
-      "fgPct": 0.487,
-      "ftPct": 0.864,
-      "fga": 10.46,
-      "fta": 2.72
+      "fgPct": 0.486,
+      "ftPct": 0.866,
+      "fga": 11.15,
+      "fta": 2.9
      },
      "gp": null
     },
@@ -19462,20 +19470,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 22.952,
-     "pts": 11.755,
-     "reb": 2.924,
-     "ast": 3.269,
-     "stl": 1.093,
-     "blk": 0.259,
-     "tpm": 0.956,
-     "to": 1.262
+     "min": 23.799,
+     "pts": 12.195,
+     "reb": 3.029,
+     "ast": 3.394,
+     "stl": 1.133,
+     "blk": 0.269,
+     "tpm": 0.991,
+     "to": 1.307
     },
     "shooting": {
      "fgPct": 0.485,
-     "ftPct": 0.867,
-     "fga": 10.46,
-     "fta": 2.72
+     "ftPct": 0.868,
+     "fga": 11.15,
+     "fta": 2.9
     },
     "gp": 67,
     "gpSource": "fantasypros",
@@ -19796,40 +19804,40 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 24.5,
-      "pts": 12.2,
-      "reb": 5.92,
-      "ast": 2.18,
-      "stl": 0.77,
-      "blk": 0.36,
-      "tpm": 1.92,
-      "to": 1.43
+      "min": 26,
+      "pts": 12.97,
+      "reb": 6.28,
+      "ast": 2.31,
+      "stl": 0.82,
+      "blk": 0.39,
+      "tpm": 2.04,
+      "to": 1.53
      },
      "shooting": {
       "fgPct": 0.48,
-      "ftPct": 0.745,
-      "fga": 9.05,
-      "fta": 2.16
+      "ftPct": 0.748,
+      "fga": 9.61,
+      "fta": 2.3
      },
      "gp": null
     }
    },
    "projection": {
     "perGame": {
-     "min": 24.5,
-     "pts": 12.2,
-     "reb": 5.92,
-     "ast": 2.18,
-     "stl": 0.77,
-     "blk": 0.36,
-     "tpm": 1.92,
-     "to": 1.43
+     "min": 26,
+     "pts": 12.97,
+     "reb": 6.28,
+     "ast": 2.31,
+     "stl": 0.82,
+     "blk": 0.39,
+     "tpm": 2.04,
+     "to": 1.53
     },
     "shooting": {
      "fgPct": 0.48,
-     "ftPct": 0.745,
-     "fga": 9.05,
-     "fta": 2.16
+     "ftPct": 0.748,
+     "fga": 9.61,
+     "fta": 2.3
     },
     "gp": 67.833,
     "gpSource": "history",
@@ -20818,20 +20826,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 19.206,
-      "pts": 11.62,
-      "reb": 4.16,
-      "ast": 1.93,
-      "stl": 0.65,
-      "blk": 0.41,
-      "tpm": 0.76,
-      "to": 1.71
+      "min": 26,
+      "pts": 16,
+      "reb": 5.19,
+      "ast": 2.34,
+      "stl": 0.78,
+      "blk": 0.51,
+      "tpm": 1.04,
+      "to": 1.82
      },
      "shooting": {
-      "fgPct": 0.477,
-      "ftPct": 0.665,
-      "fga": 8.99,
-      "fta": 3.4
+      "fgPct": 0.485,
+      "ftPct": 0.707,
+      "fga": 12.18,
+      "fta": 4.43
      },
      "gp": null
     },
@@ -20858,20 +20866,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 22.471,
-     "pts": 13.178,
-     "reb": 4.802,
-     "ast": 2.125,
-     "stl": 0.7,
-     "blk": 0.413,
-     "tpm": 0.88,
-     "to": 1.779
+     "min": 25.868,
+     "pts": 15.368,
+     "reb": 5.317,
+     "ast": 2.33,
+     "stl": 0.765,
+     "blk": 0.463,
+     "tpm": 1.02,
+     "to": 1.834
     },
     "shooting": {
-     "fgPct": 0.476,
-     "ftPct": 0.683,
-     "fga": 8.99,
-     "fta": 3.4
+     "fgPct": 0.48,
+     "ftPct": 0.704,
+     "fga": 12.18,
+     "fta": 4.43
     },
     "gp": 72,
     "gpSource": "fantasypros",
@@ -21144,20 +21152,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 25.147,
-      "pts": 11.43,
-      "reb": 3.1,
-      "ast": 5.23,
-      "stl": 1.03,
-      "blk": 0.16,
+      "min": 25.292,
+      "pts": 11.45,
+      "reb": 3.11,
+      "ast": 5.25,
+      "stl": 1.05,
+      "blk": 0.17,
       "tpm": 0.62,
-      "to": 1.26
+      "to": 1.28
      },
      "shooting": {
-      "fgPct": 0.541,
-      "ftPct": 0.846,
-      "fga": 8,
-      "fta": 2.54
+      "fgPct": 0.539,
+      "ftPct": 0.837,
+      "fga": 8.05,
+      "fta": 2.57
      },
      "gp": null
     },
@@ -21184,20 +21192,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 22.697,
-     "pts": 10.386,
-     "reb": 2.653,
-     "ast": 4.54,
-     "stl": 0.94,
-     "blk": 0.128,
+     "min": 22.769,
+     "pts": 10.396,
+     "reb": 2.658,
+     "ast": 4.55,
+     "stl": 0.95,
+     "blk": 0.133,
      "tpm": 0.529,
-     "to": 1.103
+     "to": 1.113
     },
     "shooting": {
-     "fgPct": 0.543,
-     "ftPct": 0.844,
-     "fga": 8,
-     "fta": 2.54
+     "fgPct": 0.542,
+     "ftPct": 0.839,
+     "fga": 8.05,
+     "fta": 2.57
     },
     "gp": 73,
     "gpSource": "fantasypros",
@@ -21306,20 +21314,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 28,
-      "pts": 11.97,
-      "reb": 4.05,
-      "ast": 4.4,
-      "stl": 0.98,
+      "min": 29,
+      "pts": 12.38,
+      "reb": 4.22,
+      "ast": 4.55,
+      "stl": 1.02,
       "blk": 0.23,
-      "tpm": 1.89,
-      "to": 1.77
+      "tpm": 1.97,
+      "to": 1.83
      },
      "shooting": {
       "fgPct": 0.454,
-      "ftPct": 0.858,
-      "fga": 9.82,
-      "fta": 1.34
+      "ftPct": 0.855,
+      "fga": 10.17,
+      "fta": 1.38
      },
      "gp": null
     },
@@ -21346,20 +21354,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 26.87,
-     "pts": 11.252,
-     "reb": 3.936,
-     "ast": 4.097,
-     "stl": 0.908,
+     "min": 27.37,
+     "pts": 11.457,
+     "reb": 4.021,
+     "ast": 4.172,
+     "stl": 0.928,
      "blk": 0.266,
-     "tpm": 1.733,
-     "to": 1.741
+     "tpm": 1.773,
+     "to": 1.771
     },
     "shooting": {
      "fgPct": 0.454,
-     "ftPct": 0.858,
-     "fga": 9.82,
-     "fta": 1.34
+     "ftPct": 0.857,
+     "fga": 10.17,
+     "fta": 1.38
     },
     "gp": 73,
     "gpSource": "fantasypros",
@@ -21632,19 +21640,19 @@
      "source": "sleeper",
      "perGame": {
       "min": 24,
-      "pts": 13.12,
-      "reb": 2.89,
-      "ast": 3.27,
-      "stl": 1.45,
-      "blk": 0.65,
-      "tpm": 2.61,
-      "to": 1.48
+      "pts": 12.08,
+      "reb": 2.64,
+      "ast": 2.67,
+      "stl": 1.44,
+      "blk": 0.6,
+      "tpm": 2.26,
+      "to": 1.47
      },
      "shooting": {
-      "fgPct": 0.445,
-      "ftPct": 0.8,
-      "fga": 10.71,
-      "fta": 1.2
+      "fgPct": 0.449,
+      "ftPct": 0.807,
+      "fga": 9.86,
+      "fta": 1.19
      },
      "gp": null
     },
@@ -21672,19 +21680,19 @@
    "projection": {
     "perGame": {
      "min": 22.675,
-     "pts": 11.696,
-     "reb": 2.614,
-     "ast": 2.947,
-     "stl": 1.309,
-     "blk": 0.598,
-     "tpm": 2.376,
-     "to": 1.337
+     "pts": 11.176,
+     "reb": 2.489,
+     "ast": 2.647,
+     "stl": 1.304,
+     "blk": 0.573,
+     "tpm": 2.201,
+     "to": 1.332
     },
     "shooting": {
-     "fgPct": 0.434,
-     "ftPct": 0.801,
-     "fga": 10.71,
-     "fta": 1.2
+     "fgPct": 0.436,
+     "ftPct": 0.804,
+     "fga": 9.86,
+     "fta": 1.19
     },
     "gp": 77,
     "gpSource": "fantasypros",
@@ -21772,20 +21780,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 25,
-      "pts": 14.28,
-      "reb": 2.41,
-      "ast": 3.07,
-      "stl": 0.68,
-      "blk": 0.27,
-      "tpm": 0.57,
-      "to": 0.95
+      "min": 28,
+      "pts": 16.01,
+      "reb": 2.7,
+      "ast": 3.43,
+      "stl": 0.76,
+      "blk": 0.3,
+      "tpm": 0.65,
+      "to": 1.05
      },
      "shooting": {
       "fgPct": 0.486,
       "ftPct": 0.861,
-      "fga": 10.43,
-      "fta": 4.16
+      "fga": 11.68,
+      "fta": 4.66
      },
      "gp": null
     },
@@ -21812,20 +21820,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 27.286,
-     "pts": 15.465,
-     "reb": 2.737,
-     "ast": 3.34,
-     "stl": 0.704,
-     "blk": 0.304,
-     "tpm": 0.629,
-     "to": 1.001
+     "min": 28.786,
+     "pts": 16.33,
+     "reb": 2.882,
+     "ast": 3.52,
+     "stl": 0.744,
+     "blk": 0.319,
+     "tpm": 0.669,
+     "to": 1.051
     },
     "shooting": {
      "fgPct": 0.489,
      "ftPct": 0.86,
-     "fga": 10.43,
-     "fta": 4.16
+     "fga": 11.68,
+     "fta": 4.66
     },
     "gp": 77,
     "gpSource": "fantasypros",
@@ -21934,20 +21942,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 28,
-      "pts": 12.7,
-      "reb": 3.86,
-      "ast": 4.04,
-      "stl": 0.99,
-      "blk": 0.4,
-      "tpm": 2.84,
-      "to": 2
+      "min": 31,
+      "pts": 14.04,
+      "reb": 4.26,
+      "ast": 4.47,
+      "stl": 1.09,
+      "blk": 0.44,
+      "tpm": 3.14,
+      "to": 2.23
      },
      "shooting": {
       "fgPct": 0.407,
-      "ftPct": 0.834,
-      "fga": 10.24,
-      "fta": 1.81
+      "ftPct": 0.831,
+      "fga": 11.34,
+      "fta": 2.01
      },
      "gp": null
     },
@@ -21974,20 +21982,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 28.32,
-     "pts": 12.23,
-     "reb": 3.67,
-     "ast": 3.84,
-     "stl": 0.928,
-     "blk": 0.38,
-     "tpm": 2.727,
-     "to": 1.907
+     "min": 29.82,
+     "pts": 12.9,
+     "reb": 3.87,
+     "ast": 4.055,
+     "stl": 0.978,
+     "blk": 0.4,
+     "tpm": 2.877,
+     "to": 2.022
     },
     "shooting": {
-     "fgPct": 0.415,
-     "ftPct": 0.835,
-     "fga": 10.24,
-     "fta": 1.81
+     "fgPct": 0.414,
+     "ftPct": 0.833,
+     "fga": 11.34,
+     "fta": 2.01
     },
     "gp": 75,
     "gpSource": "fantasypros",
@@ -22828,20 +22836,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 17.412,
-      "pts": 7.32,
-      "reb": 3.68,
-      "ast": 2.15,
-      "stl": 0.84,
-      "blk": 0.21,
-      "tpm": 0.97,
-      "to": 1.03
+      "min": 24,
+      "pts": 10.07,
+      "reb": 5.06,
+      "ast": 2.96,
+      "stl": 1.15,
+      "blk": 0.29,
+      "tpm": 1.32,
+      "to": 1.43
      },
      "shooting": {
-      "fgPct": 0.485,
+      "fgPct": 0.484,
       "ftPct": 0.699,
-      "fga": 5.53,
-      "fta": 1.43
+      "fga": 7.62,
+      "fta": 1.96
      },
      "gp": null
     },
@@ -22868,20 +22876,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 18.418,
-     "pts": 7.016,
-     "reb": 3.922,
-     "ast": 2.082,
-     "stl": 0.783,
-     "blk": 0.235,
-     "tpm": 0.964,
-     "to": 1.104
+     "min": 21.712,
+     "pts": 8.391,
+     "reb": 4.612,
+     "ast": 2.487,
+     "stl": 0.938,
+     "blk": 0.275,
+     "tpm": 1.139,
+     "to": 1.304
     },
     "shooting": {
      "fgPct": 0.481,
      "ftPct": 0.709,
-     "fga": 5.53,
-     "fta": 1.43
+     "fga": 7.62,
+     "fta": 1.96
     },
     "gp": 73,
     "gpSource": "fantasypros",
@@ -23268,20 +23276,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 27.939,
-      "pts": 8.11,
-      "reb": 5.58,
-      "ast": 5.29,
-      "stl": 1.03,
-      "blk": 0.74,
-      "tpm": 1.23,
-      "to": 2.44
+      "min": 26.939,
+      "pts": 7.8,
+      "reb": 5.38,
+      "ast": 5.09,
+      "stl": 1,
+      "blk": 0.71,
+      "tpm": 1.18,
+      "to": 2.35
      },
      "shooting": {
-      "fgPct": 0.429,
-      "ftPct": 0.701,
-      "fga": 6.8,
-      "fta": 1.47
+      "fgPct": 0.431,
+      "ftPct": 0.69,
+      "fga": 6.55,
+      "fta": 1.42
      },
      "gp": null
     },
@@ -23308,20 +23316,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 27.442,
-     "pts": 8.159,
-     "reb": 5.603,
-     "ast": 5.263,
-     "stl": 1.084,
-     "blk": 0.731,
-     "tpm": 1.24,
-     "to": 2.47
+     "min": 26.942,
+     "pts": 8.004,
+     "reb": 5.502,
+     "ast": 5.163,
+     "stl": 1.069,
+     "blk": 0.716,
+     "tpm": 1.215,
+     "to": 2.425
     },
     "shooting": {
-     "fgPct": 0.427,
-     "ftPct": 0.698,
-     "fga": 6.8,
-     "fta": 1.47
+     "fgPct": 0.428,
+     "ftPct": 0.693,
+     "fga": 6.55,
+     "fta": 1.42
     },
     "gp": 72,
     "gpSource": "fantasypros",
@@ -23536,7 +23544,7 @@
    "age": 31,
    "yearsExp": 11,
    "injury": {
-    "status": "DTD",
+    "status": "Out",
     "body": "Undisclosed",
     "notes": null
    },
@@ -23861,7 +23869,7 @@
     "SF",
     "SG"
    ],
-   "age": 26,
+   "age": 27,
    "yearsExp": 6,
    "injury": null,
    "yahoo": {
@@ -24025,11 +24033,7 @@
    ],
    "age": 20,
    "yearsExp": 0,
-   "injury": {
-    "status": "DTD",
-    "body": "Ankle",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "10588",
     "rank": 157,
@@ -24305,20 +24309,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 26.8,
-      "pts": 11.87,
-      "reb": 6.85,
-      "ast": 1.58,
-      "stl": 1.5,
-      "blk": 0.7,
-      "tpm": 1.45,
-      "to": 1.35
+      "min": 24,
+      "pts": 10.62,
+      "reb": 5.52,
+      "ast": 1.32,
+      "stl": 1.35,
+      "blk": 0.62,
+      "tpm": 1.3,
+      "to": 1.2
      },
      "shooting": {
       "fgPct": 0.445,
-      "ftPct": 0.757,
-      "fga": 10.4,
-      "fta": 1.52
+      "ftPct": 0.756,
+      "fga": 9.32,
+      "fta": 1.35
      },
      "gp": null
     },
@@ -24345,20 +24349,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 24.393,
-     "pts": 10.47,
-     "reb": 6.071,
-     "ast": 1.387,
-     "stl": 1.313,
-     "blk": 0.6,
-     "tpm": 1.322,
-     "to": 1.231
+     "min": 22.993,
+     "pts": 9.845,
+     "reb": 5.406,
+     "ast": 1.257,
+     "stl": 1.238,
+     "blk": 0.56,
+     "tpm": 1.247,
+     "to": 1.156
     },
     "shooting": {
      "fgPct": 0.445,
-     "ftPct": 0.761,
-     "fga": 10.4,
-     "fta": 1.52
+     "ftPct": 0.76,
+     "fga": 9.32,
+     "fta": 1.35
     },
     "gp": 72,
     "gpSource": "fantasypros",
@@ -24631,40 +24635,40 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 25,
-      "pts": 12.22,
-      "reb": 7.2,
-      "ast": 1.26,
-      "stl": 0.5,
-      "blk": 0.51,
-      "tpm": 0.32,
-      "to": 1.2
+      "min": 18,
+      "pts": 8.78,
+      "reb": 5.18,
+      "ast": 0.91,
+      "stl": 0.37,
+      "blk": 0.37,
+      "tpm": 0.23,
+      "to": 0.86
      },
      "shooting": {
-      "fgPct": 0.571,
-      "ftPct": 0.78,
-      "fga": 8.92,
-      "fta": 2.18
+      "fgPct": 0.569,
+      "ftPct": 0.783,
+      "fga": 6.43,
+      "fta": 1.57
      },
      "gp": null
     }
    },
    "projection": {
     "perGame": {
-     "min": 25,
-     "pts": 12.22,
-     "reb": 7.2,
-     "ast": 1.26,
-     "stl": 0.5,
-     "blk": 0.51,
-     "tpm": 0.32,
-     "to": 1.2
+     "min": 18,
+     "pts": 8.78,
+     "reb": 5.18,
+     "ast": 0.91,
+     "stl": 0.37,
+     "blk": 0.37,
+     "tpm": 0.23,
+     "to": 0.86
     },
     "shooting": {
-     "fgPct": 0.571,
-     "ftPct": 0.78,
-     "fga": 8.92,
-     "fta": 2.18
+     "fgPct": 0.569,
+     "ftPct": 0.783,
+     "fga": 6.43,
+     "fta": 1.57
     },
     "gp": 74,
     "gpSource": "history",
@@ -25052,20 +25056,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 26.942,
-      "pts": 9.74,
-      "reb": 4.65,
-      "ast": 2.42,
-      "stl": 1.35,
-      "blk": 0.54,
-      "tpm": 1.2,
-      "to": 0.46
+      "min": 24.942,
+      "pts": 8.36,
+      "reb": 3.99,
+      "ast": 1.74,
+      "stl": 1.25,
+      "blk": 0.49,
+      "tpm": 0.99,
+      "to": 0.43
      },
      "shooting": {
-      "fgPct": 0.464,
-      "ftPct": 0.781,
-      "fga": 7.29,
-      "fta": 2.28
+      "fgPct": 0.467,
+      "ftPct": 0.775,
+      "fga": 6.23,
+      "fta": 2
      },
      "gp": null
     },
@@ -25092,20 +25096,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 25.83,
-     "pts": 8.767,
-     "reb": 4.325,
-     "ast": 2.127,
-     "stl": 1.239,
-     "blk": 0.469,
-     "tpm": 1.074,
-     "to": 0.801
+     "min": 24.83,
+     "pts": 8.077,
+     "reb": 3.995,
+     "ast": 1.787,
+     "stl": 1.189,
+     "blk": 0.444,
+     "tpm": 0.969,
+     "to": 0.786
     },
     "shooting": {
-     "fgPct": 0.459,
-     "ftPct": 0.762,
-     "fga": 7.29,
-     "fta": 2.28
+     "fgPct": 0.461,
+     "ftPct": 0.759,
+     "fga": 6.23,
+     "fta": 2
     },
     "gp": 78,
     "gpSource": "fantasypros",
@@ -25374,20 +25378,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 25,
-      "pts": 12.28,
-      "reb": 3.25,
-      "ast": 4.63,
-      "stl": 1.75,
-      "blk": 0.46,
-      "tpm": 1.29,
-      "to": 2.51
+      "min": 21,
+      "pts": 10.29,
+      "reb": 2.72,
+      "ast": 3.89,
+      "stl": 1.48,
+      "blk": 0.38,
+      "tpm": 1.08,
+      "to": 2.11
      },
      "shooting": {
-      "fgPct": 0.481,
-      "ftPct": 0.74,
-      "fga": 9.4,
-      "fta": 2.62
+      "fgPct": 0.48,
+      "ftPct": 0.736,
+      "fga": 7.91,
+      "fta": 2.2
      },
      "gp": null
     },
@@ -25414,20 +25418,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 22.944,
-     "pts": 10.929,
-     "reb": 2.97,
-     "ast": 4.371,
-     "stl": 1.551,
-     "blk": 0.406,
-     "tpm": 1.166,
-     "to": 2.192
+     "min": 20.944,
+     "pts": 9.934,
+     "reb": 2.705,
+     "ast": 4.001,
+     "stl": 1.416,
+     "blk": 0.366,
+     "tpm": 1.061,
+     "to": 1.992
     },
     "shooting": {
      "fgPct": 0.47,
-     "ftPct": 0.744,
-     "fga": 9.4,
-     "fta": 2.62
+     "ftPct": 0.742,
+     "fga": 7.91,
+     "fta": 2.2
     },
     "gp": 71,
     "gpSource": "fantasypros",
@@ -26809,20 +26813,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 28,
-      "pts": 13.85,
-      "reb": 3.73,
-      "ast": 1.71,
-      "stl": 1.12,
-      "blk": 0.25,
-      "tpm": 2.18,
-      "to": 1.25
+      "min": 26,
+      "pts": 12.19,
+      "reb": 3.11,
+      "ast": 1.56,
+      "stl": 1.04,
+      "blk": 0.23,
+      "tpm": 1.93,
+      "to": 1.16
      },
      "shooting": {
-      "fgPct": 0.45,
-      "ftPct": 0.82,
-      "fga": 10.75,
-      "fta": 2.44
+      "fgPct": 0.449,
+      "ftPct": 0.823,
+      "fga": 9.36,
+      "fta": 2.26
      },
      "gp": null
     },
@@ -26849,20 +26853,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 26.727,
-     "pts": 12.385,
-     "reb": 3.305,
-     "ast": 1.602,
-     "stl": 0.92,
-     "blk": 0.172,
-     "tpm": 1.963,
-     "to": 1.092
+     "min": 25.727,
+     "pts": 11.555,
+     "reb": 2.995,
+     "ast": 1.527,
+     "stl": 0.88,
+     "blk": 0.162,
+     "tpm": 1.838,
+     "to": 1.047
     },
     "shooting": {
-     "fgPct": 0.44,
-     "ftPct": 0.807,
-     "fga": 10.75,
-     "fta": 2.44
+     "fgPct": 0.439,
+     "ftPct": 0.809,
+     "fga": 9.36,
+     "fta": 2.26
     },
     "gp": 75,
     "gpSource": "fantasypros",
@@ -29965,20 +29969,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 27.606,
-      "pts": 14.76,
-      "reb": 5.11,
-      "ast": 2.51,
-      "stl": 1.08,
-      "blk": 0.28,
-      "tpm": 1.55,
-      "to": 1.24
+      "min": 24,
+      "pts": 12.83,
+      "reb": 4.45,
+      "ast": 2.18,
+      "stl": 0.72,
+      "blk": 0.25,
+      "tpm": 1.34,
+      "to": 1.08
      },
      "shooting": {
       "fgPct": 0.453,
-      "ftPct": 0.784,
-      "fga": 12.11,
-      "fta": 2.87
+      "ftPct": 0.783,
+      "fga": 10.52,
+      "fta": 2.49
      },
      "gp": null
     },
@@ -30005,20 +30009,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 26.07,
-     "pts": 13.209,
-     "reb": 4.617,
-     "ast": 2.378,
-     "stl": 0.807,
-     "blk": 0.311,
-     "tpm": 1.323,
-     "to": 1.442
+     "min": 24.267,
+     "pts": 12.244,
+     "reb": 4.287,
+     "ast": 2.213,
+     "stl": 0.627,
+     "blk": 0.296,
+     "tpm": 1.218,
+     "to": 1.362
     },
     "shooting": {
      "fgPct": 0.459,
      "ftPct": 0.74,
-     "fga": 12.11,
-     "fta": 2.87
+     "fga": 10.52,
+     "fta": 2.49
     },
     "gp": 73,
     "gpSource": "fantasypros",
@@ -30129,20 +30133,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 24.394,
-      "pts": 11.9,
-      "reb": 4.07,
-      "ast": 2.65,
-      "stl": 0.92,
+      "min": 26,
+      "pts": 12.68,
+      "reb": 4.34,
+      "ast": 2.83,
+      "stl": 0.97,
       "blk": 0.11,
-      "tpm": 0.76,
-      "to": 1.35
+      "tpm": 0.82,
+      "to": 1.44
      },
      "shooting": {
       "fgPct": 0.506,
-      "ftPct": 0.78,
-      "fga": 8.92,
-      "fta": 2.73
+      "ftPct": 0.771,
+      "fga": 9.49,
+      "fta": 2.92
      },
      "gp": null
     },
@@ -30169,20 +30173,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 23.562,
-     "pts": 11.315,
-     "reb": 3.859,
-     "ast": 2.575,
-     "stl": 0.865,
+     "min": 24.365,
+     "pts": 11.705,
+     "reb": 3.994,
+     "ast": 2.665,
+     "stl": 0.89,
      "blk": 0.102,
-     "tpm": 0.731,
-     "to": 1.263
+     "tpm": 0.761,
+     "to": 1.308
     },
     "shooting": {
      "fgPct": 0.508,
-     "ftPct": 0.78,
-     "fga": 8.92,
-     "fta": 2.73
+     "ftPct": 0.775,
+     "fga": 9.49,
+     "fta": 2.92
     },
     "gp": 74,
     "gpSource": "fantasypros",
@@ -30437,11 +30441,7 @@
    ],
    "age": 26,
    "yearsExp": 2,
-   "injury": {
-    "status": "DTD",
-    "body": "Undisclosed",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "10280",
     "rank": 199,
@@ -31079,20 +31079,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 20.507,
-      "pts": 10.33,
-      "reb": 6.53,
-      "ast": 2.25,
-      "stl": 0.81,
-      "blk": 0.41,
-      "tpm": 0.97,
-      "to": 1.49
+      "min": 23,
+      "pts": 11.58,
+      "reb": 7.32,
+      "ast": 2.52,
+      "stl": 0.91,
+      "blk": 0.46,
+      "tpm": 1.09,
+      "to": 1.68
      },
      "shooting": {
-      "fgPct": 0.495,
-      "ftPct": 0.722,
-      "fga": 7.73,
-      "fta": 2.37
+      "fgPct": 0.494,
+      "ftPct": 0.718,
+      "fga": 8.68,
+      "fta": 2.66
      },
      "gp": null
     },
@@ -31119,20 +31119,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 20.214,
-     "pts": 9.737,
-     "reb": 6.094,
-     "ast": 2.151,
-     "stl": 0.8,
-     "blk": 0.402,
-     "tpm": 0.893,
-     "to": 1.383
+     "min": 21.461,
+     "pts": 10.362,
+     "reb": 6.489,
+     "ast": 2.286,
+     "stl": 0.85,
+     "blk": 0.427,
+     "tpm": 0.953,
+     "to": 1.478
     },
     "shooting": {
-     "fgPct": 0.494,
-     "ftPct": 0.723,
-     "fga": 7.73,
-     "fta": 2.37
+     "fgPct": 0.493,
+     "ftPct": 0.722,
+     "fga": 8.68,
+     "fta": 2.66
     },
     "gp": 76,
     "gpSource": "fantasypros",
@@ -31995,7 +31995,11 @@
    ],
    "age": 27,
    "yearsExp": 6,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Ankle",
+    "notes": null
+   },
    "yahoo": {
     "yahooId": "6412",
     "rank": 210,
@@ -36238,7 +36242,7 @@
    "age": 33,
    "yearsExp": 14,
    "injury": {
-    "status": "DTD",
+    "status": "Out",
     "body": "Knee",
     "notes": "Inflammation"
    },
@@ -36684,11 +36688,7 @@
    ],
    "age": 21,
    "yearsExp": 0,
-   "injury": {
-    "status": "DTD",
-    "body": "Coach's Decision",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "10576",
     "rank": 242,
@@ -38981,7 +38981,11 @@
    ],
    "age": 30,
    "yearsExp": 9,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Knee",
+    "notes": null
+   },
    "yahoo": {
     "yahooId": "5825",
     "rank": 259,
@@ -42058,20 +42062,20 @@
     "sleeper": {
      "source": "sleeper",
      "perGame": {
-      "min": 12,
-      "pts": 4.55,
-      "reb": 2.8,
-      "ast": 0.6,
-      "stl": 0.37,
-      "blk": 0.48,
+      "min": 14,
+      "pts": 5.3,
+      "reb": 3.27,
+      "ast": 0.7,
+      "stl": 0.42,
+      "blk": 0.57,
       "tpm": 0.02,
-      "to": 0.48
+      "to": 0.57
      },
      "shooting": {
-      "fgPct": 0.731,
-      "ftPct": 0.638,
-      "fga": 2.53,
-      "fta": 1.3
+      "fgPct": 0.729,
+      "ftPct": 0.645,
+      "fga": 2.95,
+      "fta": 1.52
      },
      "gp": null
     },
@@ -42098,20 +42102,20 @@
    },
    "projection": {
     "perGame": {
-     "min": 13.641,
-     "pts": 4.993,
-     "reb": 3.097,
-     "ast": 0.673,
-     "stl": 0.396,
-     "blk": 0.529,
+     "min": 14.641,
+     "pts": 5.368,
+     "reb": 3.332,
+     "ast": 0.723,
+     "stl": 0.421,
+     "blk": 0.574,
      "tpm": 0.017,
-     "to": 0.501
+     "to": 0.546
     },
     "shooting": {
-     "fgPct": 0.72,
-     "ftPct": 0.642,
-     "fga": 2.53,
-     "fta": 1.3
+     "fgPct": 0.719,
+     "ftPct": 0.645,
+     "fga": 2.95,
+     "fta": 1.52
     },
     "gp": 71,
     "gpSource": "fantasypros",
@@ -44412,11 +44416,7 @@
    ],
    "age": 27,
    "yearsExp": 5,
-   "injury": {
-    "status": "DTD",
-    "body": "Nose",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": {
     "yahooId": "6594",
     "rank": 297,
@@ -48821,11 +48821,7 @@
    ],
    "age": 20,
    "yearsExp": 0,
-   "injury": {
-    "status": "DTD",
-    "body": "Ankle",
-    "notes": "Sprain"
-   },
+   "injury": null,
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -49467,11 +49463,7 @@
    ],
    "age": 20,
    "yearsExp": 1,
-   "injury": {
-    "status": "DTD",
-    "body": "Coach's Decision",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -50534,11 +50526,7 @@
    ],
    "age": 20,
    "yearsExp": 1,
-   "injury": {
-    "status": "DTD",
-    "body": "Ankle",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -52104,7 +52092,11 @@
    ],
    "age": 24,
    "yearsExp": 3,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Knee",
+    "notes": null
+   },
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -54456,7 +54448,11 @@
    ],
    "age": 24,
    "yearsExp": 2,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Illness",
+    "notes": null
+   },
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -56447,11 +56443,7 @@
    ],
    "age": 25,
    "yearsExp": 2,
-   "injury": {
-    "status": "GTD",
-    "body": "Undisclosed",
-    "notes": "Bruise"
-   },
+   "injury": null,
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -57667,7 +57659,11 @@
    ],
    "age": 24,
    "yearsExp": 1,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Ankle",
+    "notes": "Sprain"
+   },
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -59720,7 +59716,7 @@
   {
    "id": "4771",
    "name": "Taelon Peter",
-   "team": "SAS",
+   "team": null,
    "positions": [
     "PG",
     "SF",
@@ -61849,11 +61845,7 @@
    ],
    "age": 25,
    "yearsExp": 2,
-   "injury": {
-    "status": "DTD",
-    "body": "Undisclosed",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -63319,7 +63311,11 @@
    ],
    "age": 23,
    "yearsExp": 3,
-   "injury": null,
+   "injury": {
+    "status": "DTD",
+    "body": "Illness",
+    "notes": null
+   },
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -64790,11 +64786,7 @@
    ],
    "age": 26,
    "yearsExp": 4,
-   "injury": {
-    "status": "DTD",
-    "body": "Shoulder",
-    "notes": "Soreness"
-   },
+   "injury": null,
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -65313,7 +65305,7 @@
     "PG",
     "SG"
    ],
-   "age": 20,
+   "age": 21,
    "yearsExp": 1,
    "injury": null,
    "yahoo": null,
@@ -67358,13 +67350,17 @@
   {
    "id": "1951",
    "name": "Drew Eubanks",
-   "team": "NYK",
+   "team": null,
    "positions": [
     "C"
    ],
    "age": 29,
    "yearsExp": 8,
-   "injury": null,
+   "injury": {
+    "status": "Out",
+    "body": "Pectoral",
+    "notes": null
+   },
    "yahoo": null,
    "lines": {
     "sleeper": {
@@ -68463,11 +68459,7 @@
    ],
    "age": 25,
    "yearsExp": 2,
-   "injury": {
-    "status": "Out",
-    "body": "Hamstring",
-    "notes": null
-   },
+   "injury": null,
    "yahoo": null,
    "lines": {
     "sleeper": {
