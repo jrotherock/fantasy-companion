@@ -495,7 +495,10 @@ function DaysLeft({ w }: { w: NonNullable<SeasonView['week']> }) {
 
 function Week({ v }: { v: SeasonView }) {
   const w = v.week
+  // Whose players the table shows: mine by default, the opponent's on a tap (one table, not two).
+  const [side, setSide] = useState<'mine' | 'theirs'>('mine')
   if (!w) return <div className="ckempty">No matchup this week.</div>
+  const rows = side === 'theirs' && w.oppPlayers.length ? w.oppPlayers : w.players
   const swing = w.odds?.races.filter((r) => r.state === 'swing').map((r) => LABEL[r.cat]) ?? []
   const swingCats = new Set<Cat>(w.odds?.races.filter((r) => r.state === 'swing').map((r) => r.cat) ?? [])
   return (
@@ -543,20 +546,26 @@ function Week({ v }: { v: SeasonView }) {
         </div>
       )}
       {w.odds && w.players.length > 0 && (
-        <Section title="Your players this week" hint="expected starts and what they produce">
+        <Section title="Players this week" hint="expected starts and what they produce">
+          {w.oppPlayers.length > 0 && (
+            <div className="nl-sidepick" role="tablist" aria-label="Whose players">
+              <button role="tab" aria-selected={side === 'mine'} className={side === 'mine' ? 'on' : ''} onClick={() => setSide('mine')}>Yours</button>
+              <button role="tab" aria-selected={side === 'theirs'} className={side === 'theirs' ? 'on' : ''} onClick={() => setSide('theirs')}>{w.opponent?.name ?? 'Opponent'}</button>
+            </div>
+          )}
           <div className="nl-scroll">
             <table className="nl-table nl-wkp">
               <thead><tr><th className="l">Player</th><th title="Expected starts this week: his games with a lineup spot, less his chance of sitting hurt">Starts</th><th title="Projected minutes a game">MPG</th>
                 {YCOLS.map((c) => <th key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dimh' : ''} title={c.cat && swingCats.has(c.cat) ? 'In play this week' : undefined}>{c.label}</th>)}</tr></thead>
               <tbody>
-                {w.players.map((p) => (
+                {rows.map((p) => (
                   <tr key={p.id} className={p.starts < 0.5 ? 'nl-idle' : ''}>
                     <td className="l">{p.name}</td><td>{p.starts.toFixed(1)}</td><td>{p.mpg != null ? p.mpg.toFixed(0) : '—'}</td>
                     {YCOLS.map((c) => <td key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dim' : ''}>{c.cell(p.box)}</td>)}
                   </tr>
                 ))}
-                <tr className="nl-total"><td className="l">Your week</td><td>{w.players.reduce((a, p) => a + p.starts, 0).toFixed(0)}</td><td />
-                  {YCOLS.map((c) => { const t = w.players.reduce((a, p) => addBoxUI(a, p.box), emptyBoxUI()); return <td key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dim' : ''}>{c.cell(t)}</td> })}</tr>
+                <tr className="nl-total"><td className="l">{side === 'mine' ? 'Your week' : 'Their week'}</td><td>{rows.reduce((a, p) => a + p.starts, 0).toFixed(0)}</td><td />
+                  {YCOLS.map((c) => { const t = rows.reduce((a, p) => addBoxUI(a, p.box), emptyBoxUI()); return <td key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dim' : ''}>{c.cell(t)}</td> })}</tr>
               </tbody>
             </table>
           </div>

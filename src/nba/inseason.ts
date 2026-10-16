@@ -364,6 +364,8 @@ export interface WeekView {
   idleGames: number
   /** Each of my players this week: games, expected starts, and what those starts should produce. */
   players: { id: string; name: string; games: number; starts: number; mpg: number | null; box: Box }[]
+  /** The opponent's players, the same way (empty without a matchup). */
+  oppPlayers: { id: string; name: string; games: number; starts: number; mpg: number | null; box: Box }[]
   /** Per day: my starters, theirs, my players with a game but no seat, and my seats nobody fills (a stream's room). */
   days: { date: string; mine: number; theirs: number; idle: number; open: number }[]
   playoffs: boolean
@@ -393,6 +395,15 @@ export function rosterIds(ctx: Context, players: YPlayer[]): { id: string; eligi
   return out
 }
 
+/** A side's players this week: games, expected starts, and what those starts should produce, most starts first. */
+function playersOf(ctx: Context, ids: { id: string }[], week: WeekOutlook): WeekView['players'] {
+  return ids.map(({ id }) => {
+    const pm = week.perMan.get(id) ?? { games: 0, starts: 0 }
+    const p = ctx.byId.get(id)
+    return { id, name: p?.name ?? id, games: pm.games, starts: pm.starts, mpg: p?.projection?.perGame.min ?? null, box: addBox(emptyBox(), ctx.perGame(id), pm.starts) }
+  }).sort((x, y) => y.starts - x.starts)
+}
+
 export function buildWeek(ctx: Context, snap: Snapshot, myTeamId: string): WeekView | null {
   const { today } = ctx.world
   const wk = weekOf(snap.weeks, today)
@@ -416,12 +427,8 @@ export function buildWeek(ctx: Context, snap: Snapshot, myTeamId: string): WeekV
     score: { mine: mine?.points ?? null, theirs: theirs?.points ?? null },
     odds, points,
     startsLeft: { mine: a.week.starts, theirs: b.week.starts },
-    players: rosterIds(ctx, rosterOf(myTeamId)).map(({ id }) => {
-      const pm = a.week.perMan.get(id) ?? { games: 0, starts: 0 }
-      const pg = ctx.perGame(id)
-      const p = ctx.byId.get(id)
-      return { id, name: p?.name ?? id, games: pm.games, starts: pm.starts, mpg: p?.projection?.perGame.min ?? null, box: addBox(emptyBox(), pg, pm.starts) }
-    }).sort((x, y) => y.starts - x.starts),
+    players: playersOf(ctx, rosterIds(ctx, rosterOf(myTeamId)), a.week),
+    oppPlayers: theirs ? playersOf(ctx, rosterIds(ctx, rosterOf(theirs.id)), b.week) : [],
     idleGames: a.week.wasted,
     days: days.map((d, i) => ({
       date: d,
