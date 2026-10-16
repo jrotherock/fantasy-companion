@@ -598,7 +598,7 @@ function Adds({ v }: { v: SeasonView }) {
           </ol>
         </Section>
       )}
-      <Section title="For the rest of the season" hint="better than someone you have">
+      <Section title="For the rest of the season" hint="better than someone you have, or into an open roster spot; best for your lineup first">
         {!ups.length && <div className="nl-none">Nobody on the wire beats your roster by enough to spend an add.</div>}
         {ups.map((p) => <PickupRow key={p.add} p={p} cats={cats} />)}
       </Section>
@@ -634,6 +634,8 @@ function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: 
         {p.dropName && <><b>Drop {p.dropName}</b> · </>}{p.why}
       </div>
       <div className="nl-pickd nl-dim">
+        {p.kind !== 'stream' && p.startsGain != null && <span title="What the move adds to your starting lineup over the next three weeks against this week's opponent: a pickup who fills spots left empty counts in full, one who would mostly sit barely counts">Next 3 weeks in your lineup: <b>{cats ? `${p.startsGain >= 0 ? '+' : ''}${p.startsGain.toFixed(2)} cats` : `${p.startsGain >= 0 ? '+' : ''}${Math.round(p.startsGain)} pts`}</b></span>}
+        {p.kind !== 'stream' && p.startsGain != null && ' · '}
         {p.kind !== 'stream' && <span title="His value over the games he has left, less the dropped player's: categories in play, summed per game">Season: +{Math.round(p.seasonGain)} value</span>}
         {p.kind !== 'stream' && ' · '}
         <span className={weekCost ? 'nl-cost' : ''}>This week: win {pct(p.winBefore)} → {pct(p.winAfter)} ({wk(p.weekGain)}){weekCost ? ' — costs this week' : ''}</span>
