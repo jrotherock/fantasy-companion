@@ -335,12 +335,15 @@ test('off the clock, in both formats, the cards are players likely there at my p
   }
 })
 
-test('on the clock in a points league, the playoff note speaks only of the cards', () => {
+test('on the clock in a points league, the playoff note speaks only of the cards', async () => {
+  const { slotFor } = await import('../kernel/snake.js')
   const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
   const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
   const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
   const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)
-  for (const at of [4, 27, 36, 59]) {
+  // My first four turns from slot 5, whatever the league's size.
+  const turns = Array.from({ length: harker.league.teams * harker.rounds }, (_, i) => i + 1).filter((o) => slotFor(o, harker.league.teams) === 5)
+  for (const at of turns.slice(0, 4).map((o) => o - 1)) {
     const d = { ...emptyDraft('t'), slot: 5 }
     d.picks = harker.adpOrder.slice(0, at).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
     const v = buildView(harker, d, new Map())
@@ -350,12 +353,16 @@ test('on the clock in a points league, the playoff note speaks only of the cards
   }
 })
 
-test('a player out for the season is never advised, however late — in both formats', () => {
+test('a player out for the season is never advised, however late — in both formats', async () => {
+  const { slotFor } = await import('../kernel/snake.js')
   const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
   const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
   const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
-  for (const [id, slot, at] of [['nba-hoops', 4, 123], ['nba-harker', 5, 123]] as const) {
+  for (const [id, slot] of [['nba-hoops', 4], ['nba-harker', 5]] as const) {
     const base = prepare(leagues.find((l: any) => l.id === id), players, noise, adpFor)
+    // My second-to-last turn, whatever the league's size.
+    const turns = Array.from({ length: base.league.teams * base.rounds }, (_, i) => i + 1).filter((o) => slotFor(o, base.league.teams) === slot)
+    const at = turns[turns.length - 2] - 1
     // The best player still on the board at this pick, made out for the season.
     const d0 = { ...emptyDraft('t'), slot }
     d0.picks = base.adpOrder.slice(0, at).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
@@ -379,16 +386,17 @@ test('a points mock places my roster against every team\'s season points total',
   const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
   const prep = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)
   const d = { ...emptyDraft('t'), slot: 5 }
-  d.picks = prep.adpOrder.slice(0, 16 * prep.rounds).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
+  const n = prep.league.teams
+  d.picks = prep.adpOrder.slice(0, n * prep.rounds).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
   const r = recordOf(prep, d, new Map())!
   // By hand: each seat's season points, from its own picks.
   const totals = new Map<number, number>()
-  for (const x of d.picks) totals.set(slotFor(x.overall, 16), (totals.get(slotFor(x.overall, 16)) ?? 0) + (prep.points!.byId.get(x.playerId)?.season ?? 0))
+  for (const x of d.picks) totals.set(slotFor(x.overall, n), (totals.get(slotFor(x.overall, n)) ?? 0) + (prep.points!.byId.get(x.playerId)?.season ?? 0))
   const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1])
-  assert.equal(r.place!.of, 16)
+  assert.equal(r.place!.of, n)
   assert.equal(r.place!.fpSeason, sorted.findIndex(([seat]) => seat === 5) + 1)
   assert.ok(Math.abs(r.fpSeason! - totals.get(5)!) < 1e-6)
-  assert.ok(r.place!.result >= 1 && r.place!.result <= 16)
+  assert.ok(r.place!.result >= 1 && r.place!.result <= n)
 })
 
 test('after Shai the cards say which close categories each moves and what it stacks', () => {
@@ -508,7 +516,7 @@ test('a league with a Draft rank opens the board with the simulations\' top 5, t
   assert.equal(mark('Giannis Antetokounmpo'), 'down')
   assert.equal(mark('Trae Young'), 'down')
   assert.equal(mark('Anthony Edwards'), null)
-  assert.equal(mark('Donovan Mitchell'), 'lean')
+  assert.equal(mark('Jamal Murray'), 'lean')
   assert.ok(v.board.some((r) => r.forMe === 0), 'the top card reads 0 for my team')
   const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)
   const h = buildView(harker, { ...emptyDraft('t'), slot: 5 }, new Map())
