@@ -105,6 +105,8 @@ export interface Prepared {
   draftRank: Map<string, { rank: number; mark: SimMark | null; sim: { delta: number; err: number } | null }>
   /** Your ranking for this league (preferences `order`), by id: breaks the cards' near-ties (orderTiebreak). Set by the caller. */
   myOrder: string[]
+  /** Players with your own numbers in this league (preferences `adjust`). Set by the caller. */
+  adjusted: Set<string>
 }
 
 /** data/nba/draft-rank/<league>.json, as written by scripts/nba-draft-rank.ts. */
@@ -255,7 +257,7 @@ export function prepare(
     },
     calendar: injuries ? calendarOf(injuries.teamDates) : null,
     lastSeason: Math.max(0, ...players.flatMap((p) => (p.history ?? []).map((h) => h.season))),
-    teams: new Map(), context: () => null, draftRank: new Map(), myOrder: [],
+    teams: new Map(), context: () => null, draftRank: new Map(), myOrder: [], adjusted: new Set(),
   }
   if (draftRankFile) {
     // Past the top few the simulations cannot tell most players apart (error bars of ±2 weeks in 100 against
@@ -1854,7 +1856,9 @@ export function simTiebreak<T extends { id: string; name: string; score: number 
   prep: Prepared, cards: T[], pool: T[], urgency: (a: T) => number,
 ): { advice: T[]; note: SimPick | null } {
   const top = cards[0]
-  const ts = top ? prep.draftRank.get(top.id)?.sim : null
+  // The sims ran on the plain projections: a player you have given your own numbers is not theirs to judge, on
+  // either side (2026-10-15: Jaylen Brown, whom the user cut for Philadelphia's crowding, kept the star over Banchero).
+  const ts = top && !prep.adjusted?.has(top.id) ? prep.draftRank.get(top.id)?.sim : null
   if (!ts) return { advice: cards, note: null }
   const u = urgency(top)
   const band = prep.cats ? SIM_TIE : Math.abs(top.score) * SIM_TIE_POINTS
@@ -1862,7 +1866,10 @@ export function simTiebreak<T extends { id: string; name: string; score: number 
     // Never to a player you tagged avoid: avoid loses every close call, and this is one.
     .filter((a) => a.id !== top.id && urgency(a) === u && top.score - a.score <= band && (a as { tag?: string | null }).tag !== 'avoid')
     .map((a) => ({ a, s: prep.draftRank.get(a.id)?.sim }))
-    .filter((x): x is { a: T; s: { delta: number; err: number } } => !!x.s && x.s.delta > ts.delta)
+    // Points: only an edge bigger than its own error moves the star; inside it, the higher-value card keeps it.
+    // 800 fresh Harker drafts (2026-10-15): +2.5 / +2.2 weeks per 100 over a best-value star, against +2.8 / +2.4
+    // for any edge, a gap inside the test's own error, and the star then agrees with the value the cards show.
+    .filter((x): x is { a: T; s: { delta: number; err: number } } => !!x.s && !prep.adjusted?.has(x.a.id) && x.s.delta > ts.delta && (!!prep.cats || x.s.delta - ts.delta >= Math.hypot(x.s.err, ts.err)))
     .sort((x, y) => y.s.delta - x.s.delta)[0]
   if (!best) return { advice: cards, note: null }
   return {

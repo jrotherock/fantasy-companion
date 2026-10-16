@@ -321,6 +321,7 @@ function prepFor(league: NbaLeague, inj = injuryInputs()): Prepared {
   const mine = resolvePreferences(prefFile(), prefLeague(league.id), index)
   const prep = prepare(league, applyAdjustments(players, mine.adjust), noise, adpFor, schedule(), inj, notesByTeam(), draftRankFor(league))
   prep.myOrder = mine.order
+  prep.adjusted = new Set(mine.adjust.keys())
   return prep
 }
 

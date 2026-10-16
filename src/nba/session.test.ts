@@ -161,8 +161,16 @@ test("the sims' tiebreak moves the star only within its band (0.06, or 25% in po
   assert.equal(r.advice.length, 3)
   assert.equal(simTiebreak(prep, [p('e', 5), p('a', 4.99)], [p('e', 5), p('a', 4.99)], () => 0).note, null, 'no move when the top card leads the sims')
   // Points: the band is a share of the top score (25%), so a player well behind in points can still take it.
-  const pts = simTiebreak({ cats: null, draftRank: prep.draftRank } as any, [p('a', 1000), p('b', 900)], [p('a', 1000), p('b', 900), p('e', 700)], () => 0)
-  assert.equal(pts.advice[0].id, 'b', 'e is 30% back: outside; b, 10% back and ahead in the sims, takes it')
+  const ptsRank = new Map([['a', sim(-3)], ['b', sim(2)], ['e', sim(5)]])
+  const pts = simTiebreak({ cats: null, draftRank: ptsRank } as any, [p('a', 1000), p('b', 900)], [p('a', 1000), p('b', 900), p('e', 700)], () => 0)
+  assert.equal(pts.advice[0].id, 'b', 'e is 30% back: outside; b, 10% back and clearly ahead in the sims (5 ± 2.5), takes it')
+  // Points: an edge inside its own error does not move the star (b's edge over a is 2 ± 2.5).
+  const close = simTiebreak({ cats: null, draftRank: new Map([['a', sim(-3)], ['b', sim(-1)]]) } as any, [p('a', 1000), p('b', 950)], [p('a', 1000), p('b', 950)], () => 0)
+  assert.equal(close.note, null, 'a coin flip keeps the higher-value card')
+  // A player with your own numbers is out of the sims' reach, on either side.
+  const mineRank = new Map([['a', sim(-3)], ['b', sim(5)]])
+  assert.equal(simTiebreak({ cats: {}, draftRank: mineRank, adjusted: new Set(['b']) } as any, [p('a', 5), p('b', 4.99)], [p('a', 5), p('b', 4.99)], () => 0).note, null)
+  assert.equal(simTiebreak({ cats: {}, draftRank: mineRank, adjusted: new Set(['a']) } as any, [p('a', 5), p('b', 4.99)], [p('a', 5), p('b', 4.99)], () => 0).note, null)
 })
 
 test('your ranking takes the star among near-ties only, over the sims and unlisted players alike', () => {
