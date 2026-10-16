@@ -549,14 +549,18 @@ if (MODE === 'fillrule') {
   }
   strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
   const EMPTY = 0.30, GAIN = 0.10
-  for (const [label, close, persist] of [['rule, close 0.03', 0.03, true], ['rule, close 0.06', 0.06, true], ['rule, close 0.03, no two-turn check', 0.03, false]] as [string, number, boolean][]) {
+  // `--fill-variants last`: the rule as shipped against the rule without (3), the previous-pick check (2026-10-16).
+  const variants: [string, number, boolean, boolean][] = arg('fill-variants') === 'last'
+    ? [['rule, close 0.03', 0.03, true, true], ['rule, close 0.03, no last-filler check', 0.03, true, false]]
+    : [['rule, close 0.03', 0.03, true, true], ['rule, close 0.06', 0.06, true, true], ['rule, close 0.03, no two-turn check', 0.03, false, true]]
+  for (const [label, close, persist, lastCheck] of variants) {
     const fillerRosters = new Set<string>()
     strategies[label] = (avail, mine, overall, slot) => {
       const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
         { teams: league.teams, rounds, slot, overall, spread: H }, base, { canTake: canTake(mine), neutralUntil: BUILD_FROM })
       if (!advice.length) return windowOf(avail, mine)[0]
       const top = advice[0]
-      if (mine.length < 5 || fillerRosters.has(mine.join(','))) return appPick(avail, mine, overall, slot, 'none', [], H)
+      if (mine.length < 5 || (lastCheck && fillerRosters.has(mine.join(',')))) return appPick(avail, mine, overall, slot, 'none', [], H)
       const now = shortShare(mine), before = persist ? shortShare(mine.slice(0, -1)) : now
       const short = [...now.entries()].filter(([seat, v]) => v > EMPTY && (before.get(seat) ?? 0) > EMPTY)
       if (!short.length) return appPick(avail, mine, overall, slot, 'none', [], H)
