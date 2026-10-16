@@ -588,3 +588,18 @@ test('an injury history tag shows a player who has missed a lot of games, with t
   const rookie = players.find((p: any) => p.history?.length === 1)
   if (rookie) assert.equal(injuryHistoryOf(hoops, rookie.id), null, 'one season is a role, not a history')
 })
+
+test('in a points league each card carries his season points, a game times his games; none in categories', () => {
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor)
+  const v = buildView(harker, { ...emptyDraft('t'), slot: 5 }, new Map())
+  assert.ok(v.takeNow.length > 0)
+  for (const a of v.takeNow) {
+    const r = harker.points!.byId.get(a.id)!
+    assert.ok(a.fpSeason != null && Math.abs(a.fpSeason - r.fpg * r.games.gp) < 1e-6, `${a.name}: ${a.fpSeason} vs ${r.fpg} × ${r.games.gp}`)
+  }
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
+  assert.ok(buildView(hoops, { ...emptyDraft('t'), slot: 5 }, new Map()).takeNow.every((a) => a.fpSeason == null))
+})

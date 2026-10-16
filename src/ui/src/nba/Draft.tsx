@@ -298,6 +298,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
             <div className="nb-reason">
               {reasons(a.contrib, locks)}
               {a.fpg != null && <span>{a.fpg.toFixed(1)} fp/g</span>}
+              {a.fpSeason != null && <span title="Fantasy points over the season: a game times the games he is counted for">{Math.round(a.fpSeason).toLocaleString()} season</span>}
               <span className="nb-dim">{Math.round(a.gp)} g</span>
               {a.playoff != null && <span className={po(a.playoff, view.playoffNorm)}>{a.playoff} PO g</span>}
               {a.returnNote && <span className="nb-down">{a.returnNote}</span>}

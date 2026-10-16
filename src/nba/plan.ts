@@ -809,7 +809,7 @@ export interface DraftView {
     /** A single punt that tested well after my first pick, offered until my 4th pick while nothing is locked. */
     puntTip: PuntTip | null
   }
-  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; context: PlayerContext | null;
+  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; fpSeason?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; context: PlayerContext | null;
     /** Tagged avoid: his score carries the handicap (handicapAvoided). */
     avoided: boolean; bestBuild: BestBuild | null; myRank: number | null; healthRisk: HealthRisk | null
     /** Nightly coverage with him added: each starting seat type's share of game nights filled (see coverage). */
@@ -1120,6 +1120,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       context: contextWorthShowing(prep.context(a.id)) ? prep.context(a.id) : null,
       contrib: prep.cats ? contribution(prep.cats.byId.get(a.id)!) : undefined,
       fpg: prep.points?.byId.get(a.id)?.fpg,
+      fpSeason: prep.points?.byId.get(a.id)?.season,
       gp: (prep.cats?.byId.get(a.id)?.games.gp ?? prep.points?.byId.get(a.id)?.games.gp) ?? 0,
       playoff: prep.playoff(a.id),
       returnNote: stashNote(prep, prep.returnNote(a.id), hurtOnRoster, a.id),
