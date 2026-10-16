@@ -512,6 +512,9 @@ function previewOf(view: DraftView, id: string | null) {
 
 /** Below this many players a roster is too young for coverage to mean much: shown, but muted. */
 const COVERAGE_FROM = 5
+/** Coverage colours: green at 75%+ of nights filled, amber from 50%, red below. */
+const COVERAGE_OK = 0.75
+const COVERAGE_LOW = 0.5
 
 /**
  * Nightly coverage: for each starting spot, the share of game nights my roster as drafted can fill it. Looking at a
@@ -522,8 +525,8 @@ function Coverage({ view, preview }: { view: DraftView; preview: { name: string;
   if (!cov) return null
   const young = view.roster.length < COVERAGE_FROM
   const pct = (x: number) => Math.round(x * 100)
-  // Coloured from the first pick. While the roster is young a gap is expected, so it shows amber, not red.
-  const tone = (x: number) => (x < 0.6 ? (young ? 'nb-cov-mid' : 'nb-cov-low') : x < 0.85 ? 'nb-cov-mid' : 'nb-cov-ok')
+  // Coloured from the first pick, on one scale: three colours that can be told apart at a glance.
+  const tone = (x: number) => (x < COVERAGE_LOW ? 'nb-cov-low' : x < COVERAGE_OK ? 'nb-cov-mid' : 'nb-cov-ok')
   const next = preview?.coverage ?? null
   return (
     <div className="nb-coverage" title="Share of game nights each starting spot can be filled by your roster as drafted, counting each player's chance to play. Look at a card to see what he would change.">
@@ -538,7 +541,7 @@ function Coverage({ view, preview }: { view: DraftView; preview: { name: string;
         )
       })}
       <HealthCount view={view} adding={!!(preview as { healthRisk?: unknown } | null)?.healthRisk} />
-      {young && <span className="nb-dim nb-cov-note">early: gaps show amber until pick {COVERAGE_FROM}, red after</span>}
+      {young && <span className="nb-dim nb-cov-note">early picks: red spots are normal now and fill in as you draft</span>}
     </div>
   )
 }
