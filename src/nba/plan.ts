@@ -466,6 +466,12 @@ export function emptySeatShare(prep: Prepared, ids: string[]): Map<string, numbe
   return out
 }
 
+/**
+ * Off since 2026-10-16: on that day's projections and Hoops rank the filler star cost 0.85 weeks won per 100 against
+ * the cards (two sets of 800 simulated drafts, ±0.09 each; without the previous-pick check, 1.15). The filler card
+ * and its note stay; the star goes back to the best card.
+ */
+export const FILL_STAR_ON = false
 /** The filler takes the star (categories): his seat empty on more than this share of nights... */
 export const FILL_STAR_EMPTY = 0.30
 /** ...and no further than this behind the best card, in categories a week. */
@@ -1333,7 +1339,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     const before = emptySeatShare(prep, mine.slice(0, -1)), after = emptySeatShare(prep, mine)
     return [...before].some(([seat, v]) => v > FILL_STAR_EMPTY && v - (after.get(seat) ?? 0) >= SEAT_FILL_GAIN)
   })()
-  const fillStar = !!(prep.cats && seatFill && takeNow.length && takeNow[0].id !== seatFill.id &&
+  const fillStar = !!(FILL_STAR_ON && prep.cats && seatFill && takeNow.length && takeNow[0].id !== seatFill.id &&
     seatFill.before > FILL_STAR_EMPTY && seatFill.behind <= FILL_STAR_CLOSE && !lastWasFiller)
   if (fillStar) {
     const card = takeNow.find((t) => t.id === seatFill!.id) ?? seatFillCard!
