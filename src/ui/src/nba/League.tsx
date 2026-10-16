@@ -12,6 +12,7 @@ import { Fragment, useCallback, useEffect, useState, type ReactNode } from 'reac
 import type { SeasonView } from '../../../nba/seasonView'
 import type { CatRace } from '../../../nba/matchup'
 import type { Cat } from '../../../nba/value'
+import { LeagueSize } from './LeagueSize'
 
 const LABEL: Record<Cat, string> = { fg: 'FG%', ft: 'FT%', tpm: '3PM', pts: 'PTS', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO' }
 const pct = (x: number) => `${Math.round(x * 100)}%`
@@ -123,14 +124,16 @@ function TakeBySection({ leagueId }: { leagueId: string }) {
   const key = `takeby-slot-${leagueId}`
   const [slot, setSlot] = useState<number | null>(() => { try { const v = localStorage.getItem(key); return v ? Number(v) : null } catch { return null } })
   const [tb, setTb] = useState<TakeByView | null>(null)
+  const [sized, setSized] = useState(0)
   useEffect(() => {
     fetch(`/api/nba/takeby/${leagueId}${slot ? `?slot=${slot}` : ''}`).then((r) => r.json()).then((x) => { if (x?.picks) setTb(x) }).catch(() => {})
-  }, [leagueId, slot])
+  }, [leagueId, slot, sized])
   const choose = (n: number) => { setSlot(n); try { localStorage.setItem(key, String(n)) } catch { /* private window */ } }
   if (!tb) return null
   const pc = (x: number) => `${Math.round(x * 100)}%`
   return (
     <Section title="Where your picks land" hint="by value, among those likely still there">
+      {!leagueId.startsWith('nba-mock-') && <LeagueSize leagueId={leagueId} onChange={() => setSized((n) => n + 1)} />}
       <div className="nl-slots">
         <span className="nl-dim">Your slot</span>
         {Array.from({ length: tb.teams }, (_, i) => i + 1).map((n) => (

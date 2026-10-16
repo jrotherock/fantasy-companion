@@ -23,6 +23,7 @@ import { join } from 'node:path'
 import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { NameIndex } from '../nba/join.js'
+import { parseTeams } from '../nba/yahooDraft.js'
 import { adpFor } from '../nba/draft.js'
 import { buildView, changes, compareView, prepare, recordOf, takeBy, type DraftRankFile, type Availability, type DraftView, type InjuryInputs, type NbaLeague, type Prepared } from '../nba/plan.js'
 import { parseCbsInjuries, type InjuryNote } from '../nba/sources.js'
@@ -36,6 +37,14 @@ import type { NbaPlayer } from '../nba/types.js'
 
 const DATA = 'data/nba'
 const PREFS = join(STATE_DIR, 'nba-preferences.json')
+/**
+ * A league's size as you set it in the draft prep, over the repository's: a league that does not fill
+ * (Harker had 12 of 16 the night before its 2026 draft) is resized here, with no deploy.
+ */
+const SIZES = join(STATE_DIR, 'nba-league-sizes.json')
+function readSizes(): Record<string, number> {
+  try { return existsSync(SIZES) ? JSON.parse(readFileSync(SIZES, 'utf8')) : {} } catch { return {} }
+}
 
 interface Loaded {
   players: NbaPlayer[]
@@ -49,6 +58,8 @@ function load(): Loaded {
   if (loaded) return loaded
   const players: NbaPlayer[] = JSON.parse(readFileSync(`${DATA}/players.json`, 'utf8')).players
   const leagues: NbaLeague[] = JSON.parse(readFileSync(`${DATA}/leagues.json`, 'utf8')).leagues
+  const sizes = readSizes()
+  for (const l of leagues) if (sizes[l.id]) l.teams = sizes[l.id]
   /*
    * Throwaway leagues for replaying a real draft through the screen live in
    * the state directory, never in the repository, and must end in -test, so a
@@ -351,11 +362,32 @@ function setReturn(playerId: string, date: string | null) {
 
 // ── Sessions ──
 
-/** The league's Draft rank (data/nba/draft-rank/<league>.json): a mock or a -test league uses the league it copies. */
+/**
+ * The league's Draft rank (data/nba/draft-rank/<league>.json): a mock or a -test league uses the league it copies.
+ * A rank simulated at another league size sits beside it as <league>.<teams>.json and is used at that size.
+ */
 function draftRankFor(league: NbaLeague): DraftRankFile | null {
   const base = league.mock?.baseId ?? league.id.replace(/-test$/, '')
-  const f = `${DATA}/draft-rank/${base}.json`
+  const sized = `${DATA}/draft-rank/${base}.${league.teams}.json`
+  const f = existsSync(sized) ? sized : `${DATA}/draft-rank/${base}.json`
   try { return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) as DraftRankFile : null } catch { return null }
+}
+
+/** The size the repository gives a league, before any you set. */
+function configuredTeams(id: string): number | null {
+  const l = (JSON.parse(readFileSync(`${DATA}/leagues.json`, 'utf8')).leagues as NbaLeague[]).find((x) => x.id === id)
+  return l?.teams ?? null
+}
+
+/** How many teams Yahoo has in the league now, read at most every ten minutes. */
+const yahooSizes = new Map<string, { teams: number | null; at: number }>()
+async function yahooTeams(league: NbaLeague): Promise<number | null> {
+  const hit = yahooSizes.get(league.id)
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.teams
+  let teams: number | null = null
+  try { teams = parseTeams(await yahooApi.call(`league/${league.leagueKey}/teams`, { lane: 'interactive', by: 'nba-size' })).length || null } catch { teams = hit?.teams ?? null }
+  yahooSizes.set(league.id, { teams, at: Date.now() })
+  return teams
 }
 
 let teamNotes: Record<string, string[]> | null = null
@@ -642,6 +674,11 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
     json(res, 200, compareView(s.prep, s.draft, tagsFor(s.league.id), ids, cards))
     return true
   }
+  // The league's size: what you set, what the repository says, and what Yahoo has now.
+  if (action === 'teams' && req.method === 'GET') {
+    json(res, 200, { teams: s.league.teams, configured: configuredTeams(s.league.id), yahoo: s.league.mock ? null : await yahooTeams(s.league), mock: !!s.league.mock })
+    return true
+  }
   if (req.method !== 'POST') {
     json(res, 405, { error: 'POST it' })
     return true
@@ -703,6 +740,24 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
       setLocks(s.draft, locks)
       save(s)
       json(res, 200, { ok: true, locks })
+      return true
+    }
+    case 'teams': {
+      // Resize a real league ({ teams: 12 }; null goes back to the repository's): every value, the replacement
+      // line, the odds and the plan are worked out again for the new size. A mock takes its size from its own room.
+      if (s.league.mock) { json(res, 400, { error: 'a mock takes its size from its draft room' }); return true }
+      const configured = configuredTeams(s.league.id)
+      const n = data.teams == null ? configured : Number(data.teams)
+      if (n == null || !Number.isInteger(n) || n < 4 || n > 20) { json(res, 400, { error: 'teams is a whole number from 4 to 20, or null' }); return true }
+      const sizes = readSizes()
+      if (n === configured) delete sizes[s.league.id]; else sizes[s.league.id] = n
+      mkdirSync(STATE_DIR, { recursive: true })
+      writeFileSync(SIZES, JSON.stringify(sizes, null, 1))
+      s.league.teams = n
+      if (s.draft.slot != null && s.draft.slot > n) s.draft.slot = null
+      save(s)
+      reprepare()
+      json(res, 200, { ok: true, teams: n, configured })
       return true
     }
     case 'discard': {

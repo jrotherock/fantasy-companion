@@ -11,6 +11,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DraftView, BoardRow, PathView, CompareView } from '../../../nba/plan'
 import type { Cat } from '../../../nba/value'
+import { LeagueSize } from './LeagueSize'
 import type { PlayerContext, TeamLoad } from '../../../nba/teamLoad'
 
 const CATS: Cat[] = ['fg', 'ft', 'tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to']
@@ -238,6 +239,7 @@ function Gate({ view, act }: { view: DraftView; act: Act }) {
           : 'Yahoo sets the order before the draft and the companion reads it the moment it is posted; until then, set it here'}{' '}
         — almost every number in here depends on it.
       </p>
+      {!view.mock && <LeagueSize leagueId={view.league.id} />}
       <div className="slots">
         {Array.from({ length: view.league.teams }, (_, i) => <button className="slotbtn" key={i} onClick={() => act('slot', { slot: i + 1 })}>{i + 1}</button>)}
       </div>
