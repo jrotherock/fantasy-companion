@@ -529,15 +529,15 @@ function Week({ v }: { v: SeasonView }) {
         {w.idleGames >= 1 && ` ${w.idleGames.toFixed(0)} of your players' games fall on days with no seat for them.`}
         {swing.length > 0 && ` In play: ${swing.join(', ')}.`}
       </p>
-      {w.odds && <div className="nl-subh">Each category: so far · your chance to win it · where it ends up</div>}
+      {w.odds && <div className="nl-subh">Each category, you vs {w.opponent?.name ?? 'them'}: so far · your chance to win it · where it ends (projected)</div>}
       {w.odds && (
         <div className="nl-cats">
           {w.odds.races.map((r) => (
             <div key={r.cat} className={`nl-cat ${r.state}`} title={STATE_WORD[r.state]}>
               <div className="nl-catk">{LABEL[r.cat]}</div>
-              <div className="nl-catv">{fmt(r.cat, r.mineNow)}<span>–{fmt(r.cat, r.theirsNow)}</span></div>
+              <div className="nl-catv" title="The week so far: you vs them">{fmt(r.cat, r.mineNow)}<span> vs {fmt(r.cat, r.theirsNow)}</span></div>
               <div className="nl-catp">{pct(r.win + r.tie / 2)}</div>
-              <div className="nl-catf">→ {fmt(r.cat, r.mine)}–{fmt(r.cat, r.theirs)}</div>
+              <div className="nl-catf" title="Where the week is projected to end: you vs them">ends {fmt(r.cat, r.mine)} vs {fmt(r.cat, r.theirs)}</div>
             </div>
           ))}
         </div>
