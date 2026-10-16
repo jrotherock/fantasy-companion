@@ -398,11 +398,19 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
           ★ <b>{view.orderPick.pick}</b> over {view.orderPick.over}: your ranking, {view.orderPick.behind < 0.0005 ? 'and the best score' : `${view.league.scoring === 'categories' ? view.orderPick.behind.toFixed(3) : Math.round(view.orderPick.behind)} behind the best card, inside the near-tie range`}.
         </div>
       )}
-      {view.simPick && (
-        <div className="nb-ponote" title="Within 0.06 of the top card, the star goes to the player the first-pick simulations rate higher: in simulated seasons this won about 4 more weeks in 100 than the cards' own order.">
-          ★ <b>{view.simPick.pick}</b> over {view.simPick.over}: as close on the cards, and ahead in simulated seasons ({view.simPick.gain.toFixed(1)} more weeks won in 100).
-        </div>
-      )}
+      {view.simPick && (() => {
+        const s = view.simPick
+        const cats = view.league.scoring === 'categories'
+        const gap = cats ? `${s.behind.toFixed(3)} a week` : `${Math.round(s.behind)} season value`
+        const flip = s.gain < s.err
+        return (
+          <div className="nb-ponote" title={`Close on the cards, the star goes to the player the first-pick simulations rate higher. Their estimates carry an error of about ±${s.err.toFixed(1)} weeks in 100 here, so an edge smaller than that is a coin flip.`}>
+            ★ <b>{s.pick}</b> over {s.over}, the cards' own first choice ({s.over.split(' ').at(-1)} is ahead by {gap}): {flip
+              ? <>the simulations rate {s.pick.split(' ').at(-1)} only {s.gain.toFixed(1)} weeks in 100 better, inside their ±{s.err.toFixed(1)} margin. <b>A coin flip: take either.</b></>
+              : <>the simulations rate {s.pick.split(' ').at(-1)} {s.gain.toFixed(1)} weeks in 100 better, more than their ±{s.err.toFixed(1)} margin.</>}
+          </div>
+        )
+      })()}
     </div>
   )
 }

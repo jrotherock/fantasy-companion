@@ -131,13 +131,15 @@ if (MODE === 'band' && existsSync(rankFile)) for (const r of JSON.parse(readFile
 /** As the app does it: only among players as urgent as the top card (likely gone, a coin flip, or likely back). */
 const urgency = (a: { survives: number }) => (a.survives >= 0.6 ? 2 : a.survives > 0.25 ? 1 : 0)
 const SAME_URGENCY = process.argv.includes('--same-urgency')
-const simBand = (band: number): Pick => (avail, mine, overall, slot) => {
+// `sig`: only when the sims' edge is bigger than its own error (2026-10-15: Mitchell took the star from Jalen Johnson
+// on +0.2 weeks in 100, with errors of about ±1.2).
+const simBand = (band: number, sig = false): Pick => (avail, mine, overall, slot) => {
   const advice = advisePoints(avail.map((id) => rowOf.get(id)!).filter(Boolean), { teams: league.teams, rounds, slot, overall, spread: SPREAD }, 25, canTake(mine))
   const top = advice[0]
   if (!top) return app()(avail, mine, overall, slot)
   const ts = sims.get(top.id)
   if (!ts) return top.id
-  const best = advice.filter((a) => a.id !== top.id && (!SAME_URGENCY || urgency(a) === urgency(top)) && top.score - a.score <= Math.abs(top.score) * band && sims.has(a.id) && sims.get(a.id)!.delta > ts.delta)
+  const best = advice.filter((a) => a.id !== top.id && (!SAME_URGENCY || urgency(a) === urgency(top)) && top.score - a.score <= Math.abs(top.score) * band && sims.has(a.id) && sims.get(a.id)!.delta > ts.delta && (!sig || sims.get(a.id)!.delta - ts.delta >= Math.hypot(sims.get(a.id)!.err, ts.err)))
     .sort((a, b) => sims.get(b.id)!.delta - sims.get(a.id)!.delta)[0]
   return best?.id ?? top.id
 }
@@ -181,7 +183,7 @@ const cMin = (n: number, by: number): Pick => (avail, mine, overall, slot) => {
   return app()(avail, mine, overall, slot)
 }
 const strategies: Record<string, Pick> = MODE === 'pool' ? (arg('follow') === 'value' ? { 'best value': bestValue } : { 'the app (recommender)': app() })
-: MODE === 'band' ? Object.fromEntries([['the app (recommender)', app()], ...(arg('bands') ?? '0.01;0.024').split(';').map((b) => [`sims' favourite within ${(Number(b) * 100).toFixed(1)}%`, simBand(Number(b))])])
+: MODE === 'band' ? Object.fromEntries([['the app (recommender)', app()], ...(arg('bands') ?? '0.01;0.024').split(';').flatMap((b) => [[`sims' favourite within ${(Number(b) * 100).toFixed(1)}%`, simBand(Number(b))], ...(process.argv.includes('--sig') ? [[`... only when the edge beats its error`, simBand(Number(b), true)]] : [])])])
 : MODE === 'centers' ? {
   'the app (recommender)': app(),
   '2 C by my pick 5': cMin(2, 5),

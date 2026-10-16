@@ -1838,7 +1838,12 @@ export const SIM_TIE_POINTS = 0.25
  */
 export const SIM_SHOW = 0.10
 export const SIM_SHOW_PICKS = 2
-export interface SimPick { pick: string; over: string; gain: number }
+/**
+ * The sims' tiebreak took the star: `gain` weeks won in 100 over the card it passed, `err` their combined error
+ * (an edge inside it is a coin flip), and `behind` how far below that card the new star scores (categories a week;
+ * points: season value), so the screen can say plainly when the star is not the best-value card.
+ */
+export interface SimPick { pick: string; over: string; gain: number; err: number; behind: number }
 
 const simEven = (prep: Prepared, id: string, than: string) => {
   const a = prep.draftRank.get(id)?.sim, b = prep.draftRank.get(than)?.sim
@@ -1862,7 +1867,7 @@ export function simTiebreak<T extends { id: string; name: string; score: number 
   if (!best) return { advice: cards, note: null }
   return {
     advice: [best.a, ...cards.filter((x) => x.id !== best.a.id)].slice(0, Math.max(cards.length, 1)),
-    note: { pick: best.a.name, over: top.name, gain: best.s.delta - ts.delta },
+    note: { pick: best.a.name, over: top.name, gain: best.s.delta - ts.delta, err: Math.hypot(best.s.err, ts.err), behind: top.score - best.a.score },
   }
 }
 
