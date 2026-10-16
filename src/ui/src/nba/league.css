@@ -36,7 +36,6 @@
 .nl-table .l { text-align: left; }
 .nl-table tr.nl-idle td { color: var(--muted); }
 .nl-table tr.nl-mine td { background: color-mix(in srgb, var(--amber) 10%, transparent); }
-.nl-slot { font-family: var(--mono); color: var(--muted); text-align: left !important; width: 3rem; }
 .nl-edgeh { font-size: 10px !important; padding: 0.3rem 0.1rem !important; text-align: center !important; }
 .nl-edge { font-size: var(--t-xs); padding: 0.3rem 0.1rem !important; text-align: center !important; }
 .nl-stat { display: inline-block; margin-left: 0.4rem; font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 0.3rem; border-radius: 3px; border: 1px solid var(--line); color: var(--amber); }
@@ -115,7 +114,7 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-lg { font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); }
 /* Where your picks land */
 .nl-slots { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin-bottom: 0.5rem; }
-.nl-slot { min-width: 2rem; padding: 0.2rem 0.4rem; border: 1px solid var(--line); background: none; color: inherit; border-radius: 3px; cursor: pointer; }
+.nl-slot { min-width: 2.25rem; height: 1.75rem; padding: 0 0.5rem; border: 1px solid var(--line); background: none; color: inherit; border-radius: 3px; cursor: pointer; font-family: var(--mono); text-align: center; line-height: 1; }
 .nl-slot.on { border-color: var(--blue); color: var(--blue); font-weight: 600; }
 .nl-takeby { padding: 0.45rem 0; border-top: 1px solid var(--line); }
 .nl-takebyh { font-weight: 600; margin-bottom: 0.2rem; }

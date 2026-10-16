@@ -112,7 +112,7 @@ async function post(path: string, data: unknown = {}) {
 type TakeByView = {
   slot: number; teams: number; knownSlot: number | null
   gone: { id: string; name: string; rank: number; adp: number; chance: number }[]
-  picks: { overall: number; round: number; players: { id: string; name: string; team: string | null; positions: string[]; rank: number; adp: number; chance: number; simMark: { kind: 'up' | 'lean' | 'down'; gap: number } | null }[] }[]
+  picks: { overall: number; also?: number; round: number; players: { id: string; name: string; team: string | null; positions: string[]; rank: number; adp: number; chance: number; simMark: { kind: 'up' | 'lean' | 'down'; gap: number } | null }[] }[]
 }
 
 /**
@@ -142,16 +142,22 @@ function TakeBySection({ leagueId }: { leagueId: string }) {
         {tb.knownSlot != null && tb.knownSlot !== tb.slot && <button className="nl-link" onClick={() => choose(tb.knownSlot!)}>yours is {tb.knownSlot}</button>}
       </div>
       {tb.gone.length > 0 && <p className="nl-note">Likely gone before your first pick: {tb.gone.map((g) => g.name).join(', ')}.</p>}
-      {tb.picks.map((g, i) => (
+      {tb.picks.map((g, i) => {
+        // Pick numbers count picks, not turns: a turn at the snake's end holds two.
+        const n = tb.picks.slice(0, i).reduce((k, x) => k + (x.also ? 2 : 1), 1)
+        return (
         <div key={g.overall} className="nl-takeby">
-          <div className="nl-takebyh">Your pick {i + 1} <span className="nl-dim">· round {g.round}, #{g.overall}</span></div>
+          <div className="nl-takebyh">{g.also
+            ? <>Your picks {n}–{n + 1} <span className="nl-dim">· back to back, rounds {g.round}–{g.round + 1}, #{g.overall} &amp; #{g.also}</span></>
+            : <>Your pick {n} <span className="nl-dim">· round {g.round}, #{g.overall}</span></>}</div>
           {g.players.length === 0 ? <div className="nl-dim">—</div> : (
             <div className="nl-takebylist">{g.players.map((p) => (
               <span key={p.id}><b>{p.name}</b> <span className="nl-dim">#{p.rank}{p.simMark ? ` ${p.simMark.kind === 'down' ? '▼' : p.simMark.kind === 'up' ? '▲' : '△'}` : ''} · ADP {Math.round(p.adp)} · {pc(p.chance)}</span></span>
             ))}</div>
           )}
         </div>
-      ))}
+        )
+      })}
       <p className="nl-note">Each player sits at the last of your picks where he is more likely there than not; # is the board's order (the simulations' top 5, then by usual round where the league has a Draft rank, else value; ▼ the simulations say let him go, ▲ they like him more than his round, △ a lean), the % his chance at that pick. Grouped by when players go, not tiers of value; in the draft itself the cards already weigh who will be back.</p>
     </Section>
   )

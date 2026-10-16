@@ -603,3 +603,20 @@ test('in a points league each card carries his season points, a game times his g
   const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
   assert.ok(buildView(hoops, { ...emptyDraft('t'), slot: 5 }, new Map()).takeNow.every((a) => a.fpSeason == null))
 })
+
+test('the per-slot preview keeps back-to-back picks at the turn as one turn, so neither reads empty', async () => {
+  const { takeBy } = await import('./plan.js')
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  for (const id of ['nba-harker', 'nba-hoops']) {
+    const prep = prepare(leagues.find((l: any) => l.id === id), players, noise, adpFor)
+    const n = prep.league.teams
+    const last = takeBy(prep, n, new Map())
+    assert.deepEqual([last.picks[0].overall, last.picks[0].also], [n, n + 1], `${id}: the last slot opens with two in a row`)
+    assert.ok(last.picks.every((g) => g.players.length > 0), `${id} slot ${n}: ${last.picks.map((g) => `${g.overall}:${g.players.length}`)}`)
+    const first = takeBy(prep, 1, new Map())
+    assert.deepEqual([first.picks[0].overall, first.picks[0].also], [1, undefined])
+    assert.deepEqual([first.picks[1].overall, first.picks[1].also], [2 * n, 2 * n + 1], `${id}: slot 1 turns at the end of round 2`)
+  }
+})

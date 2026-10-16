@@ -1634,8 +1634,12 @@ export interface TakeBy {
   teams: number
   /** Best by value likely gone before my first pick. */
   gone: TakeByPlayer[]
-  /** For each of my first picks, the best by value whose last likely pick is that one. */
-  picks: { overall: number; round: number; players: TakeByPlayer[] }[]
+  /**
+   * For each of my first turns, the best by value whose last likely turn is that one. Two picks back to back at
+   * the turn are one turn (`also` is the second): anyone there at the first is there at the second, so apart
+   * the first would always read empty.
+   */
+  picks: { overall: number; also?: number; round: number; players: TakeByPlayer[] }[]
 }
 
 /**
@@ -1653,9 +1657,17 @@ export function takeBy(prep: Prepared, slot: number, tags: Map<string, PrefTag>,
   // The league's Draft rank where it has one, as the board orders it; everyone else after, by value.
   const order = [...value.keys()].sort((a, b) => (prep.draftRank.get(a)?.rank ?? 10_000 + value.get(a)!) - (prep.draftRank.get(b)?.rank ?? 10_000 + value.get(b)!))
   const rank = new Map(order.map((id, i) => [id, i + 1]))
-  const mine: number[] = []
-  for (let o = 1; o <= teams * prep.rounds && mine.length < turns + 1; o++) if (slotFor(o, teams) === slot) mine.push(o)
-  const pool = [...rank.entries()].filter(([id]) => tags.get(id) !== 'never').sort((a, b) => a[1] - b[1]).slice(0, teams * (turns + 2))
+  // My turns: a pick, or two back to back at the turn.
+  const blocks: number[][] = []
+  for (let o = 1; o <= teams * prep.rounds && blocks.length <= turns; o++) {
+    if (slotFor(o, teams) !== slot) continue
+    const last = blocks.at(-1)
+    if (last && last.at(-1) === o - 1) last.push(o); else blocks.push([o])
+  }
+  const mine = blocks.map((b) => b[0])
+  // Everyone who could still be there at the last turn shown, and a round past it.
+  const reach = (blocks[Math.min(turns, blocks.length) - 1]?.at(-1) ?? teams * turns) + 2 * teams
+  const pool = [...rank.entries()].filter(([id]) => tags.get(id) !== 'never').sort((a, b) => a[1] - b[1]).slice(0, reach)
   const row = (id: string, r: number, at: number): TakeByPlayer => {
     const p = prep.players.get(id)!
     return { id, name: p.name, team: p.team, positions: prep.positions(id), rank: r, adp: prep.adp(id), chance: survives(prep.adp(id), at, L.adpSpread), simMark: prep.draftRank.get(id)?.mark ?? null }
@@ -1666,12 +1678,12 @@ export function takeBy(prep: Prepared, slot: number, tags: Map<string, PrefTag>,
     for (let i = 0; i < mine.length; i++) if (survives(prep.adp(id), mine[i], L.adpSpread) >= 0.5) k = i
     return k
   }
-  const groups = mine.slice(0, turns).map((o) => ({ overall: o, round: roundFor(o, teams), players: [] as TakeByPlayer[] }))
+  const groups = blocks.slice(0, turns).map((b) => ({ overall: b[0], ...(b.length > 1 ? { also: b[1] } : {}), round: roundFor(b[0], teams), players: [] as TakeByPlayer[] }))
   const gone: TakeByPlayer[] = []
   for (const [id, r] of pool) {
     const k = lastTurn(id)
     if (k < 0) { if (gone.length < 5) gone.push(row(id, r, mine[0])); continue }
-    if (k < groups.length && groups[k].players.length < perPick) groups[k].players.push(row(id, r, mine[k]))
+    if (k < groups.length && groups[k].players.length < perPick * (groups[k].also ? 2 : 1)) groups[k].players.push(row(id, r, mine[k]))
   }
   return { slot, teams, gone, picks: groups }
 }
