@@ -620,3 +620,40 @@ test('the per-slot preview keeps back-to-back picks at the turn as one turn, so 
     assert.deepEqual([first.picks[1].overall, first.picks[1].also], [2 * n, 2 * n + 1], `${id}: slot 1 turns at the end of round 2`)
   }
 })
+
+test('in points the filler takes the star from my 6th pick when he is within the band of the top card', async () => {
+  const { POINTS_FILL_STAR_BAND, POINTS_FILL_REF } = await import('./plan.js')
+  const { slotFor } = await import('../kernel/snake.js')
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const teams = JSON.parse(readFileSync('data/nba/teams.json', 'utf8')).teams
+  const games = JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games
+  const teamDates: Record<string, string[]> = {}
+  for (const g of games) for (const t of [g.home, g.away]) (teamDates[t] ??= []).push(g.date)
+  const harker = prepare(leagues.find((l: any) => l.id === 'nba-harker'), players, noise, adpFor,
+    Object.fromEntries(teams.map((t: any) => [t.team, t.playoffGames])), { returns: new Map(), teamDates, today: '2026-10-16' })
+  // Rooms drafting straight down ADP, where I take the bigs first: my guard seats go empty and a filler appears.
+  let starred = 0, seen = 0, promoted = 0
+  for (const slot of [3, 5, 8, 12]) {
+    const d = { ...emptyDraft('t'), slot }
+    const bigs = harker.adpOrder.filter((id) => harker.positions(id).some((p) => p === 'PF' || p === 'C'))
+    for (let o = 1; o <= 16 * 7; o++) {
+      const mineNow = slotFor(o, 16) === slot
+      const taken = new Set(d.picks.map((p) => p.playerId))
+      const id = mineNow && d.picks.filter((p) => slotFor(p.overall, 16) === slot).length < 5
+        ? bigs.find((x) => !taken.has(x))! : harker.adpOrder.find((x) => !taken.has(x))!
+      if (mineNow && d.picks.filter((p) => slotFor(p.overall, 16) === slot).length >= 5) {
+        const v = buildView(harker, d, new Map())
+        if (v.seatFill && v.clock.onClock) {
+          seen++
+          const band = POINTS_FILL_STAR_BAND * Math.max(Math.abs(v.advice[0].score), POINTS_FILL_REF) / 2.5
+          // Within the band he is the star: already the top card, or moved up to it (fillStar).
+          if (v.seatFill.behind <= band) { starred++; assert.equal(v.takeNow[0].id, v.seatFill.id, `slot ${slot} pick ${o}: ${v.seatFill.name} is the star`); if (v.fillStar) promoted++ }
+        }
+      }
+      d.picks.push({ overall: o, playerId: id, name: id, source: 'manual' as const })
+    }
+  }
+  assert.ok(seen > 0 && promoted > 0, `fillers seen ${seen}, starred ${starred}, moved up ${promoted}`)
+})

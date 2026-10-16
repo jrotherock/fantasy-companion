@@ -472,6 +472,14 @@ export function emptySeatShare(prep: Prepared, ids: string[]): Map<string, numbe
  * and its note stay; the star goes back to the best card.
  */
 export const FILL_STAR_ON = false
+/**
+ * Points (Harker): the filler card is the star from my 6th pick, when he is within this band of the top card (on the
+ * filler's scale: band / 2.5 of a typical top card). On 2026-10-16, against the cards in raw seasons with daily
+ * lineups: +0.74 ± 0.55 and +0.65 ± 0.54 weeks won per 100 in 12-team rooms, +0.32 ± 0.36 and +0.20 ± 0.40 in
+ * 16-team (600 and 800 drafts each). From the 4th pick, or a fixed "two guards, one a PG, by the 6th" rule: even.
+ */
+export const FILL_STAR_POINTS = true
+export const POINTS_FILL_STAR_BAND = 0.08
 /** The filler takes the star (categories): his seat empty on more than this share of nights... */
 export const FILL_STAR_EMPTY = 0.30
 /** ...and no further than this behind the best card, in categories a week. */
@@ -528,8 +536,9 @@ export function seatFillFor(prep: Prepared, mine: string[], advice: { id: string
   let pick: SeatFill | null = null
   for (const a of advice) {
     if (top - a.score > margin) break
-    // The star filling a seat is no news: the line is for the next best way to fill it.
-    if (a.id === star || gamesOf(prep, a.id) < SEAT_FILL_GAMES) continue
+    // The star competes too (2026-10-16): skipped, a lesser gap's filler wore the "fills" tag beside a star who
+    // filled the bigger one (Acuff the star for PG, empty 68% of nights; Green tagged "fills SF"), and was taken.
+    if (gamesOf(prep, a.id) < SEAT_FILL_GAMES) continue
     const after = emptySeatShare(prep, [...mine, a.id])
     const best = short.map(([seat, before]) => ({ seat, before, after: after.get(seat) ?? 0 }))
       .filter((x) => x.before - x.after >= SEAT_FILL_GAIN).sort((x, y) => (y.before - y.after) - (x.before - x.after))[0]
@@ -1340,8 +1349,11 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     const before = emptySeatShare(prep, mine.slice(0, -1)), after = emptySeatShare(prep, mine)
     return [...before].some(([seat, v]) => v > FILL_STAR_EMPTY && v - (after.get(seat) ?? 0) >= SEAT_FILL_GAIN)
   })()
-  const fillStar = !!(FILL_STAR_ON && prep.cats && seatFill && takeNow.length && takeNow[0].id !== seatFill.id &&
+  const catsFillStar = !!(FILL_STAR_ON && prep.cats && seatFill && takeNow.length && takeNow[0].id !== seatFill.id &&
     seatFill.before > FILL_STAR_EMPTY && seatFill.behind <= FILL_STAR_CLOSE && !lastWasFiller)
+  const pointsFillStar = !!(FILL_STAR_POINTS && prep.points && seatFill && takeNow.length && takeNow[0].id !== seatFill.id &&
+    seatFill.behind <= POINTS_FILL_STAR_BAND * Math.max(Math.abs(takeNow[0].score), POINTS_FILL_REF) / 2.5)
+  const fillStar = catsFillStar || pointsFillStar
   if (fillStar) {
     const card = takeNow.find((t) => t.id === seatFill!.id) ?? seatFillCard!
     takeNow = [card, ...takeNow.filter((t) => t.id !== seatFill!.id)].slice(0, 3)

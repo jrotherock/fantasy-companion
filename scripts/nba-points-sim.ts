@@ -57,6 +57,8 @@ const players: NbaPlayer[] = rawPlayers.map((p) => {
   return { ...p, projection: { ...p.projection, gp: gamesAfterReturn(p, av, teamDates, '2026-10-05').gp, gpSource: 'injury' as const } }
 })
 const league = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues.find((l: any) => l.id === 'nba-harker')
+/** `--teams 12`: rooms of another size (Harker had 12 of 16 the night before its 2026 draft). */
+if (arg('teams')) league.teams = Number(arg('teams'))
 const rounds = rosterSpots(league.roster)
 const byId = new Map(players.map((p) => [p.id, p]))
 const adp = (id: string) => adpFor(byId.get(id)!)
@@ -182,7 +184,87 @@ const cMin = (n: number, by: number): Pick => (avail, mine, overall, slot) => {
   }
   return app()(avail, mine, overall, slot)
 }
-const strategies: Record<string, Pick> = MODE === 'pool' ? (arg('follow') === 'value' ? { 'best value': bestValue } : { 'the app (recommender)': app() })
+// ── Empty seats (2026-10-16): a starting seat no one on my roster can fill on a night his team plays ──
+// The share of game nights each positional seat sits empty, from each player's chance to play; Util is left out,
+// any player fills it. The same measure as the draft room's coverage strip.
+const ACC: Record<string, string[]> = { PG: ['PG'], SG: ['SG'], G: ['PG', 'SG'], SF: ['SF'], PF: ['PF'], F: ['SF', 'PF'], C: ['C'] }
+const posSeats = seats.filter((x) => x in ACC)
+const seatTypes = [...new Set(posSeats)].map((x) => ({ seat: x, acc: new Set(ACC[x]), need: posSeats.filter((t) => ACC[t].every((y) => ACC[x].includes(y))).length }))
+const playP = (id: string) => Math.min(1, (rowOf.get(id)?.games.gp ?? 60) / 82)
+function emptyShare(ids: string[]): Map<string, number> {
+  const men = ids.map((id) => ({ pos: seatPositions(posOf(id)), team: byId.get(id)!.team, p: playP(id) }))
+  const out = new Map<string, number>()
+  for (const t of seatTypes) {
+    let empty = 0
+    for (const day of cal.days) {
+      let dist = [1]
+      for (const m of men) if (m.team && day.has(m.team) && m.pos.some((x) => t.acc.has(x))) { const n = dist.map(() => 0).concat(0); dist.forEach((v, i) => { n[i] += v * (1 - m.p); n[i + 1] += v * m.p }); dist = n }
+      empty += dist.slice(0, t.need).reduce((a, b) => a + b, 0)
+    }
+    out.set(t.seat, empty / cal.days.length)
+  }
+  return out
+}
+const POINTS_FILL_REF = 1500
+/**
+ * The draft room's filler (seatFillFor) as the star: from my pick `from`, a seat empty on more than `emptyMin` of
+ * nights, and a steady player (60+ games) within `band` of the top card (on the room's scale: band / 2.5 of a
+ * typical top card) who cuts its empty nights by 10+ points; the most nights cut, less 3x what he costs, wins.
+ */
+const fillStar = (from: number, band: number, emptyMin = 0.35): Pick => (avail, mine, overall, slot) => {
+  const pool = avail.map((id) => rowOf.get(id)!).filter(Boolean)
+  const advice = advisePoints(pool, { teams: league.teams, rounds, slot, overall, spread: SPREAD }, 25, canTake(mine))
+  const top = advice[0]
+  if (!top) return pool.find((r) => canTake(mine)(r.id))!.id
+  if (mine.length + 1 < from) return top.id
+  const now = emptyShare(mine)
+  const short = [...now.entries()].filter(([, v]) => v > emptyMin)
+  if (!short.length) return top.id
+  const scale = Math.max(Math.abs(top.score), POINTS_FILL_REF) / 2.5
+  let best: { id: string; worth: number } | null = null
+  for (const a of advice) {
+    if (top.score - a.score > band * scale) break
+    if ((rowOf.get(a.id)?.games.gp ?? 0) < 60) continue
+    const after = emptyShare([...mine, a.id])
+    for (const [seat, before] of short) {
+      const gain = before - (after.get(seat) ?? 0)
+      if (gain < 0.10) continue
+      const worth = gain - 3 * (top.score - a.score) / scale + (seat === 'C' ? 0.12 : 0)
+      if (!best || worth > best.worth) best = { id: a.id, worth }
+    }
+  }
+  return best?.id ?? top.id
+}
+/**
+ * The user's guard rule (2026-10-16): by my 6th pick two guard-eligible players, one of them a PG; take the best
+ * guard card within `band` of the top card from the 6th pick on, and by the 7th the best PG on the cards regardless.
+ */
+const guardRule = (band: number): Pick => (avail, mine, overall, slot) => {
+  const pool = avail.map((id) => rowOf.get(id)!).filter(Boolean)
+  const advice = advisePoints(pool, { teams: league.teams, rounds, slot, overall, spread: SPREAD }, 25, canTake(mine))
+  const top = advice[0]
+  if (!top) return pool.find((r) => canTake(mine)(r.id))!.id
+  const pick = mine.length + 1
+  const isG = (id: string) => seatPositions(posOf(id)).some((x) => x === 'PG' || x === 'SG')
+  const isPG = (id: string) => seatPositions(posOf(id)).includes('PG')
+  const guards = mine.filter(isG).length, pgs = mine.filter(isPG).length
+  if (pick < 6 || (guards >= 2 && pgs >= 1)) return top.id
+  const scale = Math.max(Math.abs(top.score), POINTS_FILL_REF) / 2.5
+  const want = (id: string) => (pgs === 0 ? isPG(id) : isG(id))
+  const near = advice.find((a) => want(a.id) && top.score - a.score <= band * scale)
+  if (near) return near.id
+  if (pick >= 7 && pgs === 0) return (advice.find((a) => isPG(a.id)) ?? top).id
+  return top.id
+}
+
+const strategies: Record<string, Pick> = MODE === 'fill' ? {
+  'the app (recommender)': app(),
+  'filler star from pick 6, band 0.08 (the card as star)': fillStar(6, 0.08),
+  'filler star from pick 4, band 0.08': fillStar(4, 0.08),
+  'filler star from pick 4, band 0.12': fillStar(4, 0.12),
+  'guard rule, within 0.10': guardRule(0.10),
+  'guard rule, within 0.25': guardRule(0.25),
+} : MODE === 'pool' ? (arg('follow') === 'value' ? { 'best value': bestValue } : { 'the app (recommender)': app() })
 : MODE === 'band' ? Object.fromEntries([['the app (recommender)', app()], ...(arg('bands') ?? '0.01;0.024').split(';').flatMap((b) => [[`sims' favourite within ${(Number(b) * 100).toFixed(1)}%`, simBand(Number(b))], ...(process.argv.includes('--sig') ? [[`... only when the edge beats its error`, simBand(Number(b), true)]] : [])])])
 : MODE === 'centers' ? {
   'the app (recommender)': app(),
@@ -336,7 +418,7 @@ for (const [name, pick] of Object.entries(strategies)) {
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 const se = (xs: number[]) => { const m = mean(xs); return Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1) / xs.length) }
 const ref = res['the app (recommender)']
-console.log(`Harker, 16 slots × ${SEEDS} rooms, room spread 1.5+0.10·ADP, ${RAW ? 'scored on RAW WEEKLY POINTS: box scores, daily lineups, real schedule, IL pickups, all-play' : 'scored on fantasy points from starts (7 seats, real schedule)'}.`)
+console.log(`Harker, ${league.teams} slots × ${SEEDS} rooms, room spread 1.5+0.10·ADP, ${RAW ? 'scored on RAW WEEKLY POINTS: box scores, daily lineups, real schedule, IL pickups, all-play' : 'scored on fantasy points from starts (7 seats, real schedule)'}.`)
 console.log('strategy                  all-play   vs the app (paired) ±2se   pts/wk   first C at my pick (median)')
 for (const [name, r] of Object.entries(res)) {
   const d = r.ap.map((x, i) => x - ref.ap[i])
