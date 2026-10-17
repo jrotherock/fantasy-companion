@@ -20,6 +20,24 @@ const HOUR = 60 * 60_000
 const ORDER_SET = 2 * 60_000
 const DRAFTING = 8_000
 /**
+ * Before the order is posted: Harker's order never showed in the API before its draft (2026-10-16), so an hourly
+ * look at 7:25 slept through the 7:30 start. The scheduled draft time is read instead: hourly until a quarter of an
+ * hour before it, then every half minute; without a time, every two minutes.
+ */
+const BEFORE_START = 15 * 60_000
+const AT_START = 30_000
+export function predraftWait(now: number, draftTime: number | null, orderSet: boolean): number {
+  if (orderSet) return ORDER_SET
+  if (draftTime == null) return ORDER_SET
+  const until = draftTime - BEFORE_START - now
+  return until > 0 ? Math.min(HOUR, until) : AT_START
+}
+/** The league's scheduled draft time (settings' draft_time, in seconds), or null. */
+function draftTimeOf(json: unknown): number | null {
+  const m = JSON.stringify(json ?? {}).match(/"draft_time":"?(\d{9,})"?/)
+  return m ? Number(m[1]) * 1000 : null
+}
+/**
  * Faster when my turn is two picks away or less: the pick before mine is what
  * the cards wait on. Held to the normal pace once the day's Yahoo calls are
  * past 60% of the cap, so a long mock never costs football its reads.
@@ -41,6 +59,9 @@ interface Watch {
   /** When the pick count last moved, and what it was: a mock with no new pick for a while has closed. */
   picks: number
   changedAt: number
+  /** The scheduled draft time, read from the league's settings before the draft; and when it was read. */
+  draftTime?: number | null
+  draftTimeAt?: number
 }
 
 /**
@@ -76,7 +97,11 @@ async function step(leagueId: string, key: string): Promise<number> {
     const managers = draftManagers(w.teams)
     if (w.status === 'predraft') {
       if (order.length) ingestApi(leagueId, [], order, managers)
-      return order.length ? ORDER_SET : HOUR
+      if (!w.draftTimeAt || Date.now() - w.draftTimeAt > HOUR) {
+        w.draftTime = draftTimeOf(await yahooApi.call(`league/${key}/settings`, { by: 'nba-draft' }))
+        w.draftTimeAt = Date.now()
+      }
+      return predraftWait(Date.now(), w.draftTime ?? null, order.length > 0)
     }
 
     const picks = parseDraftResults(await yahooApi.call(`league/${key}/draftresults`, { by: 'nba-draft' }))
