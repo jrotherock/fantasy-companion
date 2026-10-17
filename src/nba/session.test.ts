@@ -687,3 +687,32 @@ test('a card says where I would stand in the room with him: a better player neve
     assert.equal(both.get(top.id)!.now, both.get(late)!.now, 'now is the same whatever the card')
   }
 })
+
+test('at a close pair the cards read the pick after it, and the near-tie group shows', async () => {
+  const { CLOSE_PAIR } = await import('./plan.js')
+  const { slotFor } = await import('../kernel/snake.js')
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  const hoops = prepare(leagues.find((l: any) => l.id === 'nba-hoops'), players, noise, adpFor)
+  const n = hoops.league.teams, slot = n - 1
+  const turns = Array.from({ length: n * hoops.rounds }, (_, i) => i + 1).filter((o) => slotFor(o, n) === slot)
+  // The first pick of a close pair after a few rounds, the room down ADP before it.
+  const k = turns.findIndex((o, i) => i >= 4 && turns[i + 1] - o > 1 && turns[i + 1] - o <= CLOSE_PAIR)
+  const at = turns[k], second = turns[k + 1], after = turns[k + 2]
+  const d = { ...emptyDraft('t'), slot }
+  d.picks = hoops.adpOrder.slice(0, at - 1).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
+  const v = buildView(hoops, d, new Map())
+  assert.equal(v.clock.overall, at)
+  assert.equal(v.afterPair, after, `picks ${at} and ${second}: the pair is read to ${after}`)
+  assert.ok(v.takeNow.every((a) => a.backAfter != null && a.backAfter >= 0 && a.backAfter <= 1))
+  assert.ok(v.tied && v.tied.players.length >= 3, 'the near-tie group shows at a close pair')
+  assert.ok(v.tied!.players.every((x) => x.backAfter != null))
+  // Far from a close pair nothing changes: the second pick of it looks to the next turn as before.
+  d.picks.push({ overall: at, playerId: v.takeNow[0].id, name: v.takeNow[0].id, source: 'manual' as const })
+  for (let o = at + 1; o < second; o++) d.picks.push({ overall: o, playerId: hoops.adpOrder.find((x) => !d.picks.some((p) => p.playerId === x))!, name: 'x', source: 'manual' as const })
+  const w = buildView(hoops, d, new Map())
+  assert.equal(w.clock.overall, second)
+  assert.equal(w.afterPair, null)
+  assert.ok(w.takeNow.every((a) => a.backAfter == null))
+})

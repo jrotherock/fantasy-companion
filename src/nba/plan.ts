@@ -729,6 +729,8 @@ export interface Scarce { cat: Cat; left: number; names: string[]; next: number 
 const SCARCE_MIN = 1, SCARCE_SHARE = 0.7, SCARCE_FEW = 1, SCARCE_POOL = 40
 
 export interface TiedPlayer {
+  /** At a close pair: his chance of lasting to the turn after it (see DraftView.afterPair). */
+  backAfter: number | null
   id: string
   name: string
   team: string | null
@@ -775,6 +777,12 @@ export const TIEBREAK_BACK = 0.1
 
 /** How urgent a pick is: 0 likely gone by my next turn (75%+), 1 a coin flip, 2 likely back (can wait). */
 export const urgencyOf = (canWait: boolean, survives: number): 0 | 1 | 2 => (canWait ? 2 : survives <= 0.25 ? 0 : 1)
+/**
+ * Two of my picks this close are one decision (2026-10-17, Hoops slot 9: 69 and 72). Everyone "can wait" three
+ * picks, so the cards and the near-tie group read the pick after the pair instead: Collins (ADP 116) was the star
+ * at 69 though he lasted to 97, and McDaniels, a tie on fit and a coin flip to last to 89, was never shown.
+ */
+export const CLOSE_PAIR = 4
 
 /** Two rows of three at most; fewer than three is what the three cards already show. */
 const TIE_MAX = 6, TIE_MIN = 3
@@ -869,7 +877,7 @@ export interface DraftView {
     /** A single punt that tested well after my first pick, offered until my 4th pick while nothing is locked. */
     puntTip: PuntTip | null
   }
-  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; contrib?: Record<Cat, number>; fpg?: number; fpSeason?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; context: PlayerContext | null;
+  advice: (Advice & { team: string | null; positions: string[]; tag: PrefTag | null; canWait: boolean; backAfter?: number | null; contrib?: Record<Cat, number>; fpg?: number; fpSeason?: number; gp: number; playoff: number | null; tiebreak?: boolean; returnNote: string | null; there: number | null; thenName: string | null; mates: string[]; context: PlayerContext | null;
     /** Tagged avoid: his score carries the handicap (handicapAvoided). */
     avoided: boolean; bestBuild: BestBuild | null; myRank: number | null; healthRisk: HealthRisk | null
     /** Nightly coverage with him added: each starting seat type's share of game nights filled (see coverage). */
@@ -895,6 +903,8 @@ export interface DraftView {
   takeNow: DraftView['advice']
   /** Strong players likely still there at my next turn: the plan's next pick. */
   canWait: { name: string; survives: number }[]
+  /** My pick after a close pair (two of mine a few apart), which the plan line and "back at" read; else null. */
+  afterPair: number | null
   /** When the first choices are too close to call and the playoff schedule separates them. */
   playoffNote: string | null
   /** The ★ moved by the sims' tiebreak: whom it went to, over whom, and by how much in the simulations. */
@@ -1092,6 +1102,9 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   const onClock = !done && slot != null && slotFor(overall, teams) === slot
   const myNext = slot == null || done ? null : nextPickFor(slot, teams, rounds, overall - 1)
   const nextAfter = slot == null || myNext == null ? null : nextPickFor(slot, teams, rounds, myNext)
+  // A close pair (my two picks a few apart, not back to back): the turn that decides who can wait is the one after it.
+  const closePair = myNext != null && nextAfter != null && nextAfter > myNext + 1 && nextAfter - myNext <= CLOSE_PAIR
+  const afterPair = closePair && slot != null ? nextPickFor(slot, teams, rounds, nextAfter!) : null
   const p = (id: string) => prep.players.get(id)!
 
   const canTake = canTakeFor(prep, mine, tags)
@@ -1175,6 +1188,8 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
       survives: nextAfter == null ? 0 : nextAfter === myNext! + 1 ? 1 : survives(prep.adp(a.id), nextAfter, prep.league.adpSpread, myNext!),
       there: onClock ? null : survives(prep.adp(a.id), myNext!, prep.league.adpSpread, overall),
       canWait: nextAfter != null && (nextAfter === myNext! + 1 || survives(prep.adp(a.id), nextAfter, prep.league.adpSpread, myNext!) >= 0.6),
+      // At a close pair: his chance of lasting past both picks, to the turn after them.
+      backAfter: afterPair == null ? null : survives(prep.adp(a.id), afterPair, prep.league.adpSpread, myNext!),
       thenName: a.then ? p(a.then).name : null,
       mates: matesOf(a.id),
       context: contextWorthShowing(prep.context(a.id)) ? prep.context(a.id) : null,
@@ -1361,18 +1376,23 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   // White, 27th, was named for pick 13 because he would surely last; he is a late-3rd-round pick).
   const boardRank = new Map(board.map((r) => [r.id, r.rank]))
   const worthAtNext = (id: string) => nextAfter == null || (boardRank.get(id) ?? Infinity) <= nextAfter + PLAN_RANK_SLACK
-  const canWait = advice.filter((a) => a.canWait && !takeNow.some((t) => t.id === a.id) && worthAtNext(a.id)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
+  // At a close pair, who will still be there after both picks: the pick after the pair, not the one three away.
+  const canWait = afterPair != null
+    ? advice.filter((a) => (a.backAfter ?? 0) >= 0.6 && !takeNow.some((t) => t.id === a.id) && (boardRank.get(a.id) ?? Infinity) <= afterPair + PLAN_RANK_SLACK)
+      .slice(0, 3).map((a) => ({ name: a.name, survives: a.backAfter! }))
+    : advice.filter((a) => a.canWait && !takeNow.some((t) => t.id === a.id) && worthAtNext(a.id)).slice(0, 3).map((a) => ({ name: a.name, survives: a.survives }))
   // Bargains (categories only, 2026-10-14): on the board a round or more ahead of Yahoo's ADP, likely still there at the
   // pick after this one, and not on the cards. The undervalued players to plan around, not reach for: the room
   // usually lets them fall, so the edge is waiting for them.
   const bargains = !prep.cats || nextAfter == null || myNext == null ? null : (() => {
     const players = board
       .filter((r) => r.takenAt == null && r.adp != null && r.tag !== 'never' && r.adp - r.rank >= teams * BARGAIN_ROUNDS && !takeNow.some((t) => t.id === r.id))
-      .map((r) => ({ id: r.id, name: r.name, rank: r.rank, adp: r.adp!, there: nextAfter === myNext + 1 ? 1 : survives(prep.adp(r.id), nextAfter, prep.league.adpSpread, myNext) }))
+      // At a close pair, still there after both picks.
+      .map((r) => ({ id: r.id, name: r.name, rank: r.rank, adp: r.adp!, there: nextAfter === myNext + 1 ? 1 : survives(prep.adp(r.id), afterPair ?? nextAfter, prep.league.adpSpread, myNext) }))
       .filter((x) => x.there >= BARGAIN_THERE)
       .sort((a, b) => a.rank - b.rank)
       .slice(0, 3)
-    return players.length ? { at: nextAfter, players } : null
+    return players.length ? { at: afterPair ?? nextAfter, players } : null
   })()
   const lastCard = takeNow.at(-1)
   const closeMargin = prep.cats ? 0.02 : Math.abs(takeNow[0]?.score ?? 0) * 0.01
@@ -1456,13 +1476,15 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   const head = takeNow[0]
   // Back to back, everyone "can wait" a pick; the pair is on the cards' own line, so the group treats all as now.
   const pairTurn = myNext != null && nextAfter === myNext + 1
-  const waits = (a: { canWait: boolean }) => a.canWait && !pairTurn
+  // A close pair groups like a back-to-back: nearly everyone lasts the few picks between, so all are choices now.
+  const waits = (a: { canWait: boolean }) => a.canWait && !pairTurn && !closePair
   // An empty roster has nothing to fit: only the first of a back-to-back pair groups then, in the cards' order.
   if (prep.cats && head && !waits(head) && (mine.length || pairTurn)) {
     // Only the choices for this pick: those likely back next turn are the plan line's, not this one's (mocks
     // 2026-10-08: eight of them crowded out the app's own pick). Likely gone (75%+) first, then coin flips; fit
     // orders each. The app's pick is always in.
-    const urgency = (a: { canWait: boolean; survives: number }): 0 | 1 | 2 => (pairTurn ? 0 : urgencyOf(a.canWait, a.survives))
+    const urgency = (a: { canWait: boolean; survives: number; backAfter?: number | null }): 0 | 1 | 2 =>
+      pairTurn ? 0 : closePair && a.backAfter != null ? urgencyOf(a.backAfter >= 0.6, a.backAfter) : urgencyOf(a.canWait, a.survives)
     const group = advice.filter((a) => !waits(a) && Math.abs(head.score - a.score) <= TIE_GROUP)
     // At my first two picks, also those a little further back whom the simulations rate even with the pick.
     const extras = mine.length >= SIM_SHOW_PICKS || d.locks.length ? [] : advice
@@ -1486,7 +1508,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
         players: shown
           .map(({ a, fit }) => ({
             id: a.id, name: a.name, team: a.team, positions: a.positions, behind: best - a.score, appPick: a.id === head.id,
-            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName, scarce: scarceFor(a), injuryHistory: a.injuryHistory, healthRisk: a.healthRisk,
+            adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), backAfter: a.backAfter ?? null, thenName: a.thenName, scarce: scarceFor(a), injuryHistory: a.injuryHistory, healthRisk: a.healthRisk,
             preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base), there: a.there, tag: a.tag,
             simEven: extras.includes(a), myRank: a.myRank, coverage: coverageWith(a.id), room: roomFor(a.id),
           })),
@@ -1534,6 +1556,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
     healthRisks: { names: mine.filter((x) => healthRiskOf(prep, x)).map((x) => p(x).name), limit: HEALTH_RISK_LIMIT },
     bargains,
     canWait,
+    afterPair,
     alsoClose,
     seatFill,
     seatFillCard: !seatFillCard ? null : { ...seatFillCard, scarce: prep.cats ? scarceFor(seatFillCard) : null, coverage: coverageWith(seatFillCard.id), room: roomFor(seatFillCard.id) },

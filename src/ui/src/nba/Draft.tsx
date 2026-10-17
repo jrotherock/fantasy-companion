@@ -323,7 +323,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
               </div>
             )}
             {a.scarce && <ScarceLine s={a.scarce} />}
-            <Fate view={view} survives={a.survives} canWait={a.canWait} there={a.there} thenName={a.thenName} second={second} />
+            <Fate view={view} survives={a.survives} canWait={a.canWait} there={a.there} thenName={a.thenName} second={second} backAfter={a.backAfter} />
             <div className="nb-cardbtns">
               <button className={`btn ${i === 0 && onClock ? 'primary' : ''}`} onClick={(e) => { e.stopPropagation(); act('pick', { playerId: a.id }) }}>Mark drafted</button>
               <button className={`btn nb-cmp ${pins.includes(a.id) ? 'on' : ''}`} title="Compare side by side" onClick={(e) => { e.stopPropagation(); pin(a.id) }}>{pins.includes(a.id) ? 'Comparing' : 'Compare'}</button>
@@ -379,7 +379,7 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
         <div className="nb-plan">
           <span className="vlabel">PLAN</span> {cards[0].name} now
           {cards[0].thenName ? <> → {cards[0].thenName} at pick {second}, straight after — queue him in Yahoo now so a timeout takes him</>
-            : view.canWait.length > 0 && next ? <> → {view.canWait.map((w, i) => <span key={w.name}>{i ? ', ' : ''}{w.name} <span className="nb-dim">{pct(w.survives)}</span></span>)} — likely still there at pick {next.overall}</> : null}
+            : view.canWait.length > 0 && next ? <> → {view.canWait.map((w, i) => <span key={w.name}>{i ? ', ' : ''}{w.name} <span className="nb-dim">{pct(w.survives)}</span></span>)} — likely still there at pick {view.afterPair ?? next.overall}</> : null}
         </div>
       )}
       {view.bargains && (
@@ -423,8 +423,14 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
  * Gone or back by my next pick, in one color rule: amber when he is more likely gone than not (take him now
  * or lose him), blue when more likely back. Back to back, the pair; off the clock, the chance he is there.
  */
-function Fate({ view, survives, canWait, there, thenName, second }: { view: DraftView; survives: number; canWait: boolean; there: number | null; thenName: string | null; second: number }) {
+function Fate({ view, survives, canWait, there, thenName, second, backAfter }: { view: DraftView; survives: number; canWait: boolean; there: number | null; thenName: string | null; second: number; backAfter?: number | null }) {
   const next = view.ahead[0]?.overall
+  // A close pair: everyone lasts the few picks to my next one, so the number that decides is the pick after it.
+  if (backAfter != null && view.afterPair != null && there == null && !thenName) {
+    return <div className={`nb-fate ${backAfter >= 0.5 ? 'nb-wait' : 'nb-gone'}`} title={`Your picks ${view.clock.myNext} and ${next} come close together: nearly everyone lasts to ${next}, so what decides is who is still there at ${view.afterPair}.`}>
+      {backAfter >= 0.5 ? `${pct(backAfter)} back at ${view.afterPair}` : `${pct(1 - backAfter)} gone by ${view.afterPair}`}<span className="nb-dim"> · {pct(survives)} at {next}</span>
+    </div>
+  }
   const at = next != null ? ` at ${next}` : ' next turn'
   if (thenName) return <div className="nb-fate nb-wait"><span className="nb-pair">{there != null ? `${pct(there)} there at pick ${view.clock.myNext} · ` : ''}then {thenName} at pick {second}</span></div>
   if (there != null) return <div className={`nb-fate ${there >= 0.5 ? 'nb-wait' : 'nb-gone'}`}>{pct(there)} there at pick {view.clock.myNext}</div>
@@ -693,7 +699,7 @@ function Tied({ view, act, pins, pin, second, previewId, setPreviewId }: { view:
             </div>
             {x.id === fillId && <FillNote view={view} extra={false} />}
             {x.scarce && <ScarceLine s={x.scarce} />}
-            <Fate view={view} survives={x.survives} canWait={x.canWait} there={x.there} thenName={x.thenName} second={second} />
+            <Fate view={view} survives={x.survives} canWait={x.canWait} there={x.there} thenName={x.thenName} second={second} backAfter={x.backAfter} />
             <div className="nb-cardbtns">
               <button className={`btn ${x.appPick && view.clock.onClock ? 'primary' : ''}`} onClick={(e) => { e.stopPropagation(); act('pick', { playerId: x.id }) }}>Mark drafted</button>
               <button className={`btn nb-cmp ${pins.includes(x.id) ? 'on' : ''}`} title="Compare side by side" onClick={(e) => { e.stopPropagation(); pin(x.id) }}>{pins.includes(x.id) ? 'Comparing' : 'Compare'}</button>
