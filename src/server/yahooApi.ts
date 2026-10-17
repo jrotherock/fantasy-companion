@@ -243,12 +243,15 @@ export class YahooError extends Error {
  * started at took a quarter of an hour and left the app refusing its own
  * refreshes for most of it.
  *
- * Six a minute is one request every ten seconds. It remains twenty-eight
- * times gentler than the 350ms gap it replaced, and the hourly ceiling is
- * below the rate that earned the original trouble.
+ * Six a minute starved a live basketball draft (2026-10-16, Harker): the
+ * draft reader asks three or four things every eight seconds, about twenty-five
+ * a minute, and with football's rounds beside it the bucket ran dry and picks
+ * arrived minutes late. Thirty a minute, one every two seconds, carries a draft
+ * and the rest; it is still under a fifth of the 350ms gap that earned the
+ * original trouble, and the daily fuse below is unchanged.
  */
-export const RATE_PER_MIN = () => Number(process.env.YAHOO_RATE_PER_MIN ?? 6)
-export const BURST = () => Number(process.env.YAHOO_BURST ?? 40)
+export const RATE_PER_MIN = () => Number(process.env.YAHOO_RATE_PER_MIN ?? 30)
+export const BURST = () => Number(process.env.YAHOO_BURST ?? 60)
 /**
  * What the background may not touch.
  *

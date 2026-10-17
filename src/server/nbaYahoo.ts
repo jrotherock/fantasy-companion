@@ -62,6 +62,8 @@ interface Watch {
   /** The scheduled draft time, read from the league's settings before the draft; and when it was read. */
   draftTime?: number | null
   draftTimeAt?: number
+  /** The results read once after Yahoo called the draft over: the last picks land before the reader stops. */
+  finalRead?: boolean
 }
 
 /**
@@ -87,7 +89,9 @@ async function step(leagueId: string, key: string): Promise<number> {
       w.status = draftStatus(await yahooApi.call(`league/${key}`, { by: 'nba-draft' }))
       w.statusAt = Date.now()
     }
-    if (w.status === 'postdraft' && w.teamsAt) return Infinity
+    // Stops only once the finished draft's results are in: stopping at the status alone dropped Harker's last
+    // fourteen picks (2026-10-16).
+    if (w.status === 'postdraft' && w.finalRead) return Infinity
     // Seats change only when the commissioner sets or reshuffles them; every few minutes is plenty.
     if (!w.teamsAt || Date.now() - w.teamsAt > 5 * 60_000) {
       w.teams = parseTeams(await yahooApi.call(`league/${key}/teams`, { by: 'nba-draft' }))
@@ -126,7 +130,8 @@ async function step(leagueId: string, key: string): Promise<number> {
       }
     }), order, managers)
     w.error = null
-    return w.status === 'postdraft' || draftDone(leagueId) ? Infinity : draftingWait(leagueId)
+    if (w.status === 'postdraft') { w.finalRead = true; return Infinity }
+    return draftDone(leagueId) ? Infinity : draftingWait(leagueId)
   } catch (e) {
     w.error = (e as Error).message
     // Yahoo said slow down, or the day's budget is spent: wait long, and let the extension carry the draft.
