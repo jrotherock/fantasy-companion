@@ -657,3 +657,33 @@ test('in points the filler takes the star from my 6th pick when he is within the
   }
   assert.ok(seen > 0 && promoted > 0, `fillers seen ${seen}, starred ${starred}, moved up ${promoted}`)
 })
+
+test('a card says where I would stand in the room with him: a better player never ranks me lower, at equal picks', async () => {
+  const { roomWith } = await import('./plan.js')
+  const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
+  const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues
+  const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8')).r
+  for (const id of ['nba-hoops', 'nba-harker']) {
+    const prep = prepare(leagues.find((l: any) => l.id === id), players, noise, adpFor)
+    const n = prep.league.teams
+    const d = { ...emptyDraft('t'), slot: 3 }
+    // The room down ADP to my third pick.
+    const at = 2 * n + 3
+    d.picks = prep.adpOrder.slice(0, at - 1).map((pid, i) => ({ overall: i + 1, playerId: pid, name: pid, source: 'manual' as const }))
+    const v = buildView(prep, d, new Map())
+    assert.equal(v.clock.onClock, true)
+    const top = v.takeNow[0]
+    assert.ok(top.room, `${id}: the top card carries his room rank`)
+    assert.ok(top.room!.of === n && top.room!.now >= 1 && top.room!.now <= n && top.room!.with >= 1 && top.room!.with <= n)
+    // Someone the room left far behind: never better for my rank than the top card.
+    const late = prep.adpOrder.slice(at + 120).find((x) => !d.picks.some((p) => p.playerId === x))!
+    const both = roomWith(prep, d, n, 3, [top.id, late])
+    assert.ok(both.get(top.id)!.withScore >= both.get(late)!.withScore, `${id}: the top card adds more than pick ${at + 120}`)
+    assert.ok(both.get(top.id)!.with <= both.get(late)!.with)
+    // Against the same rooms: across the cards, more added never means a lower rank.
+    const ids = v.takeNow.map((a) => a.id)
+    const rw = roomWith(prep, d, n, 3, ids)
+    for (const x of ids) for (const y of ids) if (rw.get(x)!.withScore > rw.get(y)!.withScore) assert.ok(rw.get(x)!.with <= rw.get(y)!.with, `${id}: ${x} adds more than ${y} and ranks no lower`)
+    assert.equal(both.get(top.id)!.now, both.get(late)!.now, 'now is the same whatever the card')
+  }
+})

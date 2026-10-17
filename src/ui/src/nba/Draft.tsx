@@ -151,6 +151,7 @@ function Screen({ id }: { id: string }) {
               {cats && <Build view={view} act={act} preview={previewOf(view, previewId)} />}
             </>}
       </div>
+      {view.league.slot != null && !view.review && !boardOnly && <PreviewBar view={view} preview={previewOf(view, previewId)} />}
       {view.league.slot != null && (
         <div className="nb-panel">
           {/* Once the draft is done nothing is on the clock, so the review scrolls with the board rather than pinning it out of sight. */}
@@ -291,9 +292,9 @@ function Take({ view, act, previewId, setPreviewId, pins, pin, comparePair }: { 
     return (
           <div key={a.id} className={`vc ${i === 0 ? 'sel' : ''}${previewId === a.id ? ' nb-previewing' : ''}${a.scarce ? ' nb-scarcecard' : ''}${extra ? ' nb-fillcard' : ''}${i === 0 && isFill && view.fillStar ? ' nb-fillstar' : ''}`}
 
-            onMouseEnter={() => a.preview && setPreviewId(a.id)} onMouseLeave={() => setPreviewId(null)}
+            onMouseEnter={() => setPreviewId(a.id)} onMouseLeave={() => setPreviewId(null)}
             // A tap on a phone toggles the preview; the Mark drafted button stops its own click.
-            onClick={() => a.preview && setPreviewId(previewId === a.id ? null : a.id)}>
+            onClick={() => setPreviewId(previewId === a.id ? null : a.id)}>
             <span className="rk">{extra ? `FILLS YOUR ${fill!.seat} SPOT` : <>{i + 1}{i === 0 && onClock ? ' · TAKE' : ''}{i === 0 && isFill && view.fillStar ? ` · FILLS YOUR ${fill!.seat} SPOT` : ''}</>}</span>
             <span className="nm">{a.name}{a.myRank != null && <span className="nb-tag nb-myrank" title="Where he sits on your own ranking for this league">your #{a.myRank}</span>}{a.tag === 'like' && <span className="nb-tag nb-like">like</span>}{a.tag === 'avoid' && <span className="nb-tag nb-avoid">avoid</span>}</span>
             <span className="sub">{a.team} · {a.positions.join(', ')}{a.injuryHistory && <InjuryTag h={a.injuryHistory} />}{a.healthRisk && <HealthTag view={view} h={a.healthRisk} />}</span>
@@ -504,6 +505,41 @@ function HealthCount({ view, adding }: { view: DraftView; adding: boolean }) {
 }
 
 /** The card being looked at, wherever it shows: the three, the tied group, or the filler's own card. */
+type RoomWithUI = { now: number; with: number; of: number; nowScore: number; withScore: number }
+/**
+ * What a card would change, pinned to the bottom of the screen while it is looked at: with a near-tie group and a
+ * filler card on screen the build and coverage panels sat below the fold, and a hover changed numbers no one could
+ * see (2026-10-17). The room rank with him, the categories that move, the nightly spots that move.
+ */
+function PreviewBar({ view, preview }: { view: DraftView; preview: { name: string; preview?: Record<Cat, number> | null; coverage?: Record<string, number> | null; room?: RoomWithUI | null; healthRisk?: unknown } | null }) {
+  if (!preview) return null
+  const last = preview.name.split(' ').at(-1)!.toUpperCase()
+  const r = preview.room
+  const pts = view.league.scoring === 'points'
+  const before = view.build?.win ?? null
+  const after = preview.preview ?? null
+  const cats = before && after
+    ? CATS.map((c) => ({ c, d: after[c] - before[c], a: before[c], b: after[c] })).filter((x) => Math.abs(x.d) >= 0.03).sort((x, y) => Math.abs(y.d) - Math.abs(x.d)).slice(0, 6)
+    : []
+  const cov = view.coverage && preview.coverage
+    ? Object.entries(preview.coverage).map(([seat, y]) => ({ seat, x: view.coverage![seat] ?? 0, y })).filter((z) => Math.abs(z.y - z.x) >= 0.01)
+    : []
+  const p = (x: number) => `${Math.round(x * 100)}%`
+  return (
+    <div className="nb-prevbar" role="status" aria-live="polite">
+      <span className="vlabel">WITH {last}</span>
+      {r && <span className={`nb-prevroom ${r.with < r.now ? 'nb-up' : r.with > r.now ? 'nb-down' : ''}`}>
+        room <b>{ordinal(r.now)} → {ordinal(r.with)}</b> of {r.of}
+        {pts && <span className="nb-dim"> ({r.withScore - r.nowScore >= 0 ? '+' : ''}{Math.round(r.withScore - r.nowScore)} pts a week)</span>}
+      </span>}
+      {cats.map((x) => <span key={x.c} className={x.d > 0 ? 'nb-up' : 'nb-down'}>{LABEL[x.c]} {p(x.a)}→{p(x.b)}</span>)}
+      {cov.map((z) => <span key={z.seat} className={z.y > z.x ? 'nb-up' : 'nb-down'}>{z.seat} {p(z.x)}→{p(z.y)}</span>)}
+      {!!preview.healthRisk && <span className="nb-down">health risk</span>}
+      {!r && !cats.length && !cov.length && <span className="nb-dim">no change he would make shows here yet</span>}
+    </div>
+  )
+}
+
 function previewOf(view: DraftView, id: string | null) {
   if (!id) return null
   return view.takeNow.find((a) => a.id === id) ?? view.tied?.players.find((x) => x.id === id)

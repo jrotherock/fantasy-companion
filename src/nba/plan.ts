@@ -339,6 +339,57 @@ export interface RoomRow {
  * full night's points a game and points a minute beside it. Categories: the
  * categories a week the roster wins against an average team.
  */
+/** The room's headline for one roster: points a week from its starts, or categories a week against an average team. */
+function roomHeadline(prep: Prepared, ids: string[]): number {
+  if (prep.points) {
+    const rs = ids.map((id) => prep.points!.byId.get(id)).filter((r): r is NonNullable<typeof r> => !!r)
+    const share = prep.calendar
+      ? startShares(rs.map((r) => ({ id: r.id, positions: seatPositionsOf(prep.positions(r.id)), team: prep.players.get(r.id)?.team ?? null, worth: r.fpg })), startingSeats(prep.league.roster), prep.calendar)
+      : new Map<string, number>()
+    return rs.reduce((n, r) => n + r.fpg * r.games.gp * (share.get(r.id) ?? 1), 0) / SEASON_WEEKS
+  }
+  return ids.length ? expectedCats(strengthOf(prep, ids), ids.length, prep.cats!.base) : 0
+}
+
+/** Where I stand in the room now, and with one card taken: the room rank on the card's preview. */
+export interface RoomWith { now: number; with: number; of: number; nowScore: number; withScore: number }
+
+/**
+ * My room rank now and with a card added (2026-10-17: "with Anunoby: 2nd → 1st"). Both are measured at equal picks,
+ * so a team that picks after me is not a pick short: every roster is taken to my count (now, then with him), and
+ * a team without that many yet gets the best left by ADP, in the order the room picks.
+ */
+export function roomWith(prep: Prepared, d: StoredDraft, teams: number, mySlot: number, candidates: string[]): Map<string, RoomWith> {
+  const bySeat = new Map<number, string[]>()
+  for (let s = 1; s <= teams; s++) bySeat.set(s, [])
+  for (const x of d.picks) bySeat.get(slotFor(x.overall, teams))!.push(x.playerId)
+  const mine = bySeat.get(mySlot)!
+  const taken = new Set(d.picks.map((x) => x.playerId))
+  const others = [...bySeat.keys()].filter((s) => s !== mySlot)
+  // The other rosters at k picks, the short ones filled down ADP from what is left. The cards on screen are all held
+  // out of those fills, so every card is measured against the same rooms and a card that adds more never ranks lower.
+  const held = new Set(candidates)
+  const othersAt = (k: number) => {
+    const left = prep.adpOrder.filter((id) => !taken.has(id) && !held.has(id))
+    let i = 0
+    return others.map((s) => {
+      const ids = bySeat.get(s)!.slice(0, k)
+      while (ids.length < k && i < left.length) ids.push(left[i++])
+      return roomHeadline(prep, ids)
+    })
+  }
+  const rankOf = (me: number, them: number[]) => 1 + them.filter((x) => x > me).length
+  const nowScore = roomHeadline(prep, mine)
+  const nowRank = rankOf(nowScore, othersAt(mine.length))
+  const rivals = othersAt(mine.length + 1)
+  const out = new Map<string, RoomWith>()
+  for (const id of candidates) {
+    const withScore = roomHeadline(prep, [...mine, id])
+    out.set(id, { now: nowRank, with: rankOf(withScore, rivals), of: teams, nowScore, withScore })
+  }
+  return out
+}
+
 export function liveRoom(prep: Prepared, d: StoredDraft, teams: number, mySlot: number | null): RoomRow[] {
   const bySeat = new Map<number, string[]>()
   for (const x of d.picks) {
@@ -690,7 +741,7 @@ export interface TiedPlayer {
   myRank: number | null
   healthRisk: HealthRisk | null
   /** Nightly coverage with him added (see DraftView.coverage). */
-  coverage?: Record<string, number> | null
+  coverage?: Record<string, number> | null; room?: RoomWith | null
   /** His best categories, those where my roster is short first; of those, the ones it is short in; where he costs. */
   adds: Cat[]
   fills: Cat[]
@@ -822,7 +873,7 @@ export interface DraftView {
     /** Tagged avoid: his score carries the handicap (handicapAvoided). */
     avoided: boolean; bestBuild: BestBuild | null; myRank: number | null; healthRisk: HealthRisk | null
     /** Nightly coverage with him added: each starting seat type's share of game nights filled (see coverage). */
-    coverage?: Record<string, number> | null
+    coverage?: Record<string, number> | null; room?: RoomWith | null
     /** Which of my roster's weak categories he would help, from my first pick on. */
     fits: Cat[]
     /** Which of its strong ones he would add to: leaning in rather than covering. */
@@ -1335,6 +1386,16 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   const coverageOf = (ids: string[]): Record<string, number> | null =>
     prep.calendar ? Object.fromEntries([...emptySeatShare(prep, ids)].map(([seat, empty]) => [seat, 1 - empty])) : null
   const coverageWith = (id: string) => coverageOf([...mine, id])
+  // The room rank now and with each card: worked out once for every card shown, on demand below.
+  let rooms: Map<string, RoomWith> | null = null
+  const roomFor = (id: string): RoomWith | null => {
+    if (slot == null || done) return null
+    if (!rooms) {
+      const ids = [...new Set([...takeNow.map((a) => a.id), ...advice.slice(0, 24).map((a) => a.id), ...(seatFill ? [seatFill.id] : [])])]
+      rooms = roomWith(prep, d, teams, slot, ids)
+    }
+    return rooms.get(id) ?? null
+  }
   // The filler as a full card beside the three, when he is not one of them already.
   const fillRaw = seatFill && !takeNow.some((t) => t.id === seatFill.id) ? rawById.get(seatFill.id) : null
   let seatFillCard = !fillRaw ? null : (() => {
@@ -1427,7 +1488,7 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
             id: a.id, name: a.name, team: a.team, positions: a.positions, behind: best - a.score, appPick: a.id === head.id,
             adds: fit.adds, fills: fit.fills, costs: fit.costs, survives: a.survives, canWait: waits(a), urgency: urgency(a), thenName: a.thenName, scarce: scarceFor(a), injuryHistory: a.injuryHistory, healthRisk: a.healthRisk,
             preview: winChances(strengthOf(prep, [...mine, a.id]), mine.length + 1, prep.cats!.base), there: a.there, tag: a.tag,
-            simEven: extras.includes(a), myRank: a.myRank, coverage: coverageWith(a.id),
+            simEven: extras.includes(a), myRank: a.myRank, coverage: coverageWith(a.id), room: roomFor(a.id),
           })),
       }
     }
@@ -1468,14 +1529,14 @@ export function buildView(prep: Prepared, d: StoredDraft, tags: Map<string, Pref
   }
 
   return {
-    takeNow: takeNow.map((a) => ({ ...a, coverage: coverageWith(a.id) })),
+    takeNow: takeNow.map((a) => ({ ...a, coverage: coverageWith(a.id), room: roomFor(a.id) })),
     coverage: coverageOf(mine),
     healthRisks: { names: mine.filter((x) => healthRiskOf(prep, x)).map((x) => p(x).name), limit: HEALTH_RISK_LIMIT },
     bargains,
     canWait,
     alsoClose,
     seatFill,
-    seatFillCard: !seatFillCard ? null : { ...seatFillCard, scarce: prep.cats ? scarceFor(seatFillCard) : null, coverage: coverageWith(seatFillCard.id) },
+    seatFillCard: !seatFillCard ? null : { ...seatFillCard, scarce: prep.cats ? scarceFor(seatFillCard) : null, coverage: coverageWith(seatFillCard.id), room: roomFor(seatFillCard.id) },
     fillStar,
     idle,
     wontLast,
