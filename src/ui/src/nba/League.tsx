@@ -508,6 +508,8 @@ function Week({ v }: { v: SeasonView }) {
   const [side, setSide] = useState<'mine' | 'theirs'>('mine')
   if (!w) return <div className="ckempty">No matchup this week.</div>
   const rows = side === 'theirs' && w.oppPlayers.length ? w.oppPlayers : w.players
+  // A points league's weights: the table leads with each player's fantasy points (it showed only for categories).
+  const fpw = v.league.scoring === 'points' ? v.league.points : null
   const swing = w.odds?.races.filter((r) => r.state === 'swing').map((r) => LABEL[r.cat]) ?? []
   const swingCats = new Set<Cat>(w.odds?.races.filter((r) => r.state === 'swing').map((r) => r.cat) ?? [])
   return (
@@ -554,7 +556,7 @@ function Week({ v }: { v: SeasonView }) {
           ))}
         </div>
       )}
-      {w.odds && w.players.length > 0 && (
+      {w.players.length > 0 && (
         <Section title="Players this week" hint="expected starts and what they produce">
           {w.oppPlayers.length > 0 && (
             <div className="nl-sidepick" role="tablist" aria-label="Whose players">
@@ -565,23 +567,26 @@ function Week({ v }: { v: SeasonView }) {
           <div className="nl-scroll">
             <table className="nl-table nl-wkp">
               <thead><tr><th className="l">Player</th><th title="Expected starts this week: his games with a lineup spot, less his chance of sitting hurt">Starts</th><th title="Projected minutes a game">MPG</th>
+                {fpw && <th title="Fantasy points from his expected starts, at this league's scoring">FP</th>}
                 {YCOLS.map((c) => <th key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dimh' : ''} title={c.cat && swingCats.has(c.cat) ? 'In play this week' : undefined}>{c.label}</th>)}</tr></thead>
               <tbody>
                 {rows.map((p) => (
                   <tr key={p.id} className={p.starts < 0.5 ? 'nl-idle' : ''}>
                     <td className="l">{p.name}</td><td>{p.starts.toFixed(1)}</td><td>{p.mpg != null ? p.mpg.toFixed(0) : '—'}</td>
+                    {fpw && <td><b>{fpOf(p.box, fpw).toFixed(0)}</b></td>}
                     {YCOLS.map((c) => <td key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dim' : ''}>{c.cell(p.box)}</td>)}
                   </tr>
                 ))}
                 <tr className="nl-total"><td className="l">{side === 'mine' ? 'Your week' : 'Their week'}</td><td>{rows.reduce((a, p) => a + p.starts, 0).toFixed(0)}</td><td />
+                  {fpw && <td><b>{rows.reduce((a, p) => a + fpOf(p.box, fpw), 0).toFixed(0)}</b></td>}
                   {YCOLS.map((c) => { const t = rows.reduce((a, p) => addBoxUI(a, p.box), emptyBoxUI()); return <td key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dim' : ''}>{c.cell(t)}</td> })}</tr>
               </tbody>
             </table>
           </div>
-          <p className="nl-note">Expected starts times his per-game line. Highlighted columns are this week's categories in play (35–65%): the players strongest in them are the ones not to bench, and what a stream should bring.</p>
+          <p className="nl-note">Expected starts times his per-game line{fpw ? '; FP is that at this league\u2019s scoring, the sum of which is the projected week above' : ''}. Highlighted columns are this week's categories in play (35–65%): the players strongest in them are the ones not to bench, and what a stream should bring.</p>
         </Section>
       )}
-      <Section title="Days left" hint="your 10 lineup spots, day by day">
+      <Section title="Days left" hint="your lineup spots, day by day">
         <DaysLeft w={w} />
       </Section>
       <p className="nl-note">Each category is the week so far plus what both lineups are expected to do from here, seated day by day. A race at 35–65% is in play: that is where a stream helps.</p>
