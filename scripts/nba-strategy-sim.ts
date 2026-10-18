@@ -638,6 +638,15 @@ if (MODE === 'forwards') {
   strategies['any of them at pick 2'] = at(2, ids)
 }
 
+if (MODE === 'puntwhen') {
+  // When to lock a punt (2026-10-18): the cards as they are, against the punt (default AST) locked from my k-th pick.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  const c = (arg('punt') ?? 'ast') as Cat
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  for (const k of [2, 3, 4, 5]) strategies[`lock ${c} from my pick ${k}`] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', mine.length >= k - 1 ? [c] : [], H)
+}
+
 if (MODE === 'punt1') {
   // After a forced first pick: the cards as they are, against each single punt locked from my second pick.
   for (const k of Object.keys(strategies)) delete strategies[k]
