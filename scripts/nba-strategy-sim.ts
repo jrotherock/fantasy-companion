@@ -210,10 +210,10 @@ const strategies: Record<string, Pick> = {
 }
 
 /** The app's advice, with near-ties (within 0.02 categories, as on the screen) broken by fit or not at all. */
-function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack' | 'mates', locks: Cat[] = [], spread: AdpSpread = FOOTBALL_SPREAD, lineup = false, naiveTurns = false, unconditional = false, readNow = false): string {
+function appPick(avail: string[], mine: string[], overall: number, slot: number, tie: 'none' | 'cover' | 'stack' | 'mates', locks: Cat[] = [], spread: AdpSpread = FOOTBALL_SPREAD, lineup = false, naiveTurns = false, unconditional = false, readNow = false, closePairs?: number): string {
   // As the app does: a lock drops the category and ends the four-pick wait.
   const advice = adviseCategories(avail.map((id) => rowOf.get(id)!).filter(Boolean), mine.map((id) => rowOf.get(id)!),
-    { teams: league.teams, rounds, slot, overall, spread, naiveTurns, unconditional }, base, { canTake: canTake(mine), neutralUntil: locks.length || readNow ? 0 : BUILD_FROM, ignore: locks,
+    { teams: league.teams, rounds, slot, overall, spread, naiveTurns, unconditional, closePairs }, base, { canTake: canTake(mine), neutralUntil: locks.length || readNow ? 0 : BUILD_FROM, ignore: locks,
       strength: lineup ? (rs) => startedStrength(rs.map((r) => r.id)) : undefined })
   if (!advice.length) return windowOf(avail, mine)[0]
   if (tie === 'none' || !mine.length) return advice[0].id
@@ -748,6 +748,17 @@ if (MODE === 'turns') {
   const H = { a: 2, b: 0.12 }
   strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
   strategies['app, turns as before'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H, false, true)
+}
+
+if (MODE === 'pairs') {
+  // Close pairs (2026-10-17): my two picks a few apart scored as one decision, the partner weighed by his chance of
+  // lasting to the second, against the cards as they are. Only the slots with close pairs differ: by default those.
+  for (const k of Object.keys(strategies)) delete strategies[k]
+  const H = { a: 2, b: 0.12 }
+  strategies['the app (recommender)'] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H)
+  for (const g of (arg('pair-gaps') ?? '4').split(';').map(Number)) {
+    strategies[`app, close pairs within ${g}`] = (avail, mine, overall, slot) => appPick(avail, mine, overall, slot, 'none', [], H, false, false, false, false, g)
+  }
 }
 
 if (MODE === 'teammates') {

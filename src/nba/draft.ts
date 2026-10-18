@@ -39,6 +39,20 @@ export interface DraftSpot {
   naiveTurns?: boolean
   /** Simulations only: survival from ADP alone, not given that he is there at this pick (before 2026-10-05). */
   unconditional?: boolean
+  /**
+   * Two of my picks this many apart or fewer are scored as one decision, like a back-to-back, with my partner at
+   * the second weighed by his chance of lasting the picks between (2026-10-17). Off: in 1,600 simulated Hoops drafts
+   * it changed the pick in 61-153 of 800 and won nothing (-0.01 ± 0.02 and 0.00 ± 0.03 weeks per 100, gaps 4 and 6):
+   * the room's bots let the waiting player last as the odds say. The screen reads close pairs instead (plan.ts).
+   */
+  closePairs?: number
+}
+
+/** My next pick, when it comes within `spot.closePairs` picks but not straight after: a close pair. */
+export function closePairNext(spot: DraftSpot): number | null {
+  if (!spot.closePairs || spot.naiveTurns) return null
+  const next = nextTurn(spot)
+  return next != null && next > spot.overall + 1 && next - spot.overall <= spot.closePairs ? next : null
 }
 
 /**
@@ -323,7 +337,8 @@ export function adviseCategories(
   }
 
   const pair = backToBack(spot)
-  const beyond = pair ? nextPickFor(spot.slot, spot.teams, spot.rounds, spot.overall + 1) : null
+  const close = pair ? null : closePairNext(spot)
+  const beyond = pair ? nextPickFor(spot.slot, spot.teams, spot.rounds, spot.overall + 1) : close != null ? nextPickFor(spot.slot, spot.teams, spot.rounds, close) : null
   const listed = single.slice(0, shortlist)
   const extra = scored.filter((x) => opts.include?.includes(x.c.id) && !listed.includes(x))
   return [...listed, ...extra].map(({ c, s, e }) => {
@@ -350,6 +365,18 @@ export function adviseCategories(
           if (v > later) { later = v; then = x.id }
         }
         if (!then) later = e
+      } else if (close != null) {
+        // A close pair: as a back-to-back, each partner judged with who is left at the turn after the pair, but he
+        // must last the few picks to my second one: the expected best of the partners in their order, by survival.
+        const partners = follow.slice(0, PAIR_PARTNERS).map((x) => {
+          const sx = withTwo(c, x.row, s)
+          const third = follow.filter((z) => z.id !== x.id)
+            .map((z) => ({ value: expectedCats(add(sx, contribution(z.row)), k + 3, base, ignore), adp: z.adp }))
+            .sort((a, b) => b.value - a.value)
+          return { id: x.id, adp: x.adp, value: beyond != null ? expectedBest(third, beyond, x.value, spot.spread, at(spot)) : x.value }
+        }).sort((a, b) => b.value - a.value)
+        later = partners.length ? expectedBest(partners, close, e, spot.spread, at(spot)) : e
+        then = partners[0]?.id
       } else later = expectedBest(follow, next, e, spot.spread, at(spot))
     }
     return { id: c.id, name: c.name, now: e - before, score: later, survives: next == null ? 0 : pair ? 1 : survives(c.adp, next, spot.spread, at(spot)), ...(then ? { then } : {}) }
