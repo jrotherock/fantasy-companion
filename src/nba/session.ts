@@ -70,6 +70,11 @@ export interface StoredDraft {
 export interface Turn {
   at: number
   advice: { id: string; score: number; survives: number; canWait: boolean }[]
+  /**
+   * What the screen showed at this pick, by player id (2026-10-18): the cards in order, the near-tie group, the blue
+   * filler card, and the side lines. The review and the analyses read what was in front of you, not a replay.
+   */
+  shown?: { cards: string[]; group: string[]; filler: string | null; fillStar: boolean; wontLast: string | null; alsoClose: string[] }
   locks: Cat[]
   stage: 'open' | 'leaning' | 'firm' | null
 }

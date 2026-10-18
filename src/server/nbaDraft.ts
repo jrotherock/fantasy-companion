@@ -458,6 +458,14 @@ function viewOf(s: Session): DraftView {
         // The cards first, in the order shown: the review judges a pick against what the screen said to take.
         advice: [...next.takeNow, ...next.advice.filter((a) => !next.takeNow.some((t) => t.id === a.id))]
           .map((a) => ({ id: a.id, score: a.score, survives: a.survives, canWait: a.canWait })),
+        shown: {
+          cards: next.takeNow.map((a) => a.id),
+          group: next.tied?.players.map((x) => x.id) ?? [],
+          filler: next.seatFillCard?.id ?? null,
+          fillStar: next.fillStar,
+          wontLast: next.wontLast?.id ?? null,
+          alsoClose: next.alsoClose.map((x) => x.id),
+        },
         locks: [...s.draft.locks],
         stage: next.build?.stage ?? null,
       },
@@ -674,6 +682,25 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
     json(res, 200, compareView(s.prep, s.draft, tagsFor(s.league.id), ids, cards))
     return true
   }
+  // What the screen showed at each of my picks, and what I took: for reading a draft back exactly as it was.
+  if (action === 'turns' && req.method === 'GET') {
+    const teams = s.draft.order.length || s.league.teams
+    const nm = (id: string | null) => (id ? load().players.find((p) => p.id === id)?.name ?? id : null)
+    const mine = s.draft.slot == null ? [] : myPicks(s.draft, teams, slotFor)
+    const turns = Object.entries(s.draft.turns ?? {}).map(([o, t]) => {
+      const overall = Number(o)
+      const took = s.draft.picks.find((p) => p.overall === overall)
+      return {
+        overall, mine: mine.some((p) => p.overall === overall), took: nm(took?.playerId ?? null),
+        cards: t.shown?.cards.map(nm) ?? null, group: t.shown?.group.map(nm) ?? null, filler: nm(t.shown?.filler ?? null), fillStar: t.shown?.fillStar ?? null,
+        wontLast: nm(t.shown?.wontLast ?? null), alsoClose: t.shown?.alsoClose.map(nm) ?? null,
+        top: t.advice.slice(0, 12).map((a) => ({ name: nm(a.id), behind: +(t.advice[0].score - a.score).toFixed(3), survives: +a.survives.toFixed(2), canWait: a.canWait })),
+      }
+    }).sort((a, b) => a.overall - b.overall)
+    json(res, 200, { league: s.league.id, slot: s.draft.slot, turns })
+    return true
+  }
+
   // The league's size: what you set, what the repository says, and what Yahoo has now.
   if (action === 'teams' && req.method === 'GET') {
     json(res, 200, { teams: s.league.teams, configured: configuredTeams(s.league.id), yahoo: s.league.mock ? null : await yahooTeams(s.league), mock: !!s.league.mock })
