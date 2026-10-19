@@ -5,7 +5,10 @@ import type { YPlayer } from '../server/yahooParse.js'
 import type { NbaPlayer, Game, YahooWeek } from './types.js'
 import { buildSeasonView, seasonTile } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
-import type { SeasonLeague, Snapshot, World } from './inseason.js'
+import { Context, rosterIds, sideOutlook, type Fixture, type SeasonLeague, type Snapshot, type World } from './inseason.js'
+import { addDays, UPGRADE_WINS } from './adds.js'
+import { daysFrom, startingSeats } from './week.js'
+import { categoryWeek, pointsWeek } from './matchup.js'
 import { diffStatus } from './news.js'
 import { allPlay } from './extras.js'
 
@@ -180,4 +183,96 @@ test('the tile acts only on a start lost before a tip within three hours; a bett
   assert.equal(seasonTile(later, at).urgency, 'soon')
   const swap = { ...v, lineup: { ...v.lineup!, ok: false, moves: [{ start: 'a', bench: 'b', why: 'A is the better start today', by: tip(1) }] } }
   assert.equal(seasonTile(swap, at).urgency, 'soon')
+})
+
+// ── Season pickups: every week left, against that week's opponent ──
+
+/** A round robin (circle method) over the regular-season weeks before the playoffs: a different opponent most weeks. */
+function fixturesFor(league: SeasonLeague): Fixture[] {
+  const ids = Array.from({ length: league.teams }, (_, i) => String(i + 1))
+  const out: Fixture[] = []
+  for (const [n, s, e] of weeks.filter(([n]) => n < league.playoffWeeks[0])) {
+    const r = (n - 1) % (ids.length - 1)
+    const ring = [ids[0], ...ids.slice(1).map((_, i) => ids[1 + ((i + r) % (ids.length - 1))])]
+    const pairs: [string, string][] = []
+    for (let i = 0; i < ids.length / 2; i++) pairs.push([ring[i], ring[ids.length - 1 - i]])
+    out.push({ week: n, start: s, end: e, pairs })
+  }
+  return out
+}
+
+/** The same measure worked out by hand: each week left from tomorrow, against the opponent the schedule names. */
+function winsByHand(league: SeasonLeague & { myTeamId: string }, snap: Snapshot, w: World, ids: { id: string; eligible: string[] }[]): number {
+  const ctx = new Context(league, w)
+  for (const r of snap.rosters) for (const y of r.players) { const id = ctx.resolve(y); if (id) ctx.setStatus(id, y.status) }
+  const seats = startingSeats(league.roster)
+  const tomorrow = addDays(w.today, 1)
+  let total = 0
+  for (const f of snap.fixtures!.filter((x) => x.end >= tomorrow)) {
+    const pair = f.pairs.find((p) => p.includes(league.myTeamId))!
+    const opp = pair[0] === league.myTeamId ? pair[1] : pair[0]
+    const days = daysFrom(f.start, f.end, f.start > tomorrow ? f.start : tomorrow)
+    const theirs = sideOutlook(ctx, null, rosterIds(ctx, snap.rosters.find((r) => r.team.id === opp)!.players), seats, days).side
+    const mine = sideOutlook(ctx, null, ids, seats, days).side
+    if (league.scoring === 'categories') { const o = categoryWeek(mine, theirs); total += o.win + o.tie / 2 }
+    else total += pointsWeek(mine, theirs, league.points ?? {}, { mine: null, theirs: null }).win
+  }
+  return total
+}
+
+for (const league of [hoops, harker]) {
+  test(`${league.scoring}: a pickup's season gain is the matchups won over every week left, each against that week's opponent`, () => {
+    const today = '2026-11-18'
+    const { snap } = snapshotFor(league, today)
+    snap.fixtures = fixturesFor(league)
+    const w = world(today)
+    const t0 = Date.now()
+    const v = buildSeasonView(league, snap, w)
+    const ms = Date.now() - t0
+    assert.ok(ms < 8000, `built in ${ms}ms`)
+    const left = snap.fixtures.filter((f) => f.end >= addDays(today, 1)).length
+    assert.ok(left > 10, 'most of the regular season is left')
+    const swaps = v.pickups.filter((p) => p.drop)
+    assert.ok(swaps.length > 0, 'something to check')
+    const ctx = new Context(league, w)
+    const myIds = rosterIds(ctx, snap.rosters.find((r) => r.team.id === league.myTeamId)!.players)
+    const base = winsByHand(league, snap, w, myIds)
+    for (const p of swaps.slice(0, 3)) {
+      assert.equal(p.seasonWeeks, left)
+      assert.equal(p.scheduled, true)
+      const after = winsByHand(league, snap, w, [...myIds.filter((x) => x.id !== p.drop), { id: p.add, eligible: p.positions }])
+      assert.ok(Math.abs(p.seasonWins! - (after - base)) < 1e-6, `${p.name} for ${p.dropName}: ${p.seasonWins} vs ${after - base} by hand`)
+    }
+    // It decides what a season move is: whatever clears the bar for an add, and nothing else, ranked by it.
+    for (const p of swaps) assert.equal(p.kind !== 'stream', p.seasonWins! >= UPGRADE_WINS, `${p.name} for ${p.dropName}: ${p.kind}, ${p.seasonWins} wins`)
+    const ups = v.pickups.filter((p) => p.kind === 'upgrade' && p.drop)
+    assert.deepEqual(ups.map((p) => p.seasonWins), [...ups.map((p) => p.seasonWins)].sort((a, b) => b! - a!))
+  })
+}
+
+test('without the league schedule, this week’s opponent stands in for each regular-season week, and the pickup says so', () => {
+  const today = '2026-11-18'
+  const { snap } = snapshotFor(hoops, today)
+  const v = buildSeasonView(hoops, snap, world(today))
+  const p = v.pickups.find((x) => x.drop)!
+  assert.equal(p.scheduled, false)
+  assert.equal(p.seasonWeeks, weeks.filter(([n, , e]) => n < hoops.playoffWeeks[0] && e >= '2026-11-19').length)
+})
+
+test('past the next week a healthy player plays at his own season rate, not 95%', () => {
+  const today = '2026-11-18'
+  const w = world(today)
+  const ctx = new Context(hoops, w)
+  const fragile = players.find((p) => p.projection && p.team && !p.injury && p.projection.gp >= 50 && p.projection.gp <= 62)!
+  const sturdy = players.find((p) => p.projection && p.team && !p.injury && p.projection.gp >= 80)!
+  const games = (t: string) => schedule.filter((g) => g.home === t || g.away === t).length
+  assert.equal(ctx.play(fragile.id, addDays(today, 3)), 0.95, 'this week: the near-term chance')
+  assert.ok(Math.abs(ctx.play(fragile.id, addDays(today, 30)) - fragile.projection!.gp / games(fragile.team!)) < 1e-9, `${fragile.name}: ${fragile.projection!.gp} of ${games(fragile.team!)}`)
+  assert.equal(ctx.play(sturdy.id, addDays(today, 30)), 0.95, 'never above the healthy chance')
+  // Back from an injury on a date: his rate is over the games from then.
+  const back = addDays(today, 20)
+  const hurt = new Context(hoops, { ...w, returns: new Map([[fragile.id, back]]) })
+  assert.equal(hurt.play(fragile.id, addDays(today, 10)), 0)
+  const fromBack = schedule.filter((g) => (g.home === fragile.team || g.away === fragile.team) && g.date >= back).length
+  assert.ok(Math.abs(hurt.play(fragile.id, addDays(today, 40)) - Math.min(0.95, fragile.projection!.gp / fromBack)) < 1e-9)
 })

@@ -131,6 +131,8 @@ const snap = {
   weeks, rosters: teamsRows,
   mineToday: { team: meta(mineIdx), date: today, players: teamsRows[mineIdx].players.map((y, j) => ({ ...y, box: liveBox(rosters[mineIdx][j]) })) },
   scoreboard, past, standings, waivers, transactions: [], statusEvents,
+  // Who plays whom every regular-season week, as the server reads it from Yahoo's scoreboards.
+  fixtures: weeks.filter(([w]) => w < real.playoffWeeks[0]).map(([w, s, e]) => ({ week: w, start: s, end: e, pairs: pairs(w).map(([a, b]) => [String(a + 1), String(b + 1)]) })),
 }
 
 const res = await fetch(`${base}/api/nba/season/${leagueId}/snapshot`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(snap) })

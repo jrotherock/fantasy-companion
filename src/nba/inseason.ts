@@ -15,7 +15,7 @@ import { CATS, categoryZ, type Cat } from './value.js'
 import { addBox, emptyBox, type Box, type NbaMatchup, type RosterDay, type SeasonSettings, type Side, type TeamMeta } from './yahooSeason.js'
 import { daysFrom, projectWeek, seat, startingSeats, type GameOutlook, type Man, type WeekOutlook } from './week.js'
 import { categoryWeek, pointsWeek, type PointsOdds, type SideOutlook, type WeekOdds, type Weights } from './matchup.js'
-import { designation, perGameBox, playChance, withForm, type Designation, type GameLog } from './outlook.js'
+import { daysBetween, designation, HEALTHY_PLAY, perGameBox, playChance, withForm, type Designation, type GameLog } from './outlook.js'
 import { typicalWeek, type Member, type Noise } from './strength.js'
 
 export interface SeasonLeague {
@@ -47,7 +47,11 @@ export interface Snapshot {
   /** Yahoo ids of players on waivers, who cannot be added straight away. */
   waivers: string[]
   transactions: YTransaction[]
+  /** Every regular-season week's pairings, by team id: who plays whom for the rest of the season. */
+  fixtures?: Fixture[]
 }
+
+export interface Fixture { week: number; start: string; end: string; pairs: [string, string][] }
 
 /** What the server knows about players and the calendar, shared by every league. */
 export interface World {
@@ -90,6 +94,9 @@ export const isStarting = (slot: string | null) => !!slot && !RESERVE.has(slot)
  * Everything about players that every part of the screen needs: who a Yahoo
  * player is, his form, whether he plays, what a game of his is worth.
  */
+/** How far ahead a designation and the 95% for a healthy player hold; past it, his season rate. */
+export const NEAR_DAYS = 7
+
 export class Context {
   readonly byId = new Map<string, NbaPlayer & { formGames: number; recentMin: number | null; seasonMin: number | null }>()
   private readonly index: NameIndex
@@ -138,9 +145,29 @@ export class Context {
     return { date: mine ?? c?.returnDate ?? null, outForSeason: !mine && !!c?.outForSeason, text: c?.text ?? null }
   }
 
+  /**
+   * His chance of playing on a date. Past the next week a healthy player plays at his own season rate, not the
+   * near-term 95%: a man projected for 58 games misses nights nobody has reported yet (2026-10-19: Caruso, 58
+   * games, read as a season upgrade over Tobias Harris when every future night was 95%).
+   */
   play(id: string, date: string): number {
     const r = this.returnOf(id)
-    return playChance(this.designation(id), date, this.world.today, r.date, r.outForSeason)
+    const near = playChance(this.designation(id), date, this.world.today, r.date, r.outForSeason)
+    return daysBetween(this.world.today, date) <= NEAR_DAYS ? near : Math.min(near, this.seasonRate(id))
+  }
+
+  private readonly rates = new Map<string, number>()
+  /** His projected games over his team's games (from his return, if he has a date), held between 0.3 and 95%. */
+  seasonRate(id: string): number {
+    const hit = this.rates.get(id)
+    if (hit != null) return hit
+    const p = this.byId.get(id)
+    const gp = p?.projection?.gp
+    const back = this.returnOf(id).date
+    const games = (this.teamDates.get(p?.team ?? '') ?? []).filter((d) => !back || d >= back).length
+    const rate = gp && games ? Math.min(HEALTHY_PLAY, Math.max(0.3, gp / games)) : HEALTHY_PLAY
+    this.rates.set(id, rate)
+    return rate
   }
 
   outlook(id: string, date: string): GameOutlook | null {

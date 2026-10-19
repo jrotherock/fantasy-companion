@@ -42,8 +42,15 @@ export const UPGRADE_PER_GAME = { categories: 0.5, points: 2 } as const
 /** A pickup has to play at least this many more games, or it is no pickup. */
 export const MIN_GAMES_LEFT = 3
 
-/** Season moves are judged on this many fantasy weeks of starts. */
-export const HORIZON_WEEKS = 3
+/**
+ * A season move is judged on every regular-season week left, each against that week's real opponent, in matchups
+ * expected won; it has to add this many to be worth an add (2026-10-19: the next three weeks against this week's
+ * opponent made Caruso, 58 games, a season upgrade; over the whole season he cost half a win).
+ */
+export const UPGRADE_WINS = 0.1
+
+/** Candidates for a season move: the best this many free agents by per-game value. */
+const SEASON_POOL = 60
 
 /** Adds kept back for injuries and the playoffs. */
 export const RESERVE = 8
@@ -86,11 +93,14 @@ export interface Pickup {
   /** Value over the rest of the season, gained (negative: a stream that costs a little). */
   seasonGain: number
   /**
-   * Seat-aware: expected categories (points: points) over the next three weeks' starts against this week's opponent,
-   * gained by the move. A pickup who fills seats left empty counts in full; one who would mostly sit, barely
-   * (2026-10-15: the list led with a guard while both C seats sat empty 79% of nights). Null for streams.
+   * Matchups expected won over the rest of the regular season, gained by the move: every week's nightly lineups
+   * against that week's opponent, each player at his own rate of games played. Seat-aware: a pickup who fills
+   * seats left empty counts in full, one who would mostly sit barely (2026-10-15). Null once the regular season is over.
    */
-  startsGain: number | null
+  seasonWins: number | null
+  /** The weeks that measure covers, and whether each was against the real opponent (else this week's stood in). */
+  seasonWeeks: number
+  scheduled: boolean
   /** Games he plays in seats this week, from the day he can be added. */
   startsThisWeek: number
   waiver: boolean
@@ -101,7 +111,7 @@ export interface Pickup {
   playDays: { date: string; open: boolean }[]
   weekCats: { cat: Cat; before: number; after: number }[]
   /** Other players he could replace, best first: the drop is the user's call. */
-  alternatives: { drop: string; dropName: string; weekGain: number; winAfter: number; seasonGain: number }[]
+  alternatives: { drop: string; dropName: string; weekGain: number; winAfter: number; seasonGain: number; seasonWins: number | null }[]
   /** A stash: an injured player Yahoo will not let onto IL straight from the wire, so the steps. */
   steps: string | null
 }
@@ -191,22 +201,28 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
     return { gain: o.mine - o.theirs, win: o.win }
   }
   const base = score(myIds)
-  // The next three fantasy weeks from tomorrow (or from the first game): what a season move is judged on, in starts.
-  const horizon = snap.weeks.filter(([, , e]) => e >= tomorrow).slice(0, HORIZON_WEEKS).flatMap(([, a, e]) => daysFrom(a, e, a > tomorrow ? a : tomorrow))
-  const oppIdsAll = oppIds
-  const oppLong = theirs && horizon.length ? sideOutlook(ctx, null, oppIdsAll, seats, horizon).side : null
-  const longCache = new Map<string, number>()
-  const longScore = (ids: { id: string; eligible: string[] }[]): number => {
-    if (!oppLong || !horizon.length) return 0
+  // The rest of the regular season, week by week, against the team Yahoo has me playing each week (this week's
+  // opponent stands in until the league's schedule is read). Every category counts toward a week: a punted one is
+  // lost either way. The current week starts from nothing banked, the same for every roster compared.
+  const left = seasonLeft(snap, myTeamId, tomorrow, theirs?.id ?? null)
+  const scheduled = !!snap.fixtures?.length
+  const oppSides = left.map((w) => (w.opp ? sideOutlook(ctx, null, rosterIds(ctx, snap.rosters.find((r) => r.team.id === w.opp)?.players ?? []), seats, w.days).side : null))
+  const winsCache = new Map<string, number>()
+  const seasonWins = (ids: { id: string; eligible: string[] }[]): number => {
     const key = ids.map((x) => x.id).sort().join(',')
-    const hit = longCache.get(key); if (hit != null) return hit
-    const a = sideOutlook(ctx, null, ids, seats, horizon).side
-    const v = ctx.league.scoring === 'categories'
-      ? categoryWeek(a, { ...oppLong, now: emptyBox() }, CATS.filter((k) => !punts.includes(k))).expected
-      : pointsWeek(a, oppLong, ctx.league.points ?? {}, { mine: null, theirs: null }).mine
-    longCache.set(key, v); return v
+    const hit = winsCache.get(key); if (hit != null) return hit
+    let v = 0
+    left.forEach((w, i) => {
+      const o = oppSides[i]
+      if (!o) return
+      const a = sideOutlook(ctx, null, ids, seats, w.days).side
+      if (ctx.league.scoring === 'categories') { const x = categoryWeek(a, o); v += x.win + x.tie / 2 }
+      else v += pointsWeek(a, o, ctx.league.points ?? {}, { mine: null, theirs: null }).win
+    })
+    winsCache.set(key, v); return v
   }
-  const baseLong = longScore(myIds)
+  const judged = left.some((w) => w.opp)
+  const baseWins = judged ? seasonWins(myIds) : 0
   // Open active seats: a pickup into one drops nobody (2026-10-15: the public team had one after moving Porziņģis to
   // IL, and every suggestion was still a swap).
   const activeCap = seats.length + (ctx.league.roster.BN ?? 0)
@@ -238,7 +254,7 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
     const t = ctx.byId.get(id)?.team
     return !!t && schedulePlays(ctx, d, t)
   }).length
-  const forSeason = byWorth.slice(0, 25)
+  const forSeason = byWorth.slice(0, SEASON_POOL)
   const forWeek = [...pool].sort((a, b) => worth(b.id) * weekGames(b.id) - worth(a.id) * weekGames(a.id)).slice(0, 25)
   const cands = [...new Map([...forSeason, ...forWeek].map((p) => [p.id, p])).values()]
 
@@ -261,13 +277,14 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
       const add = { id: c.id, eligible: c.positions }
       const p = ctx.byId.get(c.id)!
       const after = score([...myIds, add])
-      const startsGain = longScore([...myIds, add]) - baseLong
-      if (startsGain > 0 || after.gain > base.gain) {
+      const winsGain = judged ? seasonWins([...myIds, add]) - baseWins : null
+      if ((winsGain ?? 0) > 0 || after.gain > base.gain) {
         out.push({
           add: c.id, name: p.name, team: p.team, positions: p.positions, drop: null, dropName: null, kind: 'upgrade',
           alternatives: [], seasonCats: [], weekCats: [], steps: null,
           playDays: daysFor(c.id).filter((day) => { const t = ctx.byId.get(c.id)?.team; return !!t && schedulePlays(ctx, day, t) && ctx.play(c.id, day) > 0.5 }).map((date) => ({ date, open: (openOn.get(date) ?? 0) > 0 })),
-          weekGain: after.gain - base.gain, winBefore: base.win, winAfter: after.win, seasonGain: season(c.id), startsGain,
+          weekGain: after.gain - base.gain, winBefore: base.win, winAfter: after.win, seasonGain: season(c.id),
+          seasonWins: winsGain, seasonWeeks: left.length, scheduled,
           startsThisWeek: weekGames(c.id), waiver: waiverIds.has(c.id),
           why: `Into your open roster spot (${openSpots} free): nobody dropped`,
         })
@@ -281,8 +298,10 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
       const after = scoreWithAddFrom(ctx, mySide, swapped, d, add, seats, allDays, daysFor(c.id), opp, theirs)
       const seasonGain = season(c.id) - d.season
       const weekGain = after.gain - base.gain
-      // An upgrade has to be better per game by a margin worth an add, over the games he has left.
-      const upgrade = seasonGain > UPGRADE_PER_GAME[ctx.league.scoring] * Math.max(10, ctx.gamesLeft(c.id))
+      // An upgrade has to win more matchups over the regular season left by a margin worth an add. With no
+      // regular season left (the playoffs), better per game by a margin, over the games he has left.
+      const winsGain = judged ? seasonWins([...swapped, add]) - baseWins : null
+      const upgrade = winsGain != null ? winsGain >= UPGRADE_WINS : seasonGain > UPGRADE_PER_GAME[ctx.league.scoring] * Math.max(10, ctx.gamesLeft(c.id))
       const stream = !upgrade && weekGain > (ctx.league.scoring === 'categories' ? 0.15 : 8) && seasonGain > -40
       if (!upgrade && !stream) continue
       const p = ctx.byId.get(c.id)!
@@ -302,7 +321,7 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
           ? `${waiverIds.has(c.id) ? 'Claim' : 'Add'} him dropping ${ctx.byId.get(d.id)?.name}, move him to IL once he is yours (Yahoo will not add straight to IL), then use the freed spot for another add.${back ? ` Back about ${back}.` : ''}`
           : null,
         weekGain, winBefore: base.win, winAfter: after.win, seasonGain, startsThisWeek: starts,
-        startsGain: upgrade ? longScore([...swapped, add]) - baseLong : null,
+        seasonWins: winsGain, seasonWeeks: left.length, scheduled,
         waiver: waiverIds.has(c.id),
         why: stash
           ? `Out now; better than ${ctx.byId.get(d.id)?.name} once back, for the rest of the season`
@@ -316,19 +335,21 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
   }
   // One line per player added: his best drop, the other drops he beats as alternatives.
   // Season moves by what they add to my starts (seat-aware); streams by this week.
-  const rank = (x: Pickup) => (x.kind !== 'stream' ? 1000 + (x.startsGain ?? 0) * 1000 + x.seasonGain / 1000 : x.weekGain * 100 + x.seasonGain / 10)
+  const rank = (x: Pickup) => (x.kind !== 'stream' ? 1000 + (x.seasonWins ?? 0) * 1000 + x.seasonGain / 1000 : x.weekGain * 100 + x.seasonGain / 10)
   const best = new Map<string, Pickup>()
   for (const p of [...out].sort((a, b) => rank(b) - rank(a))) {
     const cur = best.get(p.add)
     if (!cur) { best.set(p.add, p); continue }
-    if (cur.alternatives.length < 3) cur.alternatives.push({ drop: p.drop!, dropName: p.dropName!, weekGain: p.weekGain, winAfter: p.winAfter, seasonGain: p.seasonGain })
+    if (cur.alternatives.length < 3) cur.alternatives.push({ drop: p.drop!, dropName: p.dropName!, weekGain: p.weekGain, winAfter: p.winAfter, seasonGain: p.seasonGain, seasonWins: p.seasonWins })
   }
   const order = { upgrade: 0, stash: 1, stream: 2 } as const
-  const ranked = [...best.values()].sort((a, b) => order[a.kind] - order[b.kind] || (a.kind !== 'stream' ? (b.startsGain ?? 0) - (a.startsGain ?? 0) || b.seasonGain - a.seasonGain : b.weekGain - a.weekGain))
+  const ranked = [...best.values()].sort((a, b) => order[a.kind] - order[b.kind] || (a.kind !== 'stream' ? (b.seasonWins ?? 0) - (a.seasonWins ?? 0) || b.seasonGain - a.seasonGain : b.weekGain - a.weekGain))
   // Streams beyond what the budget allows this week are still listed, but marked by the screen.
   // Open means a seat HE can fill: with the swap made, is he in that day's lineup? A guard on a day only F is open
   // is not (2026-10-10: the first version counted any open seat).
-  const shown = ranked.slice(0, opts.limit ?? 8)
+  // Each kind gets its own room: a long list of season moves must not push this week's streams off the screen.
+  const limit = opts.limit ?? 8
+  const shown = (['upgrade', 'stash', 'stream'] as const).flatMap((k) => ranked.filter((p) => p.kind === k).slice(0, limit))
   for (const p of shown) {
     if (!p.playDays.length) continue
     const roster = [...myIds.filter((x) => x.id !== p.drop), { id: p.add, eligible: p.positions }]
@@ -355,6 +376,22 @@ function scoreWithAddFrom(ctx: Context, mySide: Parameters<typeof sideOutlook>[1
   }
   const o = pointsWeek(side, opp, ctx.league.points ?? {}, { mine: mySide?.points ?? null, theirs: theirs?.points ?? null })
   return { gain: o.mine - o.theirs, win: o.win, races: undefined as { cat: Cat; win: number }[] | undefined }
+}
+
+/**
+ * The regular-season weeks left from a date: each week's days from then, and my opponent that week. From the
+ * league's schedule when it has been read; otherwise Yahoo's weeks before the playoffs, with this week's opponent.
+ */
+export function seasonLeft(snap: Snapshot, myTeamId: string, from: string, thisWeeks: string | null): { week: number; days: string[]; opp: string | null }[] {
+  const days = (s: string, e: string) => daysFrom(s, e, s > from ? s : from)
+  if (snap.fixtures?.length) {
+    return snap.fixtures.filter((f) => f.end >= from).map((f) => {
+      const pair = f.pairs.find((x) => x.includes(myTeamId))
+      return { week: f.week, days: days(f.start, f.end), opp: pair ? (pair[0] === myTeamId ? pair[1] : pair[0]) : null }
+    })
+  }
+  const playoffs = snap.settings?.playoffStartWeek ?? Infinity
+  return snap.weeks.filter(([n, , e]) => n < playoffs && e >= from).map(([n, s, e]) => ({ week: n, days: days(s, e), opp: thisWeeks }))
 }
 
 function schedulePlays(ctx: Context, date: string, team: string): boolean {

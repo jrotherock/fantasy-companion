@@ -621,7 +621,7 @@ function Adds({ v }: { v: SeasonView }) {
           </ol>
         </Section>
       )}
-      <Section title="For the rest of the season" hint="better than someone you have, or into an open roster spot; best for your lineup first">
+      <Section title="For the rest of the season" hint="more matchups won over the weeks left, against each week’s real opponent; most first">
         {!ups.length && <div className="nl-none">Nobody on the wire beats your roster by enough to spend an add.</div>}
         {ups.map((p) => <PickupRow key={p.add} p={p} cats={cats} />)}
       </Section>
@@ -657,9 +657,7 @@ function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: 
         {p.dropName && <><b>Drop {p.dropName}</b> · </>}{p.why}
       </div>
       <div className="nl-pickd nl-dim">
-        {p.kind !== 'stream' && p.startsGain != null && <span title="What the move adds to your starting lineup over the next three weeks against this week's opponent: a pickup who fills spots left empty counts in full, one who would mostly sit barely counts">Next 3 weeks in your lineup: <b>{cats ? `${p.startsGain >= 0 ? '+' : ''}${p.startsGain.toFixed(2)} cats` : `${p.startsGain >= 0 ? '+' : ''}${Math.round(p.startsGain)} pts`}</b></span>}
-        {p.kind !== 'stream' && p.startsGain != null && ' · '}
-        {p.kind !== 'stream' && <span title="His value over the games he has left, less the dropped player's: categories in play, summed per game">Season: +{Math.round(p.seasonGain)} value</span>}
+        {p.kind !== 'stream' && <SeasonGain p={p} />}
         {p.kind !== 'stream' && ' · '}
         <span className={weekCost ? 'nl-cost' : ''}>This week: win {pct(p.winBefore)} → {pct(p.winAfter)} ({wk(p.weekGain)}){weekCost ? ' — costs this week' : ''}</span>
         {over && <span> · beyond your pace</span>}
@@ -682,10 +680,27 @@ function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: 
       )}
       {p.steps && <div className="nl-steps">{p.steps}</div>}
       {p.alternatives.length > 0 && (
-        <div className="nl-pickd nl-dim">Or drop: {p.alternatives.map((a, i) => <span key={a.drop}>{i ? ' · ' : ''}{a.dropName} <span title="this week's win chance after the move">(week {pct(a.winAfter)}, season +{Math.round(a.seasonGain)})</span></span>)}</div>
+        <div className="nl-pickd nl-dim">Or drop: {p.alternatives.map((a, i) => <span key={a.drop}>{i ? ' · ' : ''}{a.dropName} <span title="this week's win chance after the move">(week {pct(a.winAfter)}, season {a.seasonWins != null ? wins(a.seasonWins) : `+${Math.round(a.seasonGain)}`})</span></span>)}</div>
       )}
     </div>
   )
+}
+
+const wins = (w: number) => `${w >= 0 ? '+' : '−'}${Math.abs(w).toFixed(2)} wins`
+
+/**
+ * What a season move does for the rest of the regular season, in matchups won: every week's lineups against that
+ * week's opponent, each player at his own rate of games played. Before the league's schedule is read, this week's
+ * opponent stands in for every week, and the card says so.
+ */
+function SeasonGain({ p }: { p: SeasonView['pickups'][number] }) {
+  if (p.seasonWins == null) {
+    return <span title="His value over the games he has left, less the dropped player's: categories in play, summed per game">Season: +{Math.round(p.seasonGain)} value</span>
+  }
+  const how = p.scheduled
+    ? `Every week left in the regular season (${p.seasonWeeks}), each against that week's opponent, with every player at his own rate of games played: matchups expected won, before and after the move. A pickup who fills spots left empty counts in full; one who would mostly sit barely counts.`
+    : `The ${p.seasonWeeks} regular-season weeks left, with this week's opponent standing in for every week until the league's schedule is read.`
+  return <span title={how}>Rest of season: <b>{wins(p.seasonWins)}</b>{p.scheduled ? '' : ' (vs this week’s opponent)'}</span>
 }
 
 const dateWord = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })

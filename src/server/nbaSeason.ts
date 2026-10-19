@@ -5,8 +5,9 @@
  * Yahoo's request budget is shared with football (yahooApi.ts keeps the daily
  * cap), so reads are paced by what can change: today's lineup and the
  * scoreboard every ten minutes while games are on, hourly otherwise; rosters
- * every half hour; settings and the calendar once a day. Before a league has
- * drafted, one roster read every six hours is enough to notice it has.
+ * every half hour; settings and the calendar once a day; the matchup schedule
+ * once a week. Before a league has drafted, one roster read every six hours is
+ * enough to notice it has.
  *
  * Sleeper carries the stats: a dated game log per week and per-game
  * projections for every date of the current week, free and keyed by the same
@@ -35,7 +36,7 @@ import { easternDate } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
 import { diffStatus, type StatusEvent } from '../nba/news.js'
 import { buildSeasonView, losesStart, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
-import { weekOf, type SeasonLeague, type Snapshot, type World } from '../nba/inseason.js'
+import { weekOf, type Fixture, type SeasonLeague, type Snapshot, type World } from '../nba/inseason.js'
 import type { Box } from '../nba/yahooSeason.js'
 import type { Game, NbaPlayer } from '../nba/types.js'
 
@@ -206,7 +207,7 @@ function gamesOn(now = clock()): boolean {
   return now >= Math.min(...tips) - HOUR && now <= Math.max(...tips) + 3 * HOUR
 }
 
-type Part = 'settings' | 'weeks' | 'rosters' | 'today' | 'scoreboard' | 'standings' | 'waivers' | 'transactions' | 'past'
+type Part = 'settings' | 'weeks' | 'rosters' | 'today' | 'scoreboard' | 'standings' | 'waivers' | 'transactions' | 'past' | 'fixtures'
 
 function every(part: Part, drafted: boolean, live: boolean): number {
   if (!drafted) return part === 'rosters' || part === 'settings' || part === 'weeks' ? 6 * HOUR : Infinity
@@ -218,6 +219,7 @@ function every(part: Part, drafted: boolean, live: boolean): number {
     case 'waivers': return 2 * HOUR
     case 'transactions': return HOUR
     case 'past': return 12 * HOUR
+    case 'fixtures': return 7 * 24 * HOUR
   }
 }
 
@@ -263,6 +265,19 @@ async function readLeague(l: SeasonLeague & { myTeamId: string | null }, force =
           if (s.past[w]?.length && s.past[w].every((m) => m.status === 'postevent')) continue
           s.past[w] = parseNbaScoreboard(await yahooApi.call(`league/${key}/scoreboard;week=${w}`, { by: 'nba-season' }))
         }
+      })
+      // Who plays whom every week left in the regular season, for judging a season pickup week by week. The
+      // schedule is set before the season, so once a week is enough; it stops at the playoffs.
+      await run('fixtures', async () => {
+        const current = weekOf(s.weeks, today)?.[0] ?? 1
+        const last = s.settings?.playoffStartWeek ? s.settings.playoffStartWeek - 1 : s.weeks.length
+        const out: Fixture[] = []
+        for (let w = current; w <= last; w++) {
+          const ms = parseNbaScoreboard(await yahooApi.call(`league/${key}/scoreboard;week=${w}`, { by: 'nba-season' })).filter((m) => !m.playoffs && !m.consolation && m.sides.length === 2)
+          if (!ms.length || !ms[0].start || !ms[0].end) break
+          out.push({ week: w, start: ms[0].start, end: ms[0].end, pairs: ms.map((m) => [m.sides[0].id, m.sides[1].id] as [string, string]) })
+        }
+        if (out.length) s.fixtures = out
       })
     }
   } catch (e) {

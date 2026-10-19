@@ -16,3 +16,8 @@ The scripts read `<dir>/sched.json`. To refresh: through the signed-in app in Ch
 `/api/yahoo/raw?path=league/478.l.231557/scoreboard;week=N` (N = 1..19) for pairings, and
 `league/478.l.231557/teams/roster` for rosters, in the format of `2026-10-10/sched.json`.
 Refresh projections first with `npx tsx scripts/nba-data.ts` if they are stale.
+
+`cats-season.ts` (2026-10-18, Hoops after the draft): every team's W-L over the real schedule, my weeks, and the
+best adds. Its snapshot (`2026-10-18-hoops/sched.json`) holds app player ids, not Yahoo ids.
+
+    npx tsx scripts/nba-season-analysis/cats-season.ts scripts/nba-season-analysis/2026-10-18-hoops nba-hoops 4
