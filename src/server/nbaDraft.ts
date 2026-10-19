@@ -848,8 +848,14 @@ export function seasonLeagues(): NbaLeague[] {
   return load().leagues.filter((l) => !l.mock)
 }
 
-export function nbaPlayers(): NbaPlayer[] {
-  return load().players
+/**
+ * The players for a league's season screens: the projections with your own view of a few players (preferences
+ * `adjust`: stats or games) in place, as the draft has them (2026-10-19: Tobias Harris set to 55 games after a camp
+ * calf strain; the season screens had read the raw projections).
+ */
+export function seasonPlayers(leagueId: string): NbaPlayer[] {
+  const { players, index } = load()
+  return applyAdjustments(players, resolvePreferences(prefFile(), prefLeague(leagueId), index).adjust)
 }
 
 /** The never list for a league, as player ids: never offered anywhere in the season screens. */

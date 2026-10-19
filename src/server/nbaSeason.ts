@@ -30,7 +30,7 @@ import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { parseStandings, parseTransactions } from './yahooParse.js'
 import type { Alert } from './alerts.js'
-import { handReturns, injuryNotesNow, liveDrafts, nbaPlayers, neverIds, seasonLeagues } from './nbaDraft.js'
+import { handReturns, injuryNotesNow, liveDrafts, neverIds, seasonLeagues, seasonPlayers } from './nbaDraft.js'
 import { parseGameWeeks, parseLeagueRosters, parseNbaScoreboard, parsePlayers, parseRosterDay, parseSeasonSettings } from '../nba/yahooSeason.js'
 import { easternDate } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
@@ -157,7 +157,7 @@ function world(leagueId: string): World {
   noise ??= { sdWeekly: Object.fromEntries(Object.entries<any>(JSON.parse(readFileSync(`${DATA}/category-noise.json`, 'utf8')).raw).map(([k, v]) => [k, v.sdWeekly])) as any }
   const live = sleeper.players?.byId ?? {}
   // The player file was built before the season; Sleeper's live file has today's team and designation.
-  const players: NbaPlayer[] = nbaPlayers().map((p) => {
+  const players: NbaPlayer[] = seasonPlayers(leagueId).map((p) => {
     const l = live[p.id]
     if (!l) return p
     return { ...p, team: l.team ?? p.team, injury: l.injury ? { status: l.injury, body: p.injury?.body ?? null, notes: p.injury?.notes ?? null } : null }
