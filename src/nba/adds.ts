@@ -163,9 +163,28 @@ export function keepsSeatDepth(before: { eligible: string[] }[], after: { eligib
  * categories my roster has given up, which no pickup should chase.
  */
 export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { punts?: Cat[]; limit?: number } = {}): Pickup[] {
+  return pickupsAndPairs(ctx, snap, myTeamId, opts).pickups
+}
+
+/** Two moves made together: what they add over the season as a pair, and each alone. */
+export interface PairMove {
+  moves: { add: string; name: string; drop: string; dropName: string; waiver: boolean; seasonWins: number }[]
+  /** Matchups expected won over the rest of the regular season, gained by both moves. */
+  seasonWins: number
+  /** This week's chance of winning, before and after both. */
+  winBefore: number
+  winAfter: number
+}
+
+/** The singles a pair is built from: the best this many swaps by season wins. */
+const PAIR_POOL = 10
+/** A pair is shown when its second move adds at least this much to the best single move. */
+export const PAIR_MARGIN = UPGRADE_WINS
+
+export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, opts: { punts?: Cat[]; limit?: number } = {}): { pickups: Pickup[]; pairs: PairMove[] } {
   const { today } = ctx.world
   const mine = snap.rosters.find((r) => r.team.id === myTeamId)
-  if (!mine) return []
+  if (!mine) return { pickups: [], pairs: [] }
   const rostered = new Set<string>()
   for (const r of snap.rosters) for (const y of r.players) { const id = ctx.resolve(y); if (id) rostered.add(id) }
   const waivers = new Set(snap.waivers)
@@ -283,6 +302,7 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
   }
 
   const out: Pickup[] = []
+  const tried: { add: { id: string; eligible: string[] }; drop: { id: string; eligible: string[] }; wins: number }[] = []
   for (const c of cands) {
     if (openSpots > 0) {
       const add = { id: c.id, eligible: c.positions }
@@ -312,6 +332,7 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
       // An upgrade has to win more matchups over the regular season left by a margin worth an add. With no
       // regular season left (the playoffs), better per game by a margin, over the games he has left.
       const winsGain = judged ? seasonWins([...swapped, add]) - baseWins : null
+      if (winsGain != null) tried.push({ add, drop: d, wins: winsGain })
       const upgrade = winsGain != null ? winsGain >= UPGRADE_WINS : seasonGain > UPGRADE_PER_GAME[ctx.league.scoring] * Math.max(10, ctx.gamesLeft(c.id))
       const stream = !upgrade && weekGain > (ctx.league.scoring === 'categories' ? 0.15 : 8) && (winsGain != null ? winsGain > -STREAM_SEASON_COST : seasonGain > -40)
       if (!upgrade && !stream) continue
@@ -368,7 +389,29 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
     const seated = new Map(allDays.map((d, i) => [d, (wk.days[i]?.starting ?? []).includes(p.add)]))
     p.playDays = p.playDays.map((d) => ({ date: d.date, open: seated.get(d.date) ?? false }))
   }
-  return shown
+  // Two moves together, from the best singles: different players added, different players dropped, the seats still
+  // covered. Shown when the pair beats the best single move by a second move's worth (2026-10-19: the public league's
+  // best was two moves, +1.7 wins together, and the list could only show them one at a time).
+  const pairs: PairMove[] = []
+  if (judged && tried.length > 1) {
+    const best = Math.max(0, ...tried.map((t) => t.wins))
+    const top = [...tried].sort((a, b) => b.wins - a.wins).slice(0, PAIR_POOL)
+    for (let i = 0; i < top.length; i++) for (let j = i + 1; j < top.length; j++) {
+      const a = top[i], b = top[j]
+      if (a.add.id === b.add.id || a.drop.id === b.drop.id) continue
+      const roster = [...myIds.filter((x) => x.id !== a.drop.id && x.id !== b.drop.id), a.add, b.add]
+      if (!keepsSeatDepth(myIds, roster, seats)) continue
+      const wins = seasonWins(roster) - baseWins
+      if (wins < best + PAIR_MARGIN) continue
+      const name = (id: string) => ctx.byId.get(id)?.name ?? id
+      pairs.push({
+        moves: [a, b].map((t) => ({ add: t.add.id, name: name(t.add.id), drop: t.drop.id, dropName: name(t.drop.id), waiver: waiverIds.has(t.add.id), seasonWins: t.wins })),
+        seasonWins: wins, winBefore: base.win, winAfter: score(roster).win,
+      })
+    }
+    pairs.sort((x, y) => y.seasonWins - x.seasonWins)
+  }
+  return { pickups: shown, pairs: pairs.slice(0, 3) }
 }
 
 function scoreWithAddFrom(ctx: Context, mySide: Parameters<typeof sideOutlook>[1], rest: { id: string; eligible: string[] }[],

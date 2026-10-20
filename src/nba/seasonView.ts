@@ -8,7 +8,7 @@ import type { Cat } from './value.js'
 import { CATS } from './value.js'
 import { startingSeats } from './week.js'
 import { buildWeek, checkLineup, Context, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
-import { addPlan, budgetOf, categoryPlan, pickups, type AddPlan, type Budget, type CategoryPlan, type Pickup } from './adds.js'
+import { addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type PairMove, type Pickup } from './adds.js'
 import { leagueNews, type NewsItem, type StatusEvent } from './news.js'
 import { allPlay, playoffPlan, power, tradeIdeas, type AllPlay, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
 
@@ -24,6 +24,8 @@ export interface SeasonView {
   week: WeekView | null
   budget: Budget | null
   pickups: Pickup[]
+  /** Two moves together that beat any one move by a second move's worth. */
+  pairs: PairMove[]
   news: NewsItem[]
   /** Categories my roster is not competing in, read from how it compares with the league. */
   punts: Cat[]
@@ -58,7 +60,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   const base: SeasonView = {
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
-    lineup: null, week: null, budget: null, pickups: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
+    lineup: null, week: null, budget: null, pickups: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
     standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null,
   }
   if (!drafted || !me) return base
@@ -82,12 +84,12 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     }
   }
   const budget = budgetOf(snap, me.id, league, world.today)
-  const picks = pickups(ctx, snap, me.id, { punts })
+  const { pickups: picks, pairs } = pickupsAndPairs(ctx, snap, me.id, { punts })
   const news = leagueNews(ctx, snap, me.id, events, week?.opponent?.id ?? null).slice(0, 40)
   const st = snap.standings.find((s) => s.teamId === me.id || s.mine)
 
   const view: SeasonView = {
-    ...base, lineup, week, budget, pickups: picks, news, punts, power: pw,
+    ...base, lineup, week, budget, pickups: picks, pairs, news, punts, power: pw,
     allPlay: allPlay(snap.past, me.id, league.scoring),
     playoffs: playoffPlan(ctx, snap, me.id),
     trades: tradeIdeas(ctx, snap, me.id),
@@ -100,6 +102,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   const ids = new Set<string>()
   lineup?.rows.forEach((r) => ids.add(r.id))
   picks.forEach((p) => { ids.add(p.add); if (p.drop) ids.add(p.drop) })
+  pairs.forEach((p) => p.moves.forEach((m) => { ids.add(m.add); ids.add(m.drop) }))
   news.forEach((n) => ids.add(n.playerId))
   view.trades.forEach((t) => [...t.give, ...t.get].forEach((x) => ids.add(x.id)))
   view.playoffs?.mine.forEach((x) => ids.add(x.id))

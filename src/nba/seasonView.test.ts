@@ -6,7 +6,7 @@ import type { NbaPlayer, Game, YahooWeek } from './types.js'
 import { buildSeasonView, seasonTile } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
 import { Context, rosterIds, sideOutlook, type Fixture, type SeasonLeague, type Snapshot, type World } from './inseason.js'
-import { addDays, STREAM_SEASON_COST, UPGRADE_WINS } from './adds.js'
+import { addDays, PAIR_MARGIN, STREAM_SEASON_COST, UPGRADE_WINS, type PairMove } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
 import { diffStatus } from './news.js'
@@ -294,6 +294,19 @@ test('past the next week a healthy player plays at his own season rate, not 95%'
   assert.ok(Math.abs(hurt.play(fragile.id, addDays(today, 40)) - Math.min(0.95, fragile.projection!.gp / fromBack)) < 1e-9)
 })
 
+/** Each pair is both moves made together, worked out by hand, and worth a second move over either alone. */
+function checkPairs(pairs: PairMove[], league: SeasonLeague & { myTeamId: string }, snap: Snapshot, w: World, myIds: { id: string; eligible: string[] }[], base: number, ctx: Context) {
+  for (const pr of pairs) {
+    assert.equal(pr.moves.length, 2)
+    const [a, b] = pr.moves
+    assert.ok(a.add !== b.add && a.drop !== b.drop)
+    const roster = [...myIds.filter((x) => x.id !== a.drop && x.id !== b.drop), ...[a.add, b.add].map((id) => ({ id, eligible: [...ctx.byId.get(id)!.positions, 'Util'] }))]
+    const together = winsByHand(league, snap, w, roster) - base
+    assert.ok(Math.abs(pr.seasonWins - together) < 1e-6, `${a.name} + ${b.name}: ${pr.seasonWins} vs ${together} by hand`)
+    assert.ok(pr.seasonWins >= Math.max(a.seasonWins, b.seasonWins) + PAIR_MARGIN - 1e-9, 'a second move’s worth over either alone')
+  }
+}
+
 /** A league as Yahoo had it on 2026-10-19, from an analysis snapshot: rosters, the schedule, the season about to start. */
 function realLeague(dir: string, base: SeasonLeague & { myTeamId: string }, me: string, playoffStart: number) {
   const today = '2026-10-19'
@@ -331,6 +344,8 @@ for (const [label, dir, base, me, playoffStart] of [['Hoops', '2026-10-19-hoops'
     for (const p of v.pickups) for (const d of [p.drop, ...p.alternatives.map((a) => a.drop)]) if (d) assert.ok(fewest.has(d), `${ctx.byId.get(d)?.name ?? d} is not among the five least missed`)
     for (const p of v.pickups.filter((x) => x.kind === 'stream')) assert.ok(p.seasonWins! > -STREAM_SEASON_COST, `${p.name} for ${p.dropName}: ${p.seasonWins}`)
     if (label === 'Hoops') assert.ok(!v.pickups.some((p) => p.kind === 'stream' && p.dropName === 'Aaron Nesmith'), 'the season pickup is not streamed away')
+    checkPairs(v.pairs, league, snap, w, myIds, all, ctx)
+    if (label === 'Public') assert.ok(v.pairs.length > 0, 'the public league’s best is two moves')
     // Public punts FG% and REB: by per-game value Siakam and Mikal Bridges were among the five weakest and VanVleet and
     // Herro were not; in matchups won it is the other way round, and the moves for VanVleet and Herro are the ones offered.
     if (label === 'Public') assert.ok(v.pickups.some((p) => [p.dropName, ...p.alternatives.map((a) => a.dropName)].some((n) => n === 'Fred VanVleet' || n === 'Tyler Herro')), 'VanVleet or Herro weighed as a drop')

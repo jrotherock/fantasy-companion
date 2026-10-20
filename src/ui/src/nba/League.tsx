@@ -625,6 +625,20 @@ function Adds({ v }: { v: SeasonView }) {
         {!ups.length && <div className="nl-none">Nobody on the wire beats your roster by enough to spend an add.</div>}
         {ups.map((p) => <PickupRow key={p.add} p={p} cats={cats} />)}
       </Section>
+      {v.pairs?.length > 0 && (
+        <Section title="Two moves together" hint="worth more than any one move by itself">
+          {v.pairs.map((pr, i) => (
+            <div key={i} className="nl-pick">
+              <div className="nl-pickh"><span className="nl-kind upgrade">pair</span> <b>Rest of season: {wins(pr.seasonWins)}</b> <span className="nl-dim">· this week: win {pct(pr.winBefore)} → {pct(pr.winAfter)}</span></div>
+              {pr.moves.map((m) => (
+                <div key={m.add} className="nl-pickd">
+                  <b>Add {m.name}</b>, drop {m.dropName} <span className="nl-dim">({wins(m.seasonWins)} alone{m.waiver ? ' · waivers' : ''})</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </Section>
+      )}
       {stashes.length > 0 && (
         <Section title="Injured stashes" hint="out now, worth an IL seat">
           {stashes.map((p) => <PickupRow key={p.add} p={p} cats={cats} />)}
