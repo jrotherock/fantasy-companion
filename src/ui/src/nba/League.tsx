@@ -820,8 +820,10 @@ function YourView({ leagueId, label, onChange }: { leagueId: string; label: stri
         </div>
         <label className="nl-yv-num"><span>Minutes</span><input aria-label="Minutes a game" inputMode="decimal" value={min} disabled={!picked} onChange={(e) => setMin(e.target.value)} /></label>
         <label className="nl-yv-num"><span>Games</span><input aria-label="Games" inputMode="numeric" value={gp} disabled={!picked} onChange={(e) => setGp(e.target.value)} /></label>
-        <button className="nl-yv-save" disabled={busy || !picked} onClick={submit}>Set</button>
-        <label className="nl-yv-here"><input id="yv-just-here" type="checkbox" checked={justHere} onChange={(e) => setJustHere(e.target.checked)} /> Just {label}</label>
+        <div className="nl-yv-act">
+          <button className="nl-yv-save" disabled={busy || !picked} onClick={submit}>Set</button>
+          <label className="nl-yv-here"><input id="yv-just-here" type="checkbox" checked={justHere} onChange={(e) => setJustHere(e.target.checked)} /> Just {label}</label>
+        </div>
       </div>
       {picked && <div className="nl-none">Projection: {picked.baseMin?.toFixed(1) ?? '—'} minutes, {picked.baseGp} games.{(picked.min !== picked.baseMin || picked.gp !== picked.baseGp) ? ' The boxes show yours.' : ''} Back to the projection clears yours. {justHere ? `Sets ${label} only.` : 'Sets all your leagues.'}</div>}
       {err && <div className="nl-warn">{err}</div>}
