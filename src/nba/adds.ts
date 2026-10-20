@@ -363,10 +363,11 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
         weekGain, winBefore: base.win, winAfter: after.win, seasonGain, startsThisWeek: starts,
         seasonWins: winsGain, seasonWeeks: left.length, scheduled,
         waiver: waiverIds.has(c.id),
+        // The reason reads beside "Drop <name>" on the card and in the plan, so it does not name him again.
         why: stash
-          ? `Out now; better than ${ctx.byId.get(d.id)?.name} once back, for the rest of the season`
+          ? 'Out now; better once back, for the rest of the season'
           : upgrade
-          ? `Better than ${ctx.byId.get(d.id)?.name} for the rest of the season`
+          ? 'Better for the rest of the season'
           : ctx.league.scoring === 'categories'
             ? `${starts} game${starts === 1 ? '' : 's'} this week: +${weekGain.toFixed(2)} categories expected`
             : `${starts} game${starts === 1 ? '' : 's'} this week: +${weekGain.toFixed(0)} points expected`,
