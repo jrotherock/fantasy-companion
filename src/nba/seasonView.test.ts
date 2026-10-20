@@ -351,3 +351,39 @@ for (const [label, dir, base, me, playoffStart] of [['Hoops', '2026-10-19-hoops'
     if (label === 'Public') assert.ok(v.pickups.some((p) => [p.dropName, ...p.alternatives.map((a) => a.dropName)].some((n) => n === 'Fred VanVleet' || n === 'Tyler Herro')), 'VanVleet or Herro weighed as a drop')
   })
 }
+
+test("an absent player's minutes go to his healthy teammates, his position first, until he is back", () => {
+  const today = '2026-10-19'
+  const aj = players.find((p) => p.name === 'AJ Dybantsa')!
+  const ky = players.find((p) => p.name === 'Kyshawn George')!
+  const w = { ...world(today), returns: new Map([[aj.id, '2026-11-01']]) }
+  const ctx = new Context(hoops, w)
+  const out = '2026-10-25', back = '2026-11-12'
+  const games = schedule.filter((g) => g.home === 'WAS' || g.away === 'WAS').length
+  const freed = aj.projection!.perGame.min * Math.min(1, aj.projection!.gp / games)
+  const mates = players.filter((p) => p.team === 'WAS' && p.id !== aj.id && p.projection)
+  const given = mates.reduce((s, p) => s + ctx.minutesFrom(p.id, out), 0)
+  // All of them, but for what would take someone past 36.
+  assert.ok(given <= freed + 1e-9 && given > 0.95 * freed, `${given.toFixed(2)} of ${freed.toFixed(2)} minutes given out`)
+  for (const p of mates) assert.ok(p.projection!.perGame.min + ctx.minutesFrom(p.id, out) <= 36 + 1e-9 || ctx.minutesFrom(p.id, out) === 0, `${p.name} past 36`)
+  assert.equal(ctx.minutesFrom(aj.id, out), 0, 'not to himself')
+  // Per minute he already plays, a teammate at AJ's position gains three times what one at none of them does.
+  const group = (p: NbaPlayer) => p.positions.map((x) => (x === 'PG' || x === 'SG' ? 'G' : x === 'SF' || x === 'PF' ? 'F' : 'C'))
+  const shares = (p: NbaPlayer) => group(p).some((g) => group(aj).includes(g))
+  const rate = (p: NbaPlayer) => ctx.minutesFrom(p.id, out) / p.projection!.perGame.min
+  const uncapped = mates.filter((p) => p.projection!.perGame.min >= 12 && p.projection!.perGame.min + ctx.minutesFrom(p.id, out) < 36 - 1e-6)
+  const same = uncapped.find(shares), other = uncapped.find((p) => !shares(p))
+  assert.ok(same && other, 'one of each to compare')
+  assert.ok(Math.abs(rate(same!) / rate(other!) - 3) < 1e-6, `${same!.name} ${rate(same!).toFixed(3)} vs ${other!.name} ${rate(other!).toFixed(3)}`)
+  assert.ok(ctx.minutesFrom(ky.id, out) > 1, `Kyshawn George picks up ${ctx.minutesFrom(ky.id, out).toFixed(1)}`)
+  for (const p of mates.filter((x) => x.projection!.perGame.min < 12)) assert.equal(ctx.minutesFrom(p.id, out), 0, `${p.name} is outside the rotation`)
+  const f = (ky.projection!.perGame.min + ctx.minutesFrom(ky.id, out)) / ky.projection!.perGame.min
+  assert.ok(Math.abs(ctx.outlook(ky.id, out)!.box.pts - ky.projection!.perGame.pts * f) < 1e-9, 'his line follows the minutes')
+  assert.equal(ctx.minutesFrom(ky.id, back), 0, 'nothing once AJ is back')
+  // A healthy Washington moves nobody.
+  assert.equal(new Context(hoops, world(today)).minutesFrom(ky.id, out), 0)
+  // Sleeper's line for a date already counts who is out.
+  const line = { box: { ...emptyBox(), pts: 9 }, min: 25 }
+  const withLine = new Context(hoops, { ...w, dayProj: new Map([[`${ky.id}|${out}`, line]]) })
+  assert.equal(withLine.outlook(ky.id, out)!.box.pts, 9)
+})

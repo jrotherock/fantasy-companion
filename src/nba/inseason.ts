@@ -94,6 +94,11 @@ export const isStarting = (slot: string | null) => !!slot && !RESERVE.has(slot)
  * Everything about players that every part of the screen needs: who a Yahoo
  * player is, his form, whether he plays, what a game of his is worth.
  */
+/** A rotation player, for sharing an absent teammate's minutes; and the most anyone is given. */
+const ROTATION_MIN = 12
+const MAX_MIN = 36
+const groupsOf = (p: NbaPlayer) => [...new Set(p.positions.map((x) => (x === 'PG' || x === 'SG' ? 'G' : x === 'SF' || x === 'PF' ? 'F' : 'C')))]
+
 /** How far ahead a designation and the 95% for a healthy player hold; past it, his season rate. */
 export const NEAR_DAYS = 7
 
@@ -174,7 +179,63 @@ export class Context {
     const p = this.byId.get(id)
     if (!p) return null
     const sleeper = this.world.dayProj.get(`${id}|${date}`)
-    return { box: sleeper?.box ?? perGameBox(p), play: this.play(id, date) }
+    if (sleeper) return { box: sleeper.box, play: this.play(id, date) }
+    // Past Sleeper's dates, his teammates' absences give him their minutes (Sleeper's own lines already count them).
+    const box = perGameBox(p)
+    const min = p.projection?.perGame.min ?? 0
+    const more = this.minutesFrom(id, date)
+    if (more > 0 && min > 0) { const f = (min + more) / min; for (const k of Object.keys(box) as (keyof Box)[]) box[k] *= f }
+    return { box, play: this.play(id, date) }
+  }
+
+  /** His chance of missing a date by designation or return date alone: no season rate, no rest nights. */
+  private away(id: string, date: string): number {
+    const r = this.returnOf(id)
+    const near = playChance(this.designation(id), date, this.world.today, r.date, r.outForSeason)
+    return near < 0.5 ? 1 - near : 0
+  }
+
+  private readonly bumps = new Map<string, Map<string, number>>()
+  /**
+   * Minutes he picks up on a date from teammates who will miss it: each absent player's minutes, as far as his
+   * projection expected him to play (a man projected for 40 games left half his minutes to his teammates already),
+   * shared over the healthy rotation (12+ minutes) by minutes, his own position group counting fully and the others
+   * a third, no one past 36 (2026-10-19: Dybantsa's sprain and Claxton's hamstring moved nobody's numbers).
+   */
+  minutesFrom(id: string, date: string): number {
+    const team = this.byId.get(id)?.team
+    if (!team) return 0
+    const key = `${team}|${date}`
+    let got = this.bumps.get(key)
+    if (!got) {
+      got = new Map()
+      const mates = this.teamPlayers(team)
+      const out = mates.map((p) => ({ p, away: this.away(p.id, date) })).filter((x) => x.away > 0)
+      if (out.length) {
+        const games = (this.teamDates.get(team) ?? []).length || 82
+        const rotation = mates.filter((p) => !out.some((o) => o.p.id === p.id) && (p.projection?.perGame.min ?? 0) >= ROTATION_MIN)
+        for (const o of out) {
+          const freed = (o.p.projection?.perGame.min ?? 0) * o.away * Math.min(1, (o.p.projection?.gp ?? 0) / games)
+          if (freed <= 0) continue
+          const weight = (p: NbaPlayer) => (p.projection?.perGame.min ?? 0) * (groupsOf(p).some((g) => groupsOf(o.p).includes(g)) ? 1 : 1 / 3)
+          const total = rotation.reduce((s, p) => s + weight(p), 0)
+          if (total <= 0) continue
+          for (const p of rotation) {
+            const have = (p.projection?.perGame.min ?? 0) + (got.get(p.id) ?? 0)
+            got.set(p.id, (got.get(p.id) ?? 0) + Math.max(0, Math.min(freed * weight(p) / total, MAX_MIN - have)))
+          }
+        }
+      }
+      this.bumps.set(key, got)
+    }
+    return got.get(id) ?? 0
+  }
+
+  private readonly rosters = new Map<string, NbaPlayer[]>()
+  private teamPlayers(team: string): NbaPlayer[] {
+    let r = this.rosters.get(team)
+    if (!r) { r = [...this.byId.values()].filter((p) => p.team === team && p.projection); this.rosters.set(team, r) }
+    return r
   }
 
   perGame(id: string): Box {
