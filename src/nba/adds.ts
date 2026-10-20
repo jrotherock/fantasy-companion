@@ -49,6 +49,12 @@ export const MIN_GAMES_LEFT = 3
  */
 export const UPGRADE_WINS = 0.1
 
+/**
+ * A stream drops someone for good, so it may cost the season this many matchups, no more (2026-10-19: the week's
+ * plan streamed Caruso for Nesmith, the season pickup made that night, at half a win).
+ */
+export const STREAM_SEASON_COST = 0.15
+
 /** Candidates for a season move: the best this many free agents by per-game value. */
 const SEASON_POOL = 60
 
@@ -204,8 +210,7 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
   // The rest of the regular season, week by week, against the team Yahoo has me playing each week (this week's
   // opponent stands in until the league's schedule is read). Every category counts toward a week: a punted one is
   // lost either way. The current week starts from nothing banked, the same for every roster compared.
-  const left = seasonLeft(snap, myTeamId, tomorrow, theirs?.id ?? null)
-  const scheduled = !!snap.fixtures?.length
+  const { weeks: left, scheduled } = seasonLeft(snap, myTeamId, tomorrow, theirs?.id ?? null)
   const oppSides = left.map((w) => (w.opp ? sideOutlook(ctx, null, rosterIds(ctx, snap.rosters.find((r) => r.team.id === w.opp)?.players ?? []), seats, w.days).side : null))
   const winsCache = new Map<string, number>()
   const seasonWins = (ids: { id: string; eligible: string[] }[]): number => {
@@ -302,7 +307,7 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
       // regular season left (the playoffs), better per game by a margin, over the games he has left.
       const winsGain = judged ? seasonWins([...swapped, add]) - baseWins : null
       const upgrade = winsGain != null ? winsGain >= UPGRADE_WINS : seasonGain > UPGRADE_PER_GAME[ctx.league.scoring] * Math.max(10, ctx.gamesLeft(c.id))
-      const stream = !upgrade && weekGain > (ctx.league.scoring === 'categories' ? 0.15 : 8) && seasonGain > -40
+      const stream = !upgrade && weekGain > (ctx.league.scoring === 'categories' ? 0.15 : 8) && (winsGain != null ? winsGain > -STREAM_SEASON_COST : seasonGain > -40)
       if (!upgrade && !stream) continue
       const p = ctx.byId.get(c.id)!
       const starts = weekGames(c.id)
@@ -379,19 +384,20 @@ function scoreWithAddFrom(ctx: Context, mySide: Parameters<typeof sideOutlook>[1
 }
 
 /**
- * The regular-season weeks left from a date: each week's days from then, and my opponent that week. From the
- * league's schedule when it has been read; otherwise Yahoo's weeks before the playoffs, with this week's opponent.
+ * The regular-season weeks left from a date: each week's days from then, and my opponent that week. The league's
+ * schedule as far as it has been read; past that, Yahoo's weeks before the playoffs with this week's opponent
+ * standing in, and then the measure is not `scheduled`.
  */
-export function seasonLeft(snap: Snapshot, myTeamId: string, from: string, thisWeeks: string | null): { week: number; days: string[]; opp: string | null }[] {
+export function seasonLeft(snap: Snapshot, myTeamId: string, from: string, thisWeeks: string | null): { weeks: { week: number; days: string[]; opp: string | null }[]; scheduled: boolean } {
   const days = (s: string, e: string) => daysFrom(s, e, s > from ? s : from)
-  if (snap.fixtures?.length) {
-    return snap.fixtures.filter((f) => f.end >= from).map((f) => {
-      const pair = f.pairs.find((x) => x.includes(myTeamId))
-      return { week: f.week, days: days(f.start, f.end), opp: pair ? (pair[0] === myTeamId ? pair[1] : pair[0]) : null }
-    })
-  }
+  const read = (snap.fixtures ?? []).filter((f) => f.end >= from).map((f) => {
+    const pair = f.pairs.find((x) => x.includes(myTeamId))
+    return { week: f.week, days: days(f.start, f.end), opp: pair ? (pair[0] === myTeamId ? pair[1] : pair[0]) : null }
+  })
+  const lastEnd = snap.fixtures?.length ? snap.fixtures[snap.fixtures.length - 1].end : null
   const playoffs = snap.settings?.playoffStartWeek ?? Infinity
-  return snap.weeks.filter(([n, , e]) => n < playoffs && e >= from).map(([n, s, e]) => ({ week: n, days: days(s, e), opp: thisWeeks }))
+  const rest = snap.weeks.filter(([n, s, e]) => n < playoffs && e >= from && (!lastEnd || s > lastEnd)).map(([n, s, e]) => ({ week: n, days: days(s, e), opp: thisWeeks }))
+  return { weeks: [...read, ...rest], scheduled: rest.length === 0 && read.length > 0 }
 }
 
 function schedulePlays(ctx: Context, date: string, team: string): boolean {

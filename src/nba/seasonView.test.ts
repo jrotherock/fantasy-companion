@@ -6,7 +6,7 @@ import type { NbaPlayer, Game, YahooWeek } from './types.js'
 import { buildSeasonView, seasonTile } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
 import { Context, rosterIds, sideOutlook, type Fixture, type SeasonLeague, type Snapshot, type World } from './inseason.js'
-import { addDays, UPGRADE_WINS } from './adds.js'
+import { addDays, STREAM_SEASON_COST, UPGRADE_WINS } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
 import { diffStatus } from './news.js'
@@ -245,10 +245,23 @@ for (const league of [hoops, harker]) {
     }
     // It decides what a season move is: whatever clears the bar for an add, and nothing else, ranked by it.
     for (const p of swaps) assert.equal(p.kind !== 'stream', p.seasonWins! >= UPGRADE_WINS, `${p.name} for ${p.dropName}: ${p.kind}, ${p.seasonWins} wins`)
+    // A stream drops someone for good: never one the season will miss by more than the cap.
+    for (const p of swaps.filter((x) => x.kind === 'stream')) assert.ok(p.seasonWins! > -STREAM_SEASON_COST, `${p.name} for ${p.dropName}: ${p.seasonWins}`)
     const ups = v.pickups.filter((p) => p.kind === 'upgrade' && p.drop)
     assert.deepEqual(ups.map((p) => p.seasonWins), [...ups.map((p) => p.seasonWins)].sort((a, b) => b! - a!))
   })
 }
+
+test('a schedule read only part way: the weeks read against their opponents, the rest with this week’s standing in, not scheduled', () => {
+  const today = '2026-11-18'
+  const { snap } = snapshotFor(hoops, today)
+  const all = fixturesFor(hoops)
+  snap.fixtures = all.filter((f) => f.end < '2026-12-20')
+  const v = buildSeasonView(hoops, snap, world(today))
+  const p = v.pickups.find((x) => x.drop)!
+  assert.equal(p.seasonWeeks, all.filter((f) => f.end >= '2026-11-19').length, 'every regular-season week is still counted')
+  assert.equal(p.scheduled, false)
+})
 
 test('without the league schedule, this week’s opponent stands in for each regular-season week, and the pickup says so', () => {
   const today = '2026-11-18'
@@ -275,4 +288,26 @@ test('past the next week a healthy player plays at his own season rate, not 95%'
   assert.equal(hurt.play(fragile.id, addDays(today, 10)), 0)
   const fromBack = schedule.filter((g) => (g.home === fragile.team || g.away === fragile.team) && g.date >= back).length
   assert.ok(Math.abs(hurt.play(fragile.id, addDays(today, 40)) - Math.min(0.95, fragile.projection!.gp / fromBack)) < 1e-9)
+})
+
+test('Hoops on 2026-10-19: no stream drops a player the season would miss by more than the cap (the plan streamed Caruso for Nesmith)', () => {
+  const today = '2026-10-19'
+  const d = JSON.parse(readFileSync('scripts/nba-season-analysis/2026-10-19-hoops/sched.json', 'utf8'))
+  const byY = new Map(players.filter((p) => p.yahoo).map((p) => [p.yahoo!.yahooId, p]))
+  const fixtures: Fixture[] = d.weeks.split('|').map((s: string) => { const [w, a, b, pairs] = s.split(':'); return { week: +w, start: a, end: b, pairs: pairs.split(',').map((x: string) => x.split('-')) } })
+  const rosters = d.rosters.split('\n').map((line: string) => {
+    const [tid, , list] = line.split('~')
+    return { team: meta(tid, tid === '4'), players: list.split(',').map((y: string) => ({ y: y.replace('i', ''), il: y.endsWith('i') })).filter((x: any) => byY.has(x.y)).map((x: any) => ypl(byY.get(x.y)!, x.il ? 'IL' : 'BN')) }
+  })
+  const side = (t: TeamMeta) => ({ ...t, box: emptyBox(), points: 0, projected: null, games: null })
+  const f1 = fixtures[0]
+  const scoreboard: NbaMatchup[] = f1.pairs.map(([a, b]) => ({ week: 1, start: f1.start, end: f1.end, status: 'preevent', playoffs: false, consolation: false, winnerTeamId: null, sides: [side(rosters.find((r: any) => r.team.id === a)!.team), side(rosters.find((r: any) => r.team.id === b)!.team)], leaders: {} }))
+  const snap: Snapshot = {
+    at: Date.parse(today + 'T16:00:00Z'), settings: { maxAdds: 120, maxWeeklyAdds: 10, tradeEnd: null, playoffStartWeek: 18, playoffTeams: 6, waiverType: 'R', waiverDays: 2, faab: false, scoringType: 'head' },
+    weeks: fixtures.map((f) => [f.week, f.start, f.end] as YahooWeek), rosters, mineToday: null, scoreboard, past: {}, standings: [], waivers: [], transactions: [], fixtures,
+  }
+  const v = buildSeasonView({ ...hoops, id: 'nba-hoops', playoffWeeks: [18, 19, 20] }, snap, world(today))
+  const streams = v.pickups.filter((p) => p.kind === 'stream')
+  for (const p of streams) assert.ok(p.seasonWins! > -STREAM_SEASON_COST, `${p.name} for ${p.dropName}: ${p.seasonWins}`)
+  assert.ok(!streams.some((p) => p.dropName === 'Aaron Nesmith'), 'the season pickup is not streamed away')
 })

@@ -51,7 +51,7 @@ export interface Snapshot {
   fixtures?: Fixture[]
 }
 
-export interface Fixture { week: number; start: string; end: string; pairs: [string, string][] }
+export interface Fixture { week: number; start: string; end: string; pairs: [string, string][]; /** When this week was read. */ at?: number }
 
 /** What the server knows about players and the calendar, shared by every league. */
 export interface World {

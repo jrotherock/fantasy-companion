@@ -267,17 +267,21 @@ async function readLeague(l: SeasonLeague & { myTeamId: string | null }, force =
         }
       })
       // Who plays whom every week left in the regular season, for judging a season pickup week by week. The
-      // schedule is set before the season, so once a week is enough; it stops at the playoffs.
+      // schedule is set before the season, so once a week is enough; it stops at the playoffs. Kept week by week:
+      // a read the budget stops keeps what it has, and the next goes on from there (2026-10-19: the public league's
+      // nineteen weeks never finished in one round, and each try threw away what it had read).
       await run('fixtures', async () => {
         const current = weekOf(s.weeks, today)?.[0] ?? 1
         const last = s.settings?.playoffStartWeek ? s.settings.playoffStartWeek - 1 : s.weeks.length
-        const out: Fixture[] = []
+        const have = new Map((s.fixtures ?? []).map((f) => [f.week, f]))
         for (let w = current; w <= last; w++) {
+          const known = have.get(w)
+          if (known?.at && Date.now() - known.at < 6 * 24 * HOUR) continue
           const ms = parseNbaScoreboard(await yahooApi.call(`league/${key}/scoreboard;week=${w}`, { by: 'nba-season' })).filter((m) => !m.playoffs && !m.consolation && m.sides.length === 2)
           if (!ms.length || !ms[0].start || !ms[0].end) break
-          out.push({ week: w, start: ms[0].start, end: ms[0].end, pairs: ms.map((m) => [m.sides[0].id, m.sides[1].id] as [string, string]) })
+          have.set(w, { week: w, start: ms[0].start, end: ms[0].end, pairs: ms.map((m) => [m.sides[0].id, m.sides[1].id] as [string, string]), at: Date.now() })
+          s.fixtures = [...have.values()].sort((a, b) => a.week - b.week)
         }
-        if (out.length) s.fixtures = out
       })
     }
   } catch (e) {
