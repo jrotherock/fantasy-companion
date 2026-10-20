@@ -11,6 +11,7 @@ import { buildWeek, checkLineup, Context, type LineupCheck, type SeasonLeague, t
 import { addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type PairMove, type Pickup } from './adds.js'
 import { leagueNews, type NewsItem, type StatusEvent } from './news.js'
 import { allPlay, playoffPlan, power, tradeIdeas, type AllPlay, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
+import type { Alert } from '../server/alerts.js'
 
 export interface PlayerRef { name: string; team: string | null; positions: string[] }
 
@@ -182,4 +183,59 @@ export function seasonTile(v: SeasonView, now: number): SeasonTile {
     return { ...base, urgency: 'watch', action: 'Close week', why: swing.length ? `In play: ${swing.join(', ')}` : 'A close week', score }
   }
   return { ...base, urgency: 'quiet', action: 'Nothing to do', why: w ? `Week ${w.week}` : 'Between weeks', score }
+}
+
+// ── Pickup alerts ──────────────────────────────────────────────────────────
+
+/** A season pickup is worth a notification at this many matchups won over the rest of the season; a pair at this. */
+export const NOTIFY_WINS = 0.25
+export const NOTIFY_PAIR_WINS = 0.5
+/** A stream is worth one when it moves this week's chance of winning by this much, with adds to spend. */
+export const NOTIFY_STREAM = 0.1
+
+const signed = (w: number) => `${w >= 0 ? '+' : '−'}${Math.abs(w).toFixed(2)} wins`
+const pctOf = (x: number) => `${Math.round(x * 100)}%`
+
+/**
+ * New pickups worth your attention: the best season move, the best pair, the best stream this week. Each is sent once
+ * (its id names the players), and a better one is a new alert; once the player is gone from the wire, so is the alert.
+ * Costs scale with what the move is worth, and stay under a lineup move's (2026-10-19: asked for, so a pickup that
+ * shows up mid-season is not found only by opening the screen).
+ */
+export function pickupAlerts(v: SeasonView, link: string): Alert[] {
+  const out: Alert[] = []
+  if (v.phase !== 'season') return out
+  const name = (id: string | null) => (id ? v.players[id]?.name ?? id : '')
+  const L = v.league
+  const best = v.pickups.filter((p) => p.kind !== 'stream' && p.drop && (p.seasonWins ?? 0) >= NOTIFY_WINS).sort((a, b) => (b.seasonWins ?? 0) - (a.seasonWins ?? 0))[0]
+  if (best) {
+    out.push({
+      id: `nba-pickup:${L.id}:${best.add}:${best.drop}`, leagueId: L.id, rule: 'nba-pickup',
+      headline: `${L.label}: add ${best.name}, drop ${best.dropName}`,
+      detail: `${signed(best.seasonWins!)} over the rest of the season; this week ${pctOf(best.winBefore)} → ${pctOf(best.winAfter)}. ${best.waiver ? 'On waivers: put in a claim.' : 'A free agent: add him now.'}`,
+      consequence: Math.round(35 + 20 * Math.min(1, best.seasonWins!)), deadline: null, link, playerId: best.add,
+    })
+  }
+  const pair = v.pairs.find((p) => p.seasonWins >= NOTIFY_PAIR_WINS)
+  if (pair) {
+    const [a, b] = pair.moves
+    out.push({
+      id: `nba-pair:${L.id}:${[a, b].map((m) => `${m.add}>${m.drop}`).sort().join('+')}`, leagueId: L.id, rule: 'nba-pair',
+      headline: `${L.label}: two moves, ${signed(pair.seasonWins)} together`,
+      detail: `Add ${a.name} for ${a.dropName} (${signed(a.seasonWins)} alone) and ${b.name} for ${b.dropName} (${signed(b.seasonWins)} alone); this week ${pctOf(pair.winBefore)} → ${pctOf(pair.winAfter)}.`,
+      consequence: Math.round(35 + 20 * Math.min(1, pair.seasonWins / 2)), deadline: null, link, playerId: a.add,
+    })
+  }
+  const stream = (v.budget?.forStreams ?? 0) > 0 && v.week
+    ? v.pickups.filter((p) => p.kind === 'stream' && p.winAfter - p.winBefore >= NOTIFY_STREAM).sort((a, b) => (b.winAfter - b.winBefore) - (a.winAfter - a.winBefore))[0]
+    : undefined
+  if (stream && v.week) {
+    out.push({
+      id: `nba-stream:${L.id}:${v.week.week}:${stream.add}`, leagueId: L.id, rule: 'nba-stream',
+      headline: `${L.label}: stream ${stream.name} for ${stream.dropName}`,
+      detail: `This week ${pctOf(stream.winBefore)} → ${pctOf(stream.winAfter)}, ${stream.startsThisWeek} game${stream.startsThisWeek === 1 ? '' : 's'}; ${signed(stream.seasonWins ?? 0)} over the season.`,
+      consequence: Math.round(40 + 60 * Math.min(0.25, stream.winAfter - stream.winBefore)), deadline: Date.parse(`${v.week.end}T23:59:00-05:00`), link, playerId: stream.add,
+    })
+  }
+  return out
 }

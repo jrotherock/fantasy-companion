@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import type { YPlayer } from '../server/yahooParse.js'
 import type { NbaPlayer, Game, YahooWeek } from './types.js'
-import { buildSeasonView, seasonTile } from './seasonView.js'
+import { buildSeasonView, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonTile } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
 import { Context, rosterIds, sideOutlook, type Fixture, type SeasonLeague, type Snapshot, type World } from './inseason.js'
 import { addDays, PAIR_MARGIN, STREAM_SEASON_COST, UPGRADE_WINS, type PairMove } from './adds.js'
@@ -386,4 +386,29 @@ test("an absent player's minutes go to his healthy teammates, his position first
   const line = { box: { ...emptyBox(), pts: 9 }, min: 25 }
   const withLine = new Context(hoops, { ...w, dayProj: new Map([[`${ky.id}|${out}`, line]]) })
   assert.equal(withLine.outlook(ky.id, out)!.box.pts, 9)
+})
+
+test('pickup alerts: the best season move, the best pair and the best stream, each once, named by its players', () => {
+  const { league, snap, w } = realLeague('2026-10-19-public', publicLeague, '2', 20)
+  const v = buildSeasonView(league, snap, w)
+  const a = pickupAlerts(v, '/nba/league/nba-public')
+  const season = a.find((x) => x.rule === 'nba-pickup')!
+  const top = v.pickups.filter((p) => p.kind !== 'stream' && p.drop).sort((x, y) => y.seasonWins! - x.seasonWins!)[0]
+  assert.ok(top.seasonWins! >= NOTIFY_WINS)
+  assert.equal(season.id, `nba-pickup:nba-public:${top.add}:${top.drop}`, 'the best one, named by who is added and dropped')
+  assert.ok(season.consequence < 70, 'under a lineup move')
+  const pair = a.find((x) => x.rule === 'nba-pair')!
+  assert.ok(pair && v.pairs[0].seasonWins >= NOTIFY_PAIR_WINS)
+  assert.ok(pair.headline.includes(v.pairs[0].seasonWins.toFixed(2)))
+  // The same screen again says the same thing, so it is sent once.
+  assert.deepEqual(pickupAlerts(buildSeasonView(league, snap, w), '/nba/league/nba-public').map((x) => x.id), a.map((x) => x.id))
+  // Nothing worth a quarter of a win: nothing sent.
+  const quiet = { ...v, pickups: v.pickups.map((p) => ({ ...p, seasonWins: 0.2 })), pairs: [] }
+  assert.deepEqual(pickupAlerts(quiet, '/x').filter((x) => x.rule !== 'nba-stream'), [])
+  // A stream that moves the week by ten points, with adds to spend; none with no adds left.
+  const s = { ...v, week: { ...v.week!, week: 1, end: '2026-10-25' }, budget: { ...v.budget!, forStreams: 2 }, pickups: [{ ...v.pickups[0], kind: 'stream' as const, winBefore: 0.45, winAfter: 0.58, startsThisWeek: 3, seasonWins: -0.05 }], pairs: [] }
+  const st = pickupAlerts(s, '/x').find((x) => x.rule === 'nba-stream')!
+  assert.equal(st.id, `nba-stream:nba-public:1:${v.pickups[0].add}`)
+  assert.ok(st.deadline! > Date.parse('2026-10-25T12:00:00Z'), 'it lasts the week')
+  assert.equal(pickupAlerts({ ...s, budget: { ...s.budget, forStreams: 0 } }, '/x').filter((x) => x.rule === 'nba-stream').length, 0)
 })

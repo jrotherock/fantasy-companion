@@ -35,7 +35,7 @@ import { parseGameWeeks, parseLeagueRosters, parseNbaScoreboard, parsePlayers, p
 import { easternDate } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
 import { diffStatus, type StatusEvent } from '../nba/news.js'
-import { buildSeasonView, losesStart, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
+import { buildSeasonView, losesStart, pickupAlerts, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
 import { weekOf, type Fixture, type SeasonLeague, type Snapshot, type World } from '../nba/inseason.js'
 import type { Box } from '../nba/yahooSeason.js'
 import type { Game, NbaPlayer } from '../nba/types.js'
@@ -403,6 +403,8 @@ export function nbaAlerts(now = clock()): Alert[] {
         playerId: n.playerId,
       })
     }
+    // New pickups worth knowing about without opening the screen: the best season move, pair and stream.
+    out.push(...pickupAlerts(v, `/nba/league/${l.id}`))
     // A healthy player stuck on IL: he cannot play, and Yahoo blocks adds until he is moved.
     for (const m of v.lineup?.ilMoves ?? []) {
       if (m.action !== 'off-il') continue
