@@ -243,6 +243,10 @@ for (const league of [hoops, harker]) {
       const after = winsByHand(league, snap, w, [...myIds.filter((x) => x.id !== p.drop), { id: p.add, eligible: p.positions }])
       assert.ok(Math.abs(p.seasonWins! - (after - base)) < 1e-6, `${p.name} for ${p.dropName}: ${p.seasonWins} vs ${after - base} by hand`)
     }
+    // The drops weighed are the five the season would miss least, in matchups won without them.
+    const missedBy = myIds.map((x) => ({ id: x.id, missed: base - winsByHand(league, snap, w, myIds.filter((y) => y.id !== x.id)) })).sort((a, b) => a.missed - b.missed)
+    const fewest = new Set(missedBy.slice(0, 5).map((x) => x.id))
+    for (const p of v.pickups) for (const d of [p.drop, ...p.alternatives.map((a) => a.drop)]) if (d) assert.ok(fewest.has(d), `${d} is not among the five least missed`)
     // It decides what a season move is: whatever clears the bar for an add, and nothing else, ranked by it.
     for (const p of swaps) assert.equal(p.kind !== 'stream', p.seasonWins! >= UPGRADE_WINS, `${p.name} for ${p.dropName}: ${p.kind}, ${p.seasonWins} wins`)
     // A stream drops someone for good: never one the season will miss by more than the cap.
@@ -290,24 +294,45 @@ test('past the next week a healthy player plays at his own season rate, not 95%'
   assert.ok(Math.abs(hurt.play(fragile.id, addDays(today, 40)) - Math.min(0.95, fragile.projection!.gp / fromBack)) < 1e-9)
 })
 
-test('Hoops on 2026-10-19: no stream drops a player the season would miss by more than the cap (the plan streamed Caruso for Nesmith)', () => {
+/** A league as Yahoo had it on 2026-10-19, from an analysis snapshot: rosters, the schedule, the season about to start. */
+function realLeague(dir: string, base: SeasonLeague & { myTeamId: string }, me: string, playoffStart: number) {
   const today = '2026-10-19'
-  const d = JSON.parse(readFileSync('scripts/nba-season-analysis/2026-10-19-hoops/sched.json', 'utf8'))
+  const d = JSON.parse(readFileSync(`scripts/nba-season-analysis/${dir}/sched.json`, 'utf8'))
   const byY = new Map(players.filter((p) => p.yahoo).map((p) => [p.yahoo!.yahooId, p]))
   const fixtures: Fixture[] = d.weeks.split('|').map((s: string) => { const [w, a, b, pairs] = s.split(':'); return { week: +w, start: a, end: b, pairs: pairs.split(',').map((x: string) => x.split('-')) } })
   const rosters = d.rosters.split('\n').map((line: string) => {
     const [tid, , list] = line.split('~')
-    return { team: meta(tid, tid === '4'), players: list.split(',').map((y: string) => ({ y: y.replace('i', ''), il: y.endsWith('i') })).filter((x: any) => byY.has(x.y)).map((x: any) => ypl(byY.get(x.y)!, x.il ? 'IL' : 'BN')) }
+    return { team: meta(tid, tid === me), players: list.split(',').map((y: string) => ({ y: y.replace('i', ''), il: y.endsWith('i') })).filter((x: any) => byY.has(x.y)).map((x: any) => ypl(byY.get(x.y)!, x.il ? 'IL' : 'BN')) }
   })
   const side = (t: TeamMeta) => ({ ...t, box: emptyBox(), points: 0, projected: null, games: null })
   const f1 = fixtures[0]
   const scoreboard: NbaMatchup[] = f1.pairs.map(([a, b]) => ({ week: 1, start: f1.start, end: f1.end, status: 'preevent', playoffs: false, consolation: false, winnerTeamId: null, sides: [side(rosters.find((r: any) => r.team.id === a)!.team), side(rosters.find((r: any) => r.team.id === b)!.team)], leaders: {} }))
   const snap: Snapshot = {
-    at: Date.parse(today + 'T16:00:00Z'), settings: { maxAdds: 120, maxWeeklyAdds: 10, tradeEnd: null, playoffStartWeek: 18, playoffTeams: 6, waiverType: 'R', waiverDays: 2, faab: false, scoringType: 'head' },
+    at: Date.parse(today + 'T16:00:00Z'), settings: { maxAdds: null, maxWeeklyAdds: base.adds.perWeek, tradeEnd: null, playoffStartWeek: playoffStart, playoffTeams: 6, waiverType: 'R', waiverDays: 2, faab: false, scoringType: 'head' },
     weeks: fixtures.map((f) => [f.week, f.start, f.end] as YahooWeek), rosters, mineToday: null, scoreboard, past: {}, standings: [], waivers: [], transactions: [], fixtures,
   }
-  const v = buildSeasonView({ ...hoops, id: 'nba-hoops', playoffWeeks: [18, 19, 20] }, snap, world(today))
-  const streams = v.pickups.filter((p) => p.kind === 'stream')
-  for (const p of streams) assert.ok(p.seasonWins! > -STREAM_SEASON_COST, `${p.name} for ${p.dropName}: ${p.seasonWins}`)
-  assert.ok(!streams.some((p) => p.dropName === 'Aaron Nesmith'), 'the season pickup is not streamed away')
-})
+  const league = { ...base, myTeamId: me, playoffWeeks: [playoffStart, playoffStart + 1, playoffStart + 2] }
+  const w = world(today)
+  const ctx = new Context(league, w)
+  const myIds = rosterIds(ctx, rosters.find((r: any) => r.team.id === me)!.players)
+  return { league, snap, w, ctx, myIds }
+}
+
+const publicLeague: SeasonLeague & { myTeamId: string } = {
+  ...hoops, id: 'nba-public', roster: { PG: 1, SG: 1, G: 1, SF: 1, PF: 1, F: 1, C: 2, Util: 2, BN: 3, IL: 3 }, adds: { perWeek: 4, season: null }, myTeamId: '2',
+}
+
+for (const [label, dir, base, me, playoffStart] of [['Hoops', '2026-10-19-hoops', { ...hoops, id: 'nba-hoops' }, '4', 18], ['Public', '2026-10-19-public', publicLeague, '2', 20]] as const) {
+  test(`${label} on 2026-10-19: drops are the five the season misses least, and no stream costs the season more than the cap`, () => {
+    const { league, snap, w, ctx, myIds } = realLeague(dir, base, me, playoffStart)
+    const v = buildSeasonView(league, snap, w)
+    const all = winsByHand(league, snap, w, myIds)
+    const fewest = new Set(myIds.map((x) => ({ id: x.id, missed: all - winsByHand(league, snap, w, myIds.filter((y) => y.id !== x.id)) })).sort((a, b) => a.missed - b.missed).slice(0, 5).map((x) => x.id))
+    for (const p of v.pickups) for (const d of [p.drop, ...p.alternatives.map((a) => a.drop)]) if (d) assert.ok(fewest.has(d), `${ctx.byId.get(d)?.name ?? d} is not among the five least missed`)
+    for (const p of v.pickups.filter((x) => x.kind === 'stream')) assert.ok(p.seasonWins! > -STREAM_SEASON_COST, `${p.name} for ${p.dropName}: ${p.seasonWins}`)
+    if (label === 'Hoops') assert.ok(!v.pickups.some((p) => p.kind === 'stream' && p.dropName === 'Aaron Nesmith'), 'the season pickup is not streamed away')
+    // Public punts FG% and REB: by per-game value Siakam and Mikal Bridges were among the five weakest and VanVleet and
+    // Herro were not; in matchups won it is the other way round, and the moves for VanVleet and Herro are the ones offered.
+    if (label === 'Public') assert.ok(v.pickups.some((p) => [p.dropName, ...p.alternatives.map((a) => a.dropName)].some((n) => n === 'Fred VanVleet' || n === 'Tyler Herro')), 'VanVleet or Herro weighed as a drop')
+  })
+}

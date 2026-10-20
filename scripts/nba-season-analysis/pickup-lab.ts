@@ -23,7 +23,14 @@ const [S, LEAGUE, ME, TODAY, NAMED = ''] = process.argv.slice(2)
 const raw = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players as any[]
 const prefs = existsSync('data/preferences/nba.json') ? JSON.parse(readFileSync('data/preferences/nba.json', 'utf8')) : null
 const index = new NameIndex(raw.map((p) => ({ id: p.id, name: p.name, team: p.team })))
-const players = applyAdjustments(raw, resolvePreferences(prefs, LEAGUE, index).adjust)
+// SCALE="Name:0.8;Name:1.1" scales a player's per-game counting stats (a minutes view: 22 of 29 minutes is 0.76).
+const scale = new Map((process.env.SCALE ?? '').split(';').filter(Boolean).map((x) => { const [n, f] = x.split(':'); return [n, Number(f)] as const }))
+const players = applyAdjustments(raw, resolvePreferences(prefs, LEAGUE, index).adjust).map((p: any) => {
+  const f = scale.get(p.name)
+  if (!f || !p.projection) return p
+  const pg = Object.fromEntries(Object.entries(p.projection.perGame).map(([k, v]) => [k, typeof v === 'number' ? v * f : v]))
+  return { ...p, projection: { ...p.projection, perGame: pg } }
+})
 const schedule = JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games
 const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8'))
 const sdWeekly = Object.fromEntries(Object.entries(noise.raw).map(([k, v]: [string, any]) => [k, v.sdWeekly])) as any

@@ -55,6 +55,9 @@ export const UPGRADE_WINS = 0.1
  */
 export const STREAM_SEASON_COST = 0.15
 
+/** How many of my players are weighed as drops. */
+const DROPS = 5
+
 /** Candidates for a season move: the best this many free agents by per-game value. */
 const SEASON_POOL = 60
 
@@ -239,11 +242,14 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
     allDays.forEach((d, i) => openOn.set(d, Math.max(0, seats.length - (wk0.days[i]?.starting.length ?? 0))))
   }
 
-  // Who could go: the weakest for the season, not hurt long-term (they belong on IL instead).
+  // Who could go: the five the season would miss least, in matchups won without him (2026-10-19: by per-game value,
+  // Nesmith, picked up that night for his fit, was the first drop offered for a stream). By per-game value when
+  // there is no season left to judge.
+  const missed = (id: string) => (judged ? baseWins - seasonWins(myIds.filter((x) => x.id !== id)) : season(id))
   const drops = myIds
-    .map((x) => ({ ...x, season: season(x.id) }))
-    .sort((a, b) => a.season - b.season)
-    .slice(0, 5)
+    .map((x) => ({ ...x, season: season(x.id), missed: missed(x.id) }))
+    .sort((a, b) => a.missed - b.missed)
+    .slice(0, DROPS)
   const ilSlots = ctx.league.roster.IL ?? 0
   const ilOpen = Math.max(0, ilSlots - mine.players.filter((y) => y.slot === 'IL' || y.slot === 'IL+').length)
   // Out for a while: worth a roster spot only by way of IL.
