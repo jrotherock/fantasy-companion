@@ -226,6 +226,20 @@ test('a league view: its own order and expected stats, kept out of other leagues
   assert.equal((g[0].projection!.perGame as any).gp, undefined)
 })
 
+test('a minutes view: stats not stated follow the minutes at the same rates; stated ones stay as given', () => {
+  const p: any = { id: 'd', name: 'DeMar DeRozan', projection: { perGame: { min: 29, pts: 20.3, reb: 4.1, ast: 4.4, stl: 0.9, blk: 0.3, tpm: 0.5, to: 1.9 }, shooting: { fgPct: 0.49, ftPct: 0.85, fga: 15.2, fta: 5.6 }, gp: 77 } }
+  const [only] = applyAdjustments([p], new Map([['d', { min: 22 }]]))
+  const f = 22 / 29
+  assert.equal(only.projection!.perGame.min, 22)
+  for (const k of ['pts', 'reb', 'ast', 'stl', 'blk', 'tpm', 'to']) assert.ok(Math.abs((only.projection!.perGame as any)[k] - p.projection.perGame[k] * f) < 1e-9, k)
+  assert.ok(Math.abs((only.projection!.shooting as any).fga - 15.2 * f) < 1e-9, 'attempts follow the minutes')
+  assert.equal(only.projection!.shooting.fgPct, 0.49, 'percentages do not')
+  assert.equal(only.projection!.gp, 77)
+  const [mixed] = applyAdjustments([p], new Map([['d', { min: 22, ast: 5 }]]))
+  assert.equal(mixed.projection!.perGame.ast, 5, 'a stated stat stays as given')
+  assert.ok(Math.abs(mixed.projection!.perGame.pts - 20.3 * f) < 1e-9)
+})
+
 test('a health risk: 60 games or fewer, or a season mostly lost', () => {
   const players = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
   const leagues = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues

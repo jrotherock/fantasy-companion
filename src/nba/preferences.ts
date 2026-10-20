@@ -20,7 +20,8 @@
  * `order`, your ranking of a few players, which breaks the cards' near-ties
  * (plan.ts orderTiebreak); and `adjust`, per-game stats you expect instead of
  * the projection's ({"Tyrese Maxey": {"ast": 4.8}}; fgPct, ftPct, fga and fta are
- * shooting; gp sets games played, taken as given), which every card, tile and path then reads.
+ * shooting; gp sets games played, taken as given; min sets minutes, and every stat not stated follows them at the
+ * same per-minute rate), which every card, tile and path then reads.
  */
 import { NameIndex } from './join.js'
 import type { NbaPlayer } from './types.js'
@@ -86,6 +87,14 @@ export function applyAdjustments(players: NbaPlayer[], adjust: Map<string, Recor
     const a = adjust.get(p.id)
     if (!a || !p.projection) return p
     const perGame: Record<string, number> = { ...p.projection.perGame }, shooting: Record<string, number | null> = { ...p.projection.shooting }
+    // Minutes: whatever you do not state follows them, so {min: 22} alone is a smaller role at the same rates, and
+    // {min: 33.6, ast: 9.2} keeps your assists and scales the rest (2026-10-19: DeRozan at 22 of 29 minutes).
+    const was = p.projection.perGame.min
+    if (Number.isFinite(a.min) && was > 0) {
+      const f = a.min / was
+      for (const k of Object.keys(perGame)) if (k !== 'min' && !(k in a)) perGame[k] *= f
+      for (const k of ['fga', 'fta']) if (!(k in a) && shooting[k] != null) shooting[k] = (shooting[k] as number) * f
+    }
     // Games are the projection's own field, taken as given (not blended with the player's history).
     for (const [k, v] of Object.entries(a)) if (Number.isFinite(v) && k !== 'gp') (SHOOTING.has(k) ? shooting : perGame)[k] = v
     const games = Number.isFinite(a.gp) ? { gp: a.gp, gpSource: 'you' as const } : {}

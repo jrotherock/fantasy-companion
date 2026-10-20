@@ -91,7 +91,7 @@ export function NbaLeague({ id, onBack }: { id: string; onBack: () => void }) {
           {tab === 'Week' && <Week v={v} />}
           {tab === 'Adds' && <Adds v={v} />}
           {tab === 'News' && <News v={v} />}
-          {tab === 'Season' && <Season v={v} />}
+          {tab === 'Season' && <Season v={v} onChange={() => refresh()} />}
         </>
       )}
     </div>
@@ -703,6 +703,64 @@ function SeasonGain({ p }: { p: SeasonView['pickups'][number] }) {
   return <span title={how}>Rest of season: <b>{wins(p.seasonWins)}</b>{p.scheduled ? '' : ' (vs this week’s opponent)'}</span>
 }
 
+type ViewRow = { id: string; name: string; team: string | null; stats: Record<string, number>; min: number | null; gp: number | null }
+
+/**
+ * Your view of players in this league: the minutes or games you expect instead of the projection's (a rotation call,
+ * a role you doubt, a camp injury). Minutes carry every stat you have not set at the same per-minute rate; games are
+ * taken as given. Pickups, the week and the power table read them; so does the draft.
+ */
+function YourView({ leagueId, onChange }: { leagueId: string; onChange: () => void }) {
+  const [rows, setRows] = useState<ViewRow[] | null>(null)
+  const [name, setName] = useState('')
+  const [min, setMin] = useState('')
+  const [gp, setGp] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const load = useCallback(() => {
+    fetch(`/api/nba/draft/${leagueId}/adjust`).then((r) => (r.ok ? r.json() : null)).then((x) => x && setRows(x.players)).catch(() => {})
+  }, [leagueId])
+  useEffect(load, [load])
+  const save = async (who: string, stats: Record<string, number | null>) => {
+    setBusy(true); setErr(null)
+    try {
+      const res = await fetch(`/api/nba/draft/${leagueId}/adjust`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: who, stats, merge: true }) })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+      load(); onChange()
+      return true
+    } catch (e) { setErr((e as Error).message); return false } finally { setBusy(false) }
+  }
+  const add = async () => {
+    const stats: Record<string, number> = {}
+    if (min.trim()) stats.min = Number(min)
+    if (gp.trim()) stats.gp = Number(gp)
+    if (!name.trim() || !Object.keys(stats).length || Object.values(stats).some((x) => !Number.isFinite(x) || x <= 0)) { setErr('A name, and minutes or games'); return }
+    if (await save(name.trim(), stats)) { setName(''); setMin(''); setGp('') }
+  }
+  const shown = (rows ?? []).filter((r) => r.stats.min != null || r.stats.gp != null)
+  const rest = (rows ?? []).length - shown.length
+  return (
+    <Section title="Your view of players" hint="minutes and games you expect; pickups and the week use them">
+      {!shown.length && <div className="nl-none">None set. The projections stand for everyone.</div>}
+      {shown.map((r) => (
+        <div key={r.id} className="nl-yv-row">
+          <b>{r.name}</b> <span className="nl-dim">{r.team}</span>
+          {r.stats.min != null && <span> · {r.stats.min} min <span className="nl-dim">(projection {r.min?.toFixed(0) ?? '—'})</span> <button className="nl-link" disabled={busy} onClick={() => save(r.name, { min: null })}>clear</button></span>}
+          {r.stats.gp != null && <span> · {r.stats.gp} games <span className="nl-dim">(projection {r.gp?.toFixed(0) ?? '—'})</span> <button className="nl-link" disabled={busy} onClick={() => save(r.name, { gp: null })}>clear</button></span>}
+        </div>
+      ))}
+      {rest > 0 && <div className="nl-none">{rest} more with stats set in the draft room.</div>}
+      <div className="nl-yv-form">
+        <input aria-label="Player name" placeholder="Player" value={name} onChange={(e) => setName(e.target.value)} />
+        <input aria-label="Minutes a game" placeholder="Minutes" inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} />
+        <input aria-label="Games" placeholder="Games" inputMode="numeric" value={gp} onChange={(e) => setGp(e.target.value)} />
+        <button className="nl-yv-save" disabled={busy} onClick={add}>Set</button>
+      </div>
+      {err && <div className="nl-warn">{err}</div>}
+    </Section>
+  )
+}
+
 const dateWord = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
 
 // ── News ──
@@ -745,7 +803,7 @@ function News({ v }: { v: SeasonView }) {
 
 // ── Season ──
 
-function Season({ v }: { v: SeasonView }) {
+function Season({ v, onChange }: { v: SeasonView; onChange: () => void }) {
   const [exp, setExp] = useState<{ name: string; leagues: { label: string; starting: boolean }[]; status: string }[] | null>(null)
   useEffect(() => { fetch('/api/nba/season/exposure').then((r) => r.json()).then(setExp).catch(() => {}) }, [])
   const cats = v.league.scoring === 'categories'
@@ -755,6 +813,7 @@ function Season({ v }: { v: SeasonView }) {
   return (
     <>
       <a className="nl-room" href={`/nba/draft/${v.league.id}`}><span className="nl-roomk">Draft</span><span>How the draft came out, and the room</span><span className="ckchev">›</span></a>
+      <YourView leagueId={v.league.id} onChange={onChange} />
       {v.catPlan && (
         <Section title="Category plan" hint="against this league's rosters">
           <p className="nl-line">

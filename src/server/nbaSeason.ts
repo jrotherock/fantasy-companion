@@ -30,7 +30,7 @@ import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { parseStandings, parseTransactions } from './yahooParse.js'
 import type { Alert } from './alerts.js'
-import { handReturns, injuryNotesNow, liveDrafts, neverIds, seasonLeagues, seasonPlayers } from './nbaDraft.js'
+import { handReturns, injuryNotesNow, liveDrafts, neverIds, onPreferencesChange, seasonLeagues, seasonPlayers } from './nbaDraft.js'
 import { parseGameWeeks, parseLeagueRosters, parseNbaScoreboard, parsePlayers, parseRosterDay, parseSeasonSettings } from '../nba/yahooSeason.js'
 import { easternDate } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
@@ -302,6 +302,8 @@ function leagueBody(json: any): Record<string, any> {
 // ── Views ──
 
 const views = new Map<string, { at: number; view: SeasonView }>()
+// Your lists or your view of a player changed: every league's screen is worked out again on its next read.
+onPreferencesChange(() => views.clear())
 /** A view goes stale on its own: games tip, and a lineup move stops being possible. */
 const VIEW_TTL = 2 * MIN
 

@@ -211,3 +211,11 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-sidepick button { background: transparent; color: var(--dim); border: 0; padding: 0.3rem 0.8rem; font: inherit; font-size: 0.8rem; cursor: pointer; }
 .nl-sidepick button.on { background: var(--surface-2, rgba(255,255,255,.06)); color: var(--text, inherit); font-weight: 600; }
 .nl-sidepick button:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+
+/* Your view of players: what you set beside the projection, and a line to set more. */
+.nl-yv-row { font-size: var(--t-sm); padding: 0.25rem 0; border-bottom: 1px solid var(--line); }
+.nl-yv-form { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+.nl-yv-form input { flex: 1 1 6rem; min-width: 0; background: var(--raise); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem 0.5rem; font: inherit; font-size: var(--t-sm); }
+.nl-yv-form input:first-child { flex: 2 1 10rem; }
+.nl-yv-save { background: var(--raise); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem 0.9rem; font: inherit; font-size: var(--t-sm); cursor: pointer; }
+.nl-yv-save:disabled { opacity: 0.5; cursor: default; }

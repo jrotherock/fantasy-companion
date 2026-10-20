@@ -343,7 +343,12 @@ function reprepare() {
     s.prep = prepFor(s.league, inj)
     s.dirty = true
   }
+  for (const f of prefListeners) f()
 }
+
+/** Called whenever your lists, return dates or view of a player change: the season screens are worked out again. */
+const prefListeners: (() => void)[] = []
+export function onPreferencesChange(f: () => void) { prefListeners.push(f) }
 
 /** A return date you set for a player, by name, kept with your lists. Null goes back to CBS's. */
 function setReturn(playerId: string, date: string | null) {
@@ -706,6 +711,18 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
     json(res, 200, { teams: s.league.teams, configured: configuredTeams(s.league.id), yahoo: s.league.mock ? null : await yahooTeams(s.league), mock: !!s.league.mock })
     return true
   }
+  // Your view of players in this league (preferences `adjust`): what you set beside the projection's minutes and games.
+  if (action === 'adjust' && req.method === 'GET') {
+    const { players, index } = load()
+    const mine = resolvePreferences(prefFile(), prefLeague(s.league.id), index).adjust
+    json(res, 200, {
+      players: [...mine].map(([pid, stats]) => {
+        const p = players.find((x) => x.id === pid)
+        return { id: pid, name: p?.name ?? pid, team: p?.team ?? null, stats, min: p?.projection?.perGame.min ?? null, gp: p?.projection?.gp ?? null }
+      }),
+    })
+    return true
+  }
   if (req.method !== 'POST') {
     json(res, 405, { error: 'POST it' })
     return true
@@ -813,14 +830,26 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
       return true
     }
     case 'adjust': {
-      // Your expected per-game stats for one player in this league ({ast: 4.8, fgPct: 0.465}); null clears them.
-      const p = load().players.find((x) => x.id === String(data.playerId))
-      if (!p) { json(res, 400, { error: 'unknown player' }); return true }
-      const stats = data.stats == null ? null : Object.fromEntries(Object.entries(data.stats).map(([k, v]) => [k, Number(v)]).filter(([, v]) => Number.isFinite(v as number)))
+      // Your expected per-game stats for one player in this league ({ast: 4.8, fgPct: 0.465, min: 22, gp: 55}); null
+      // clears them. By id, or by name from the season screen. With `merge`, only the stats sent change (null removes
+      // one), so setting minutes keeps the games you set.
+      const { players, index } = load()
+      const pid = data.playerId != null ? String(data.playerId) : data.name ? index.resolve(String(data.name), null) : null
+      const p = players.find((x) => x.id === pid)
+      if (!p) { json(res, 400, { error: data.name ? `no player called ${data.name}` : 'unknown player' }); return true }
       const file = prefFile()
       const lists = ((file.leagues ??= {})[prefLeague(s.league.id)] ??= {})
       const adjust = { ...(lists.adjust ?? {}) }
-      if (stats && Object.keys(stats).length) adjust[p.name] = stats as Record<string, number>; else delete adjust[p.name]
+      const given = Object.entries(data.stats ?? {})
+      const valid = given.map(([k, v]) => [k, v == null ? null : Number(v)] as const).filter(([, v]) => v == null || Number.isFinite(v))
+      let stats: Record<string, number> | null
+      if (data.merge) {
+        stats = { ...(adjust[p.name] ?? {}) }
+        for (const [k, v] of valid) if (v == null) delete stats[k]; else stats[k] = v
+      } else {
+        stats = data.stats == null ? null : Object.fromEntries(valid.filter(([, v]) => v != null)) as Record<string, number>
+      }
+      if (stats && Object.keys(stats).length) adjust[p.name] = stats; else delete adjust[p.name]
       if (Object.keys(adjust).length) lists.adjust = adjust; else delete lists.adjust
       mkdirSync(STATE_DIR, { recursive: true })
       writeFileSync(PREFS, JSON.stringify(file, null, 1))
