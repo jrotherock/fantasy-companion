@@ -87,6 +87,27 @@ test('the add plan: an upgrade that does not cost the week first, streams rolled
   assert.equal(plan.steps[2].drop, 'Sexton', 'the second stream replaces the first')
 })
 
+test('the add plan: a season move that costs this week waits for Monday when that is worth more than a weaker one now', async () => {
+  const { addPlan } = await import('./adds.js')
+  const up = (name: string, seasonWins: number, winAfter: number, drop = 'Andrew Nembhard') => ({
+    add: name, name, team: 'X', positions: ['SF'], drop, dropName: drop, kind: 'upgrade', weekGain: 0, winBefore: 0.47, winAfter,
+    seasonGain: 0, seasonWins, seasonWeeks: 19, scheduled: true, startsThisWeek: 3, waiver: false, why: 'w', alternatives: [], steps: null,
+    seasonCats: [], weekCats: [], playDays: [],
+  })
+  const budget = { week: { used: 0, max: 4 }, season: null, weeksLeft: 19, pace: null, forStreams: 2, note: '' }
+  // Bridges: +0.74 now, costing week 1 seven points; made on Monday about +0.81. Tre Jones: +0.49, no cost now.
+  const plan = addPlan([up('Miles Bridges', 0.74, 0.40), up('Tre Jones', 0.49, 0.47)] as any, budget, '2026-10-19', '2026-10-25')!
+  assert.deepEqual(plan.steps.map((x) => x.add), ['Miles Bridges'], 'not both: they drop the same player')
+  assert.ok(plan.steps[0].when.includes('Oct 26'), plan.steps[0].when)
+  assert.ok(plan.steps[0].why.includes('+0.81'), plan.steps[0].why)
+  // Worth less on Monday than the other one now: the other one, now.
+  const now = addPlan([up('Miles Bridges', 0.40, 0.40), up('Tre Jones', 0.49, 0.47)] as any, budget, '2026-10-19', '2026-10-25')!
+  assert.deepEqual(now.steps.map((x) => [x.add, x.when]), [['Tre Jones', 'now']])
+  // A Monday move leaves this week's adds for this week.
+  const two = addPlan([up('Miles Bridges', 0.74, 0.40), up('Tre Jones', 0.49, 0.47, 'Fred VanVleet')] as any, { ...budget, week: { used: 2, max: 4 } }, '2026-10-19', '2026-10-25')!
+  assert.deepEqual(two.steps.map((x) => x.add).sort(), ['Miles Bridges', 'Tre Jones'])
+})
+
 test("a day's stats before his game read as no line, not a line of zeros; after it, the box", async () => {
   const { boxOf } = await import('./yahooSeason.js')
   const dash = ['9004003', '5', '9007006', '8', '10', '12', '15', '16', '17', '18', '19'].map((id) => ({ stat: { stat_id: id, value: id.startsWith('900') ? '-/-' : '-' } }))

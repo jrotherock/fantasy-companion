@@ -6,7 +6,7 @@ import type { NbaPlayer, Game, YahooWeek } from './types.js'
 import { buildSeasonView, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonTile } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
 import { Context, rosterIds, sideOutlook, type Fixture, type SeasonLeague, type Snapshot, type World } from './inseason.js'
-import { addDays, PAIR_MARGIN, STREAM_SEASON_COST, UPGRADE_WINS, type PairMove } from './adds.js'
+import { addDays, PAIR_MARGIN, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, type PairMove } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
 import { diffStatus } from './news.js'
@@ -330,6 +330,23 @@ function realLeague(dir: string, base: SeasonLeague & { myTeamId: string }, me: 
   const myIds = rosterIds(ctx, rosters.find((r: any) => r.team.id === me)!.players)
   return { league, snap, w, ctx, myIds }
 }
+
+const harkerLeague: SeasonLeague & { myTeamId: string } = {
+  ...harker, id: 'nba-harker', teams: 12, roster: { PG: 1, SG: 1, G: 1, SF: 1, PF: 1, F: 1, C: 1, Util: 2, BN: 2, IL: 2 }, myTeamId: '3',
+}
+
+test('Harker on 2026-10-19: no stream drops a starter’s load (the plan streamed Kuminga for Jalen Green)', () => {
+  const { league, snap, w: w0, ctx } = realLeague('2026-10-19-harker', harkerLeague, '3', 20)
+  // Live, with Sleeper's lines, Kuminga was a twentieth of a win behind Green over the season; here he is made that
+  // close (his line up a tenth), so only the starter's-load rule can keep Green.
+  const up = 1.1
+  const w = { ...w0, players: w0.players.map((p) => p.name !== 'Jonathan Kuminga' ? p : { ...p, projection: { ...p.projection!, perGame: Object.fromEntries(Object.entries(p.projection!.perGame).map(([k, x]) => [k, k === 'min' ? x : (x as number) * up])) as any } }) }
+  const v = buildSeasonView(league, snap, w)
+  for (const p of v.pickups.filter((x) => x.kind === 'stream')) {
+    assert.ok((ctx.byId.get(p.drop!)?.projection?.perGame.min ?? 0) < STREAM_KEEP_MIN, `${p.name} streamed for ${p.dropName}`)
+  }
+  assert.ok(!v.pickups.some((p) => p.kind === 'stream' && p.dropName === 'Jalen Green'))
+})
 
 const publicLeague: SeasonLeague & { myTeamId: string } = {
   ...hoops, id: 'nba-public', roster: { PG: 1, SG: 1, G: 1, SF: 1, PF: 1, F: 1, C: 2, Util: 2, BN: 3, IL: 3 }, adds: { perWeek: 4, season: null }, myTeamId: '2',

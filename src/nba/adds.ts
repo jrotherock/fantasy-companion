@@ -55,6 +55,13 @@ export const UPGRADE_WINS = 0.1
  */
 export const STREAM_SEASON_COST = 0.15
 
+/**
+ * A stream never drops a starter's load: a player projected for this many minutes (yours, if you set them) is kept
+ * however close the projections call the swap (2026-10-19: Harker's plan streamed Kuminga, who starts but does not
+ * close, for Jalen Green at 33 minutes, the two a twentieth of a win apart over the season).
+ */
+export const STREAM_KEEP_MIN = 30
+
 /** How many of my players are weighed as drops. */
 const DROPS = 5
 
@@ -334,7 +341,8 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
       const winsGain = judged ? seasonWins([...swapped, add]) - baseWins : null
       if (winsGain != null) tried.push({ add, drop: d, wins: winsGain })
       const upgrade = winsGain != null ? winsGain >= UPGRADE_WINS : seasonGain > UPGRADE_PER_GAME[ctx.league.scoring] * Math.max(10, ctx.gamesLeft(c.id))
-      const stream = !upgrade && weekGain > (ctx.league.scoring === 'categories' ? 0.15 : 8) && (winsGain != null ? winsGain > -STREAM_SEASON_COST : seasonGain > -40)
+      const secure = (ctx.byId.get(d.id)?.projection?.perGame.min ?? 0) >= STREAM_KEEP_MIN
+      const stream = !upgrade && !secure && weekGain > (ctx.league.scoring === 'categories' ? 0.15 : 8) && (winsGain != null ? winsGain > -STREAM_SEASON_COST : seasonGain > -40)
       if (!upgrade && !stream) continue
       const p = ctx.byId.get(c.id)!
       const starts = weekGames(c.id)
@@ -453,6 +461,8 @@ function schedulePlays(ctx: Context, date: string, team: string): boolean {
   return (ctx.teamDates.get(team) ?? []).includes(date)
 }
 
+const weekday = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })
+
 export const addDays = (d: string, n: number) => {
   const t = new Date(`${d}T12:00:00Z`)
   t.setUTCDate(t.getUTCDate() + n)
@@ -470,7 +480,13 @@ export interface AddPlan {
   reserve: number
 }
 
-export function addPlan(picks: Pickup[], budget: Budget | null, today: string): AddPlan | null {
+/**
+ * The week's adds as a plan. A season move that costs this week waits for Monday when that is worth more: its season
+ * gain already counts this week's loss, so made after the week it keeps the rest and loses nothing now (2026-10-19:
+ * the public plan took Tre Jones now, +0.49, over Miles Bridges, +0.74, because Bridges cost week 1 seven points;
+ * on Monday he was worth about +0.81). A Monday move does not spend this week's adds.
+ */
+export function addPlan(picks: Pickup[], budget: Budget | null, today: string, weekEnd: string | null = null): AddPlan | null {
   const left = budget?.week ? Math.max(0, budget.week.max - budget.week.used)
     : budget?.season ? Math.max(0, budget.season.max - budget.season.used) : 4
   if (!left) return { left, steps: [], reserve: 0 }
@@ -479,11 +495,25 @@ export function addPlan(picks: Pickup[], budget: Budget | null, today: string): 
   const steps: AddPlan['steps'] = []
   const used = new Set<string>()
   const dropped = new Set<string>()
-  const ups = picks.filter((p) => p.kind === 'upgrade' && p.winAfter >= p.winBefore - 0.03)
-  for (const p of ups) {
-    if (!spend || dropped.has(p.drop ?? '')) continue
-    steps.push({ when: p.waiver ? 'claim now (clears in a day)' : 'now', add: p.name, drop: p.dropName, why: `${p.why}; this week ${Math.round(p.winBefore * 100)}% → ${Math.round(p.winAfter * 100)}%` })
-    used.add(p.add); if (p.drop) dropped.add(p.drop); spend--
+  const cost = (p: Pickup) => Math.max(0, p.winBefore - p.winAfter)
+  const pct = (x: number) => `${Math.round(x * 100)}%`
+  const monday = weekEnd ? addDays(weekEnd, 1) : null
+  const ups = picks.filter((p) => p.kind === 'upgrade').map((p) => {
+    const later = monday && p.seasonWins != null && cost(p) > 0.03
+    // Now: the season gain as it stands, this week's loss included. Monday: the same, less that loss.
+    return { p, later: !!later, value: p.seasonWins == null ? p.seasonGain / 1000 : later ? p.seasonWins + cost(p) : p.seasonWins }
+  }).filter((x) => x.later || x.p.winAfter >= x.p.winBefore - 0.03).sort((a, b) => b.value - a.value)
+  const dayWord = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
+  for (const { p, later, value } of ups) {
+    if (dropped.has(p.drop ?? '') || used.has(p.add)) continue
+    if (later) {
+      steps.push({ when: `${dayWord(monday!)}, after this week`, add: p.name, drop: p.dropName, why: `${p.why}; +${value.toFixed(2)} wins made then, against +${p.seasonWins!.toFixed(2)} now, which costs this week ${pct(p.winBefore)} → ${pct(p.winAfter)}${p.waiver ? '' : ' (if he is still there)'}` })
+    } else {
+      if (!spend) continue
+      steps.push({ when: p.waiver ? 'claim now (clears in a day)' : 'now', add: p.name, drop: p.dropName, why: `${p.why}; this week ${pct(p.winBefore)} → ${pct(p.winAfter)}` })
+      spend--
+    }
+    used.add(p.add); if (p.drop) dropped.add(p.drop)
   }
   // Streams: the best first; then, while adds remain, one whose games all come after the last stream's last game.
   const streams = picks.filter((p) => p.kind === 'stream' && !used.has(p.add) && p.playDays.length).sort((a, b) => b.weekGain - a.weekGain)
@@ -492,11 +522,10 @@ export function addPlan(picks: Pickup[], budget: Budget | null, today: string): 
     if (!spend) break
     if (last && p.playDays[0].date <= last.playDays.at(-1)!.date) continue
     if (!last && dropped.has(p.drop ?? '')) continue
-    const dayWord = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })
     steps.push({
-      when: last ? `after ${last.name}'s last game (${dayWord(last.playDays.at(-1)!.date)})` : p.waiver ? 'claim now' : 'now',
+      when: last ? `after ${last.name}'s last game (${weekday(last.playDays.at(-1)!.date)})` : p.waiver ? 'claim now' : 'now',
       add: p.name, drop: last ? last.name : p.dropName,
-      why: `plays ${p.playDays.map((d) => dayWord(d.date)).join(', ')}, ${p.playDays.filter((d) => d.open).length} into empty spots`,
+      why: `plays ${p.playDays.map((d) => weekday(d.date)).join(', ')}, ${p.playDays.filter((d) => d.open).length} into empty spots`,
     })
     last = p; spend--
   }

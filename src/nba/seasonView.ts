@@ -95,7 +95,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     playoffs: playoffPlan(ctx, snap, me.id),
     trades: tradeIdeas(ctx, snap, me.id),
     standing: st ? { rank: st.rank, w: st.wins, l: st.losses, t: st.ties } : null,
-    addPlan: addPlan(picks, budget, world.today),
+    addPlan: addPlan(picks, budget, world.today, week?.end ?? null),
     catPlan: league.scoring === 'categories' && mine?.edges ? categoryPlan(ctx, snap, mine.edges, punts) : null,
     startsOn: (() => { const first = [...snap.weeks].map((w) => w[1]).sort()[0]; return first && first > world.today ? first : null })(),
   }
