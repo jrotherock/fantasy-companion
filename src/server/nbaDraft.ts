@@ -714,7 +714,7 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
   // Your view of players in this league (preferences `adjust`): what you set beside the projection's minutes and games.
   if (action === 'adjust' && req.method === 'GET') {
     const { players, index } = load()
-    const mine = resolvePreferences(prefFile(), prefLeague(s.league.id), index).adjust
+    const { adjust: mine, own } = resolvePreferences(prefFile(), prefLeague(s.league.id), index)
     // Everyone with a projection, for picking a player by name: minutes and games as the league reads them now
     // (yours where set), and the projection's own beside them.
     const now = new Map(seasonPlayers(s.league.id).map((p) => [p.id, p]))
@@ -722,7 +722,9 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
     json(res, 200, {
       players: [...mine].map(([pid, stats]) => {
         const p = players.find((x) => x.id === pid)
-        return { id: pid, name: p?.name ?? pid, team: p?.team ?? null, stats, min: p?.projection?.perGame.min ?? null, gp: p?.projection?.gp ?? null }
+        // Each stat: this league's own, or every league's.
+        const scope = Object.fromEntries(Object.keys(stats).map((k) => [k, own.get(pid)?.has(k) ? 'league' : 'all']))
+        return { id: pid, name: p?.name ?? pid, team: p?.team ?? null, stats, scope, min: p?.projection?.perGame.min ?? null, gp: p?.projection?.gp ?? null }
       }),
       pool: players.filter((p) => p.projection && p.team).map((p) => ({
         id: p.id, name: p.name, team: p.team, positions: p.positions,
@@ -839,15 +841,26 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
       return true
     }
     case 'adjust': {
-      // Your expected per-game stats for one player in this league ({ast: 4.8, fgPct: 0.465, min: 22, gp: 55}); null
-      // clears them. By id, or by name from the season screen. With `merge`, only the stats sent change (null removes
-      // one), so setting minutes keeps the games you set.
+      // Your expected per-game stats for one player ({ast: 4.8, fgPct: 0.465, min: 22, gp: 55}); null clears them. By
+      // id, or by name from the season screen. With `merge`, only the stats sent change (null removes one), so setting
+      // minutes keeps the games you set. `scope: 'all'` sets them for every league and takes each stat sent off every
+      // league's own list, so one entry is what all of them read; otherwise this league only.
       const { players, index } = load()
       const pid = data.playerId != null ? String(data.playerId) : data.name ? index.resolve(String(data.name), null) : null
       const p = players.find((x) => x.id === pid)
       if (!p) { json(res, 400, { error: data.name ? `no player called ${data.name}` : 'unknown player' }); return true }
       const file = prefFile()
-      const lists = ((file.leagues ??= {})[prefLeague(s.league.id)] ??= {})
+      const everywhere = data.scope === 'all'
+      const lists: { adjust?: Record<string, Record<string, number>> } = everywhere ? file : ((file.leagues ??= {})[prefLeague(s.league.id)] ??= {})
+      if (everywhere) {
+        for (const l of Object.values(file.leagues ?? {})) {
+          const mine = l.adjust?.[p.name]
+          if (!mine) continue
+          for (const k of Object.keys(data.stats ?? {})) delete mine[k]
+          if (!Object.keys(mine).length) delete l.adjust![p.name]
+          if (l.adjust && !Object.keys(l.adjust).length) delete l.adjust
+        }
+      }
       const adjust = { ...(lists.adjust ?? {}) }
       const given = Object.entries(data.stats ?? {})
       const valid = given.map(([k, v]) => [k, v == null ? null : Number(v)] as const).filter(([, v]) => v == null || Number.isFinite(v))

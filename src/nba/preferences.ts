@@ -35,6 +35,11 @@ interface LeagueLists extends Lists {
 }
 export interface PreferenceFile extends Lists {
   leagues?: Record<string, LeagueLists>
+  /**
+   * Your view of players in every league: minutes and games, by name. A league's own `adjust` adds to it and wins
+   * stat by stat (2026-10-19: a role or an injury is the same in every league, so it is set once by default).
+   */
+  adjust?: Record<string, Record<string, number>>
   /** Return dates you have set for injured players, by name: YYYY-MM-DD. */
   returns?: Record<string, string | null>
 }
@@ -43,8 +48,10 @@ export interface Preferences {
   tags: Map<string, PrefTag>
   /** The league's own ranking, by player id, first = most wanted. */
   order: string[]
-  /** The league's own expected per-game stats, by player id. */
+  /** Expected per-game stats, minutes and games, by player id: every league's, with this league's own over them. */
   adjust: Map<string, Record<string, number>>
+  /** Which stats in `adjust` are this league's own (the rest are every league's), by player id. */
+  own: Map<string, Set<string>>
   /** Names that matched nobody: a typo, or a player who has left the league. */
   unresolved: string[]
 }
@@ -54,7 +61,8 @@ export function resolvePreferences(file: PreferenceFile | null, leagueId: string
   const unresolved: string[] = []
   const order: string[] = []
   const adjust = new Map<string, Record<string, number>>()
-  if (!file) return { tags, unresolved, order, adjust }
+  const own = new Map<string, Set<string>>()
+  if (!file) return { tags, unresolved, order, adjust, own }
   const league = file.leagues?.[leagueId] ?? {}
   // Weakest first, so a name on two lists ends up with the stronger tag.
   for (const tag of ['like', 'avoid', 'never'] as PrefTag[]) {
@@ -69,12 +77,18 @@ export function resolvePreferences(file: PreferenceFile | null, leagueId: string
     if (id && !order.includes(id)) order.push(id)
     else if (!id) unresolved.push(name)
   }
-  for (const [name, stats] of Object.entries(league.adjust ?? {})) {
+  for (const [name, stats] of Object.entries(file.adjust ?? {})) {
     const id = index.resolve(name, null)
-    if (id) adjust.set(id, stats)
+    if (id) adjust.set(id, { ...stats })
     else unresolved.push(name)
   }
-  return { tags, unresolved, order, adjust }
+  for (const [name, stats] of Object.entries(league.adjust ?? {})) {
+    const id = index.resolve(name, null)
+    if (!id) { unresolved.push(name); continue }
+    adjust.set(id, { ...(adjust.get(id) ?? {}), ...stats })
+    own.set(id, new Set(Object.keys(stats)))
+  }
+  return { tags, unresolved, order, adjust, own }
 }
 
 // Shooting: the percentages and the attempts that weight them.

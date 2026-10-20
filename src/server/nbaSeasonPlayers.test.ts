@@ -55,3 +55,26 @@ test('picking a player by name: everyone with a projection, minutes and games as
   assert.notEqual(harrisNow.baseGp, 55, 'the projection beside it')
   assert.ok(pool.every((p: any) => p.team), 'only players on a team')
 })
+
+test('minutes and games for every league by default: one entry is what all three read, and a league can keep its own', async () => {
+  // Every league: Hoops, Harker and Public all read it.
+  await call('POST', '/api/nba/draft/nba-hoops/adjust', { name: 'Cameron Johnson', stats: { min: 32 }, merge: true, scope: 'all' })
+  const cj = (league: string) => seasonPlayers(league).find((p) => p.name === 'Cameron Johnson')!.projection!.perGame.min
+  for (const l of ['nba-hoops', 'nba-harker', 'nba-public']) assert.equal(cj(l), 32, l)
+  const row = (league: string, name: string) => (call('GET', `/api/nba/draft/${league}/adjust`)).then((r) => r.body.players.find((p: any) => p.name === name))
+  assert.deepEqual((await row('nba-public', 'Cameron Johnson')).scope, { min: 'all' })
+  // One league its own: it wins there, and only there.
+  await call('POST', '/api/nba/draft/nba-harker/adjust', { name: 'Cameron Johnson', stats: { min: 28 }, merge: true, scope: 'league' })
+  assert.equal(cj('nba-harker'), 28)
+  assert.equal(cj('nba-hoops'), 32)
+  assert.equal((await row('nba-harker', 'Cameron Johnson')).scope.min, 'league')
+  // Set for every league again: the league's own is taken off, so all three read the one entry.
+  await call('POST', '/api/nba/draft/nba-hoops/adjust', { name: 'Cameron Johnson', stats: { min: 31 }, merge: true, scope: 'all' })
+  for (const l of ['nba-hoops', 'nba-harker', 'nba-public']) assert.equal(cj(l), 31, l)
+  // Hoops' own games for Harris stay Hoops' own; stats set in the draft room are untouched by a minutes entry.
+  assert.equal((await row('nba-hoops', 'Tobias Harris')).scope.gp, 'league')
+  // Cleared for every league: back to the projection everywhere.
+  await call('POST', '/api/nba/draft/nba-public/adjust', { name: 'Cameron Johnson', stats: { min: null }, merge: true, scope: 'all' })
+  const base = (await call('GET', '/api/nba/draft/nba-hoops/adjust')).body.pool.find((p: any) => p.name === 'Cameron Johnson').baseMin
+  for (const l of ['nba-hoops', 'nba-harker', 'nba-public']) assert.ok(Math.abs(cj(l) - base) < 0.06, l)
+})

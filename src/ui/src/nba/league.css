@@ -227,4 +227,6 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-yv-name { font-weight: 600; color: var(--ink); }
 .nl-yv-save { background: var(--raise); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem 0.9rem; font: inherit; font-size: var(--t-sm); cursor: pointer; }
 .nl-yv-save:disabled { opacity: 0.5; cursor: default; }
+.nl-yv-here { display: flex; align-items: center; gap: 0.35rem; font-size: var(--t-sm); color: var(--muted); white-space: nowrap; align-self: center; }
+.nl-yv-here input { width: auto; padding: 0; accent-color: var(--blue); }
 @media (max-width: 520px) { .nl-yv-pick { flex-basis: 100%; } }

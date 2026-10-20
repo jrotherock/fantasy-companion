@@ -717,7 +717,7 @@ function SeasonGain({ p }: { p: SeasonView['pickups'][number] }) {
   return <span title={how}>Rest of season: <b>{wins(p.seasonWins)}</b>{p.scheduled ? '' : ' (vs this week’s opponent)'}</span>
 }
 
-type ViewRow = { id: string; name: string; team: string | null; stats: Record<string, number>; min: number | null; gp: number | null }
+type ViewRow = { id: string; name: string; team: string | null; stats: Record<string, number>; scope: Record<string, 'all' | 'league'>; min: number | null; gp: number | null }
 type PoolRow = { id: string; name: string; team: string; positions: string[]; min: number | null; gp: number; baseMin: number | null; baseGp: number }
 
 /** For matching names as typed: no accents, no case, no punctuation (Dončić is doncic). */
@@ -730,7 +730,7 @@ const fold = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').t
  * list as you type, never typed free (2026-10-19: asked for), and his current minutes and games fill in as the
  * baseline to adjust from.
  */
-function YourView({ leagueId, onChange }: { leagueId: string; onChange: () => void }) {
+function YourView({ leagueId, label, onChange }: { leagueId: string; label: string; onChange: () => void }) {
   const [rows, setRows] = useState<ViewRow[] | null>(null)
   const [pool, setPool] = useState<PoolRow[]>([])
   const [query, setQuery] = useState('')
@@ -739,6 +739,8 @@ function YourView({ leagueId, onChange }: { leagueId: string; onChange: () => vo
   const [hi, setHi] = useState(0)
   const [min, setMin] = useState('')
   const [gp, setGp] = useState('')
+  // Minutes and games are the same in every league, so that is where they go unless you say otherwise.
+  const [justHere, setJustHere] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const load = useCallback(() => {
@@ -756,11 +758,14 @@ function YourView({ leagueId, onChange }: { leagueId: string; onChange: () => vo
   const pick = (p: PoolRow) => {
     setPicked(p); setQuery(p.name); setOpen(false); setErr(null)
     setMin(p.min != null ? String(p.min) : ''); setGp(String(p.gp))
+    // Set for this league only before: keep it that way unless changed.
+    const row = rows?.find((r) => r.id === p.id)
+    setJustHere(!!row && ['min', 'gp'].some((k) => row.scope?.[k] === 'league'))
   }
-  const save = async (playerId: string, stats: Record<string, number | null>) => {
+  const save = async (playerId: string, stats: Record<string, number | null>, scope: 'all' | 'league') => {
     setBusy(true); setErr(null)
     try {
-      const res = await fetch(`/api/nba/draft/${leagueId}/adjust`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId, stats, merge: true }) })
+      const res = await fetch(`/api/nba/draft/${leagueId}/adjust`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId, stats, merge: true, scope }) })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       load(); onChange()
       return true
@@ -775,7 +780,7 @@ function YourView({ leagueId, onChange }: { leagueId: string; onChange: () => vo
       min: picked.baseMin != null && Math.abs(m - picked.baseMin) < 0.05 ? null : m,
       gp: g === picked.baseGp ? null : g,
     }
-    if (await save(picked.id, stats)) { setPicked(null); setQuery(''); setMin(''); setGp('') }
+    if (await save(picked.id, stats, justHere ? 'league' : 'all')) { setPicked(null); setQuery(''); setMin(''); setGp(''); setJustHere(false) }
   }
   const edit = (r: ViewRow) => { const p = pool.find((x) => x.id === r.id); if (p) pick(p) }
   const onKey = (e: React.KeyboardEvent) => {
@@ -793,8 +798,9 @@ function YourView({ leagueId, onChange }: { leagueId: string; onChange: () => vo
       {shown.map((r) => (
         <div key={r.id} className="nl-yv-row">
           <button className="nl-link nl-yv-name" onClick={() => edit(r)} title="Change">{r.name}</button> <span className="nl-dim">{r.team}</span>
-          {r.stats.min != null && <span> · {r.stats.min} min <span className="nl-dim">(projection {r.min?.toFixed(0) ?? '—'})</span> <button className="nl-link" disabled={busy} onClick={() => save(r.id, { min: null })}>clear</button></span>}
-          {r.stats.gp != null && <span> · {r.stats.gp} games <span className="nl-dim">(projection {r.gp?.toFixed(0) ?? '—'})</span> <button className="nl-link" disabled={busy} onClick={() => save(r.id, { gp: null })}>clear</button></span>}
+          {(['min', 'gp'] as const).filter((k) => r.stats[k] != null).map((k) => (
+            <span key={k}> · {r.stats[k]} {k === 'min' ? 'min' : 'games'} <span className="nl-dim">(projection {(k === 'min' ? r.min : r.gp)?.toFixed(0) ?? '—'}{r.scope?.[k] === 'league' ? `, ${label} only` : ', all leagues'})</span> <button className="nl-link" disabled={busy} onClick={() => save(r.id, { [k]: null }, r.scope?.[k] === 'league' ? 'league' : 'all')}>clear</button></span>
+          ))}
         </div>
       ))}
       {rest > 0 && <div className="nl-none">{rest} more with stats set in the draft room.</div>}
@@ -815,8 +821,9 @@ function YourView({ leagueId, onChange }: { leagueId: string; onChange: () => vo
         <label className="nl-yv-num"><span>Minutes</span><input aria-label="Minutes a game" inputMode="decimal" value={min} disabled={!picked} onChange={(e) => setMin(e.target.value)} /></label>
         <label className="nl-yv-num"><span>Games</span><input aria-label="Games" inputMode="numeric" value={gp} disabled={!picked} onChange={(e) => setGp(e.target.value)} /></label>
         <button className="nl-yv-save" disabled={busy || !picked} onClick={submit}>Set</button>
+        <label className="nl-yv-here"><input id="yv-just-here" type="checkbox" checked={justHere} onChange={(e) => setJustHere(e.target.checked)} /> Just {label}</label>
       </div>
-      {picked && <div className="nl-none">Projection: {picked.baseMin?.toFixed(1) ?? '—'} minutes, {picked.baseGp} games.{(picked.min !== picked.baseMin || picked.gp !== picked.baseGp) ? ' The boxes show yours.' : ''} Back to the projection clears yours.</div>}
+      {picked && <div className="nl-none">Projection: {picked.baseMin?.toFixed(1) ?? '—'} minutes, {picked.baseGp} games.{(picked.min !== picked.baseMin || picked.gp !== picked.baseGp) ? ' The boxes show yours.' : ''} Back to the projection clears yours. {justHere ? `Sets ${label} only.` : 'Sets all your leagues.'}</div>}
       {err && <div className="nl-warn">{err}</div>}
     </Section>
   )
@@ -874,7 +881,7 @@ function Season({ v, onChange }: { v: SeasonView; onChange: () => void }) {
   return (
     <>
       <a className="nl-room" href={`/nba/draft/${v.league.id}`}><span className="nl-roomk">Draft</span><span>How the draft came out, and the room</span><span className="ckchev">›</span></a>
-      <YourView leagueId={v.league.id} onChange={onChange} />
+      <YourView leagueId={v.league.id} label={v.league.label} onChange={onChange} />
       {v.catPlan && (
         <Section title="Category plan" hint="against this league's rosters">
           <p className="nl-line">
