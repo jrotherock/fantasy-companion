@@ -44,3 +44,14 @@ test('your view of a player from the season screen: by name, merged, minutes sca
   assert.deepEqual((await call('GET', '/api/nba/draft/nba-hoops/adjust')).body.players.find((p: any) => p.name === 'Tobias Harris').stats, { gp: 55 })
   assert.equal((await call('POST', '/api/nba/draft/nba-hoops/adjust', { name: 'Nobody Atall', stats: { min: 20 }, merge: true })).status, 400)
 })
+
+test('picking a player by name: everyone with a projection, minutes and games as the league reads them, the projection beside', async () => {
+  const { pool } = (await call('GET', '/api/nba/draft/nba-hoops/adjust')).body
+  const cj = pool.find((p: any) => p.name === 'Cameron Johnson')
+  assert.ok(cj && cj.team && cj.min > 20 && cj.gp > 50, 'Cam Johnson is there to pick')
+  assert.equal(cj.min, cj.baseMin, 'nothing set for him: the projection')
+  const harrisNow = pool.find((p: any) => p.name === 'Tobias Harris')
+  assert.equal(harrisNow.gp, 55, 'yours where set')
+  assert.notEqual(harrisNow.baseGp, 55, 'the projection beside it')
+  assert.ok(pool.every((p: any) => p.team), 'only players on a team')
+})

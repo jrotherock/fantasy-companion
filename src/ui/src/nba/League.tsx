@@ -718,38 +718,72 @@ function SeasonGain({ p }: { p: SeasonView['pickups'][number] }) {
 }
 
 type ViewRow = { id: string; name: string; team: string | null; stats: Record<string, number>; min: number | null; gp: number | null }
+type PoolRow = { id: string; name: string; team: string; positions: string[]; min: number | null; gp: number; baseMin: number | null; baseGp: number }
+
+/** For matching names as typed: no accents, no case, no punctuation (Dončić is doncic). */
+const fold = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, '')
 
 /**
  * Your view of players in this league: the minutes or games you expect instead of the projection's (a rotation call,
  * a role you doubt, a camp injury). Minutes carry every stat you have not set at the same per-minute rate; games are
- * taken as given. Pickups, the week and the power table read them; so does the draft.
+ * taken as given. Pickups, the week and the power table read them; so does the draft. A player is picked from the
+ * list as you type, never typed free (2026-10-19: asked for), and his current minutes and games fill in as the
+ * baseline to adjust from.
  */
 function YourView({ leagueId, onChange }: { leagueId: string; onChange: () => void }) {
   const [rows, setRows] = useState<ViewRow[] | null>(null)
-  const [name, setName] = useState('')
+  const [pool, setPool] = useState<PoolRow[]>([])
+  const [query, setQuery] = useState('')
+  const [picked, setPicked] = useState<PoolRow | null>(null)
+  const [open, setOpen] = useState(false)
+  const [hi, setHi] = useState(0)
   const [min, setMin] = useState('')
   const [gp, setGp] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const load = useCallback(() => {
-    fetch(`/api/nba/draft/${leagueId}/adjust`).then((r) => (r.ok ? r.json() : null)).then((x) => x && setRows(x.players)).catch(() => {})
+    fetch(`/api/nba/draft/${leagueId}/adjust`).then((r) => (r.ok ? r.json() : null)).then((x) => { if (x) { setRows(x.players); setPool(x.pool ?? []) } }).catch(() => {})
   }, [leagueId])
   useEffect(load, [load])
-  const save = async (who: string, stats: Record<string, number | null>) => {
+  const q = fold(query.trim())
+  // Each word typed starts a word of the name, in any order ("cam joh", "johnson cam"); or the name contains it whole.
+  const words = q.split(/\s+/).filter(Boolean)
+  const fits = (name: string) => { const n = fold(name), parts = n.split(/\s+/); return n.includes(q) || words.every((w) => parts.some((x) => x.startsWith(w))) }
+  const matches = q.length < 2 || picked ? [] : pool
+    .filter((p) => fits(p.name))
+    .sort((a, b) => Number(fold(b.name).startsWith(q)) - Number(fold(a.name).startsWith(q)) || (b.min ?? 0) - (a.min ?? 0))
+    .slice(0, 8)
+  const pick = (p: PoolRow) => {
+    setPicked(p); setQuery(p.name); setOpen(false); setErr(null)
+    setMin(p.min != null ? String(p.min) : ''); setGp(String(p.gp))
+  }
+  const save = async (playerId: string, stats: Record<string, number | null>) => {
     setBusy(true); setErr(null)
     try {
-      const res = await fetch(`/api/nba/draft/${leagueId}/adjust`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: who, stats, merge: true }) })
+      const res = await fetch(`/api/nba/draft/${leagueId}/adjust`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId, stats, merge: true }) })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       load(); onChange()
       return true
     } catch (e) { setErr((e as Error).message); return false } finally { setBusy(false) }
   }
-  const add = async () => {
-    const stats: Record<string, number> = {}
-    if (min.trim()) stats.min = Number(min)
-    if (gp.trim()) stats.gp = Number(gp)
-    if (!name.trim() || !Object.keys(stats).length || Object.values(stats).some((x) => !Number.isFinite(x) || x <= 0)) { setErr('A name, and minutes or games'); return }
-    if (await save(name.trim(), stats)) { setName(''); setMin(''); setGp('') }
+  const submit = async () => {
+    if (!picked) { setErr('Pick a player from the list'); return }
+    const m = Number(min), g = Number(gp)
+    if (!(m > 0 && m <= 48) || !(g > 0 && g <= 82)) { setErr('Minutes 1–48 and games 1–82'); return }
+    // Only what differs from the projection is kept as yours; back to the projection clears it.
+    const stats: Record<string, number | null> = {
+      min: picked.baseMin != null && Math.abs(m - picked.baseMin) < 0.05 ? null : m,
+      gp: g === picked.baseGp ? null : g,
+    }
+    if (await save(picked.id, stats)) { setPicked(null); setQuery(''); setMin(''); setGp('') }
+  }
+  const edit = (r: ViewRow) => { const p = pool.find((x) => x.id === r.id); if (p) pick(p) }
+  const onKey = (e: React.KeyboardEvent) => {
+    if (!matches.length) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, matches.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)) }
+    else if (e.key === 'Enter') { e.preventDefault(); pick(matches[hi] ?? matches[0]) }
+    else if (e.key === 'Escape') setOpen(false)
   }
   const shown = (rows ?? []).filter((r) => r.stats.min != null || r.stats.gp != null)
   const rest = (rows ?? []).length - shown.length
@@ -758,18 +792,31 @@ function YourView({ leagueId, onChange }: { leagueId: string; onChange: () => vo
       {!shown.length && <div className="nl-none">None set. The projections stand for everyone.</div>}
       {shown.map((r) => (
         <div key={r.id} className="nl-yv-row">
-          <b>{r.name}</b> <span className="nl-dim">{r.team}</span>
-          {r.stats.min != null && <span> · {r.stats.min} min <span className="nl-dim">(projection {r.min?.toFixed(0) ?? '—'})</span> <button className="nl-link" disabled={busy} onClick={() => save(r.name, { min: null })}>clear</button></span>}
-          {r.stats.gp != null && <span> · {r.stats.gp} games <span className="nl-dim">(projection {r.gp?.toFixed(0) ?? '—'})</span> <button className="nl-link" disabled={busy} onClick={() => save(r.name, { gp: null })}>clear</button></span>}
+          <button className="nl-link nl-yv-name" onClick={() => edit(r)} title="Change">{r.name}</button> <span className="nl-dim">{r.team}</span>
+          {r.stats.min != null && <span> · {r.stats.min} min <span className="nl-dim">(projection {r.min?.toFixed(0) ?? '—'})</span> <button className="nl-link" disabled={busy} onClick={() => save(r.id, { min: null })}>clear</button></span>}
+          {r.stats.gp != null && <span> · {r.stats.gp} games <span className="nl-dim">(projection {r.gp?.toFixed(0) ?? '—'})</span> <button className="nl-link" disabled={busy} onClick={() => save(r.id, { gp: null })}>clear</button></span>}
         </div>
       ))}
       {rest > 0 && <div className="nl-none">{rest} more with stats set in the draft room.</div>}
       <div className="nl-yv-form">
-        <input aria-label="Player name" placeholder="Player" value={name} onChange={(e) => setName(e.target.value)} />
-        <input aria-label="Minutes a game" placeholder="Minutes" inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} />
-        <input aria-label="Games" placeholder="Games" inputMode="numeric" value={gp} onChange={(e) => setGp(e.target.value)} />
-        <button className="nl-yv-save" disabled={busy} onClick={add}>Set</button>
+        <div className="nl-yv-pick">
+          <input aria-label="Player" placeholder="Player" value={query} autoComplete="off" role="combobox" aria-expanded={open && matches.length > 0}
+            onChange={(e) => { setQuery(e.target.value); setPicked(null); setOpen(true); setHi(0) }} onKeyDown={onKey} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+          {open && matches.length > 0 && (
+            <ul className="nl-yv-list" role="listbox">
+              {matches.map((p, i) => (
+                <li key={p.id} role="option" aria-selected={i === hi} className={i === hi ? 'on' : ''} onMouseDown={(e) => { e.preventDefault(); pick(p) }} onMouseEnter={() => setHi(i)}>
+                  <b>{p.name}</b> <span className="nl-dim">{p.team} · {p.positions.join('/')} · {p.min?.toFixed(0) ?? '—'} min · {p.gp} g</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <label className="nl-yv-num"><span>Minutes</span><input aria-label="Minutes a game" inputMode="decimal" value={min} disabled={!picked} onChange={(e) => setMin(e.target.value)} /></label>
+        <label className="nl-yv-num"><span>Games</span><input aria-label="Games" inputMode="numeric" value={gp} disabled={!picked} onChange={(e) => setGp(e.target.value)} /></label>
+        <button className="nl-yv-save" disabled={busy || !picked} onClick={submit}>Set</button>
       </div>
+      {picked && <div className="nl-none">Projection: {picked.baseMin?.toFixed(1) ?? '—'} minutes, {picked.baseGp} games.{(picked.min !== picked.baseMin || picked.gp !== picked.baseGp) ? ' The boxes show yours.' : ''} Back to the projection clears yours.</div>}
       {err && <div className="nl-warn">{err}</div>}
     </Section>
   )

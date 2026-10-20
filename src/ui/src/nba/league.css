@@ -215,7 +215,16 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 /* Your view of players: what you set beside the projection, and a line to set more. */
 .nl-yv-row { font-size: var(--t-sm); padding: 0.25rem 0; border-bottom: 1px solid var(--line); }
 .nl-yv-form { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
-.nl-yv-form input { flex: 1 1 6rem; min-width: 0; background: var(--raise); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem 0.5rem; font: inherit; font-size: var(--t-sm); }
-.nl-yv-form input:first-child { flex: 2 1 10rem; }
+.nl-yv-form input { width: 100%; min-width: 0; background: var(--raise); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem 0.5rem; font: inherit; font-size: var(--t-sm); box-sizing: border-box; }
+.nl-yv-form input:disabled { opacity: 0.5; }
+.nl-yv-pick { position: relative; flex: 2 1 12rem; min-width: 0; }
+.nl-yv-num { flex: 1 1 5rem; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.nl-yv-num span { font-size: var(--t-xs, 0.7rem); color: var(--muted); }
+.nl-yv-form { align-items: flex-end; }
+.nl-yv-list { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 2px); margin: 0; padding: 0.2rem 0; list-style: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); max-height: 18rem; overflow-y: auto; }
+.nl-yv-list li { padding: 0.35rem 0.6rem; font-size: var(--t-sm); cursor: pointer; }
+.nl-yv-list li.on { background: var(--raise); }
+.nl-yv-name { font-weight: 600; color: var(--ink); }
 .nl-yv-save { background: var(--raise); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem 0.9rem; font: inherit; font-size: var(--t-sm); cursor: pointer; }
 .nl-yv-save:disabled { opacity: 0.5; cursor: default; }
+@media (max-width: 520px) { .nl-yv-pick { flex-basis: 100%; } }

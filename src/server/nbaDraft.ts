@@ -715,11 +715,20 @@ export async function handleNba(parts: string[], url: URL, req: any, res: any, j
   if (action === 'adjust' && req.method === 'GET') {
     const { players, index } = load()
     const mine = resolvePreferences(prefFile(), prefLeague(s.league.id), index).adjust
+    // Everyone with a projection, for picking a player by name: minutes and games as the league reads them now
+    // (yours where set), and the projection's own beside them.
+    const now = new Map(seasonPlayers(s.league.id).map((p) => [p.id, p]))
+    const r1 = (x: number | null | undefined) => (x == null ? null : Math.round(x * 10) / 10)
     json(res, 200, {
       players: [...mine].map(([pid, stats]) => {
         const p = players.find((x) => x.id === pid)
         return { id: pid, name: p?.name ?? pid, team: p?.team ?? null, stats, min: p?.projection?.perGame.min ?? null, gp: p?.projection?.gp ?? null }
       }),
+      pool: players.filter((p) => p.projection && p.team).map((p) => ({
+        id: p.id, name: p.name, team: p.team, positions: p.positions,
+        min: r1(now.get(p.id)?.projection?.perGame.min), gp: Math.round(now.get(p.id)?.projection?.gp ?? 0),
+        baseMin: r1(p.projection!.perGame.min), baseGp: Math.round(p.projection!.gp),
+      })),
     })
     return true
   }
