@@ -461,3 +461,55 @@ test('points: the players this week add up to the projected week (their starts a
   const rest = v.week!.players.reduce((s, p) => s + fp(p.box), 0)
   assert.ok(Math.abs(v.week!.points!.mineNow + rest - v.week!.points!.mine) < 0.5, `${v.week!.points!.mineNow} + ${rest.toFixed(1)} vs ${v.week!.points!.mine.toFixed(1)}`)
 })
+
+test("the live scoreboard says when a game is on and over, not the tip time; each row gets its score and clock", () => {
+  const today = '2026-11-18'
+  const { snap } = snapshotFor(hoops, today)
+  const rows = snap.mineToday!.players
+  const mine = rows.map((y) => players.find((p) => p.yahoo?.yahooId === y.yahooId)!).filter(Boolean)
+  const games = schedule.filter((g) => g.date === today)
+  const withGame = mine.filter((p) => games.some((g) => g.home === p.team || g.away === p.team))
+  assert.ok(withGame.length >= 2, 'two of mine play')
+  const [a, b] = withGame
+  const ga = games.find((g) => g.home === a.team || g.away === a.team)!, gb = games.find((g) => g.home === b.team || g.away === b.team)!
+  // Before any tip by the clock (16:00Z), but the scoreboard has one game over and one in the 3rd.
+  const w = { ...world(today), scores: [
+    { home: ga.home, away: ga.away, homeScore: 101, awayScore: 99, state: 'post' as const, period: 4, clock: '0.0', detail: 'Final' },
+    ...(gb === ga ? [] : [{ home: gb.home, away: gb.away, homeScore: 70, awayScore: 72, state: 'in' as const, period: 3, clock: '6:00', detail: '6:00 - 3rd' }]),
+  ] }
+  const v = buildSeasonView(hoops, snap, w)
+  const ra = v.lineup!.rows.find((r) => r.id === a.id)!
+  assert.deepEqual([ra.game!.started, ra.game!.final, ra.game!.status], [true, true, 'Final'])
+  assert.deepEqual(ra.game!.score, a.team === ga.home ? { us: 101, them: 99 } : { us: 99, them: 101 })
+  if (gb !== ga) {
+    const rb = v.lineup!.rows.find((r) => r.id === b.id)!
+    assert.deepEqual([rb.game!.started, rb.game!.final, rb.game!.status, rb.game!.played], [true, false, 'Q3 6:00', 0.625])
+  }
+  // Without the scoreboard, the tip time decides: nothing has tipped at 16:00Z.
+  const plain = buildSeasonView(hoops, snap, world(today)).lineup!.rows.find((r) => r.id === a.id)!
+  assert.deepEqual([plain.game!.started, plain.game!.score], [false, null])
+})
+
+test("tomorrow's lineup as set: a starter whose team is off while a bench player plays is a start lost, said a day ahead", () => {
+  const today = '2026-11-18', tomorrow = '2026-11-19'
+  const { snap } = snapshotFor(hoops, today)
+  const plays = new Set(schedule.filter((g) => g.date === tomorrow).flatMap((g) => [g.home, g.away]))
+  const day = snap.mineToday!.players
+  const idleStarter = day.find((y) => y.slot !== 'BN' && !plays.has(y.team!))
+  const benchPlaying = day.find((y) => y.slot === 'BN' && plays.has(y.team!))
+  assert.ok(idleStarter && benchPlaying, 'the fixture has both tomorrow')
+  snap.mineTomorrow = { ...snap.mineToday!, date: tomorrow }
+  const v = buildSeasonView(hoops, snap, world(today))
+  assert.equal(v.tomorrow!.date, tomorrow)
+  const byId = (y: { yahooId: string }) => players.find((p) => p.yahoo?.yahooId === y.yahooId)!.id
+  for (const m of v.tomorrow!.moves) assert.ok(plays.has(players.find((p) => p.id === m.start)!.team!), 'only a player who plays tomorrow is started')
+  assert.ok(v.tomorrow!.lostStarts > 0)
+  const idle = new Set(day.filter((y) => y.slot !== 'BN' && y.slot !== 'IL' && !plays.has(y.team!)).map(byId))
+  assert.ok(v.tomorrow!.moves.some((m) => m.bench && idle.has(m.bench) && /no game tomorrow/.test(m.why)), 'a starter who is off tomorrow comes out, and says why')
+  // Nothing to do tonight: the home tile says to set tomorrow's.
+  const quiet = { ...v, lineup: { ...v.lineup!, moves: [] } }
+  assert.equal(seasonTile(quiet, world(today).now).action, "Set tomorrow's lineup")
+  // Read for another day (yesterday's read of "tomorrow"): not used.
+  snap.mineTomorrow = { ...snap.mineToday!, date: today }
+  assert.equal(buildSeasonView(hoops, snap, world(today)).tomorrow, null)
+})

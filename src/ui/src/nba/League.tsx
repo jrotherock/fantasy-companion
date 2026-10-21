@@ -328,6 +328,7 @@ function Today({ v }: { v: SeasonView }) {
           </ul>
         )}
       </div>
+      <Tomorrow v={v} />
       {gamesToday
         ? <>
             <RosterGroup title="Playing tonight" rows={tonight} points={v.league.points} total />
@@ -337,6 +338,32 @@ function Today({ v }: { v: SeasonView }) {
       {hurt.length > 0 && <RosterGroup title="Out or on IL" rows={hurt} preseason={!!v.startsOn} points={v.league.points} />}
       <p className="nl-note">Yahoo locks each player at his game's tip. Once his game starts, each cell is what he has done, read from Yahoo about every ten minutes, shaded green where he is ahead of his projection and red where he is behind, deeper the further (part way through a game, against the share of it played so far). Before then, the italic numbers are his projection for tonight or his next game. "Games" is how many games his team plays in the matchup week from today on.</p>
     </>
+  )
+}
+
+/**
+ * Tomorrow's lineup as set, a day ahead: Yahoo keeps a lineup for each day, and one left as today's can start players
+ * whose teams do not play while bench players who do sit (2026-10-20: Harden, Murray and Allen started a Wednesday
+ * their teams were off, Wilson, Powell and Turner on the bench). Shown whenever tomorrow's needs a change; a quiet
+ * "right" only once tonight has nothing left to set.
+ */
+function Tomorrow({ v }: { v: SeasonView }) {
+  const t = v.tomorrow
+  if (!t) return null
+  const name = (id: string | null) => (id ? v.players[id]?.name ?? id : '')
+  const tonightLeft = (v.lineup?.rows ?? []).some((r) => r.game && !r.game.started)
+  if (!t.moves.length) return tonightLeft ? null : <div className="nl-act ok nl-tomorrow"><div className="nl-acth">Tomorrow's lineup is right <span className="nl-dim">· {dateWord(t.date)}, {t.playing} of yours play</span></div></div>
+  const lost = t.lostStarts
+  return (
+    <div className="nl-act fix nl-tomorrow">
+      <div className="nl-acth">Tomorrow, {dateWord(t.date)}: {t.moves.length} change{t.moves.length === 1 ? '' : 's'} to the lineup as set{lost ? <span className="nl-cost"> · {lost} start{lost === 1 ? '' : 's'} lost otherwise</span> : null}</div>
+      <ul className="nl-moves">
+        {t.moves.map((m) => (
+          <li key={m.start}><b>Start {name(m.start)}</b>{m.bench && <> for <b>{name(m.bench)}</b></>}<span className="nl-why">{m.why}{m.by ? ` · his game tips ${time(m.by)}` : ''}</span></li>
+        ))}
+      </ul>
+      <div className="nl-acts nl-dim">Yahoo keeps a lineup for each day: set tomorrow's in Yahoo (pick the date) any time before each tip.</div>
+    </div>
   )
 }
 
@@ -401,7 +428,9 @@ function paceOf(r: TodayRow, now: number): Box | null {
   return scaleBox(r.tonight, playedShare(r, now))
 }
 /** The share of his game played so far: all of it once final; otherwise time since tip over a game's length. */
-const playedShare = (r: TodayRow, now: number) => (stateOf(r) === 'final' ? 1 : Math.max(0.1, Math.min(1, (now - (r.game?.tip ? Date.parse(r.game.tip) : now)) / GAME_MS)))
+const playedShare = (r: TodayRow, now: number) => (stateOf(r) === 'final' ? 1
+  : r.game?.played != null ? Math.max(0.05, r.game.played)
+  : Math.max(0.1, Math.min(1, (now - (r.game?.tip ? Date.parse(r.game.tip) : now)) / GAME_MS)))
 /** Early in a game a steal or two swings the pace a long way, so the shade deepens as the game goes on. */
 const sure = (r: TodayRow, now: number) => 0.35 + 0.65 * playedShare(r, now)
 const ACTIVE_SLOT = (slot: string | null) => !!slot && !['BN', 'IL', 'IL+'].includes(slot)
@@ -452,7 +481,7 @@ function RosterGroup({ title, rows, preseason, points, total }: { title: string;
                   <td className="l nl-slotc">{r.slot ?? '—'}</td>
                   <td className="l nl-playerc">{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>{r.status !== 'healthy' && <> <InjuryTag r={r} /></>}<div className="nl-line-m"><RowLine r={r} /></div></td>
                   <td className="l nl-gamec">{r.game
-                    ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · {st === 'final' ? <i className="nl-final">final</i> : st === 'live' ? <b className="nl-live">live</b> : <span className="nl-dim">{time(r.game.tip)} · proj</span>}</>
+                    ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · <GameState r={r} /></>
                     : r.next ? <span className="nl-dim">{dateWord(r.next.date)} {r.next.home ? 'v' : '@'} {r.next.vs} · proj</span> : '—'}</td>
                   {points && (
                     <td className={`nl-catc nl-fpc${real ? '' : ' nl-projv'}`} style={real && pace ? shade(fpHeat(fpOf(real, points), fpOf(pace, points)) * sure(r, now)) : undefined}>
@@ -481,6 +510,20 @@ function RosterGroup({ title, rows, preseason, points, total }: { title: string;
       </div>
     </>
   )
+}
+
+/**
+ * Where his game stands, as Yahoo's matchup page has it: "Final (W) 106–100" in italics once over; the period and
+ * clock with the score while on ("Q2 4:12 · 55–48", his team first); the tip time before. Without the scoreboard,
+ * "live" or "final" from the tip time.
+ */
+function GameState({ r }: { r: TodayRow }) {
+  const g = r.game!
+  const st = stateOf(r)
+  const score = g.score ? `${g.score.us}–${g.score.them}` : ''
+  if (st === 'final') return <i className="nl-final">{g.status ?? 'Final'}{g.won != null ? ` (${g.won ? 'W' : 'L'})` : ''}{score ? ` ${score}` : ''}</i>
+  if (st === 'live') return <><b className="nl-live">{g.status ?? 'live'}</b>{score && <span className={g.score!.us > g.score!.them ? 'nl-up' : g.score!.us < g.score!.them ? 'nl-down' : ''}> · {score}</span>}</>
+  return <span className="nl-dim">{time(g.tip)} · proj</span>
 }
 
 /** On a phone, where the category columns do not fit: the line under his name. */

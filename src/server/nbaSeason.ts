@@ -36,6 +36,7 @@ import { easternDate } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
 import { diffStatus, type StatusEvent } from '../nba/news.js'
 import { buildSeasonView, losesStart, pickupAlerts, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
+import { parseEspnScoreboard, type LiveGame } from '../nba/scores.js'
 import { weekOf, type Fixture, type SeasonLeague, type Snapshot, type WeekDays, type World } from '../nba/inseason.js'
 import { daysFrom } from '../nba/week.js'
 import { addDays } from '../nba/adds.js'
@@ -176,6 +177,29 @@ function world(leagueId: string): World {
     never: neverIds(leagueId),
     now,
     today: easternDate(now),
+    scores: scores?.date === easternDate(now) ? scores.games : [],
+  }
+}
+
+// ── Tonight's scores and clocks (ESPN's public scoreboard; scores only) ──
+
+let scores: { date: string; at: number; games: LiveGame[] } | null = null
+
+/** Today's games as they stand: every minute while games are on, every ten otherwise. A local test run reads none. */
+async function refreshScores() {
+  if (process.env.NBA_NOW && !process.env.RAILWAY_ENVIRONMENT) return
+  const today = easternDate(clock())
+  if (scores && scores.date === today && Date.now() - scores.at < (gamesOn() ? MIN : 10 * MIN) - 5000) return
+  try {
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${today.replaceAll('-', '')}`, { headers: { 'User-Agent': 'fantasy-companion' } })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const games = parseEspnScoreboard(await res.json())
+    const changed = JSON.stringify(games) !== JSON.stringify(scores?.date === today ? scores.games : null)
+    scores = { date: today, at: Date.now(), games }
+    if (changed) views.clear()
+  } catch (e) {
+    console.warn('nba scores:', String((e as Error)?.message ?? e))
+    if (scores) scores.at = Date.now()
   }
 }
 
@@ -209,7 +233,7 @@ function gamesOn(now = clock()): boolean {
   return now >= Math.min(...tips) - HOUR && now <= Math.max(...tips) + 3 * HOUR
 }
 
-type Part = 'settings' | 'weeks' | 'rosters' | 'today' | 'scoreboard' | 'standings' | 'waivers' | 'transactions' | 'past' | 'fixtures' | 'weekDays'
+type Part = 'settings' | 'weeks' | 'rosters' | 'today' | 'tomorrow' | 'scoreboard' | 'standings' | 'waivers' | 'transactions' | 'past' | 'fixtures' | 'weekDays'
 
 function every(part: Part, drafted: boolean, live: boolean): number {
   if (!drafted) return part === 'rosters' || part === 'settings' || part === 'weeks' ? 6 * HOUR : Infinity
@@ -223,6 +247,7 @@ function every(part: Part, drafted: boolean, live: boolean): number {
     case 'past': return 12 * HOUR
     case 'fixtures': return 7 * 24 * HOUR
     case 'weekDays': return live ? 10 * MIN : HOUR
+    case 'tomorrow': return HOUR
   }
 }
 
@@ -257,6 +282,12 @@ async function readLeague(l: SeasonLeague & { myTeamId: string | null }, force =
     const mine = s.rosters.find((r) => r.team.mine)?.team ?? s.rosters.find((r) => r.team.id === l.myTeamId)?.team
     if (s.rosters.some((r) => r.players.length) && mine) {
       await run('today', async () => { s.mineToday = parseRosterDay(await yahooApi.call(`team/${mine.key}/roster;date=${today}/players/stats;type=date;date=${today}`, { by: 'nba-season' })) })
+      // Tomorrow's lineup as set, hourly: what to warn about a day ahead.
+      await run('tomorrow', async () => {
+        const d = addDays(today, 1)
+        const day = parseRosterDay(await yahooApi.call(`team/${mine.key}/roster;date=${d}/players/stats;type=date;date=${d}`, { by: 'nba-season' }))
+        s.mineTomorrow = day ? { ...day, date: d } : null
+      })
       await run('scoreboard', async () => { s.scoreboard = parseNbaScoreboard(await yahooApi.call(`league/${key}/scoreboard`, { by: 'nba-season' })) })
       // The week day by day, mine and my opponent's: who sat where and what each line was, so the week screen can show
       // what has counted so far. A finished day is read once after it ends; today's is re-read while games are on (mine
@@ -412,6 +443,23 @@ export function nbaAlerts(now = clock()): Alert[] {
         playerId: m.start,
       })
     }
+    // Tomorrow's lineup as set loses starts: said once tonight has nothing left to set (every game of mine has tipped,
+    // or none tonight). The id is the one tomorrow's own lineup alert would have, so it is not said twice.
+    const tonightLeft = (v.lineup?.rows ?? []).some((r) => r.game && !r.game.started)
+    if (v.tomorrow && !tonightLeft) {
+      for (const m of v.tomorrow.moves.filter(losesStart)) {
+        out.push({
+          id: `nba-lineup:${l.id}:${v.tomorrow.date}:${m.start}`,
+          leagueId: l.id, rule: 'nba-lineup',
+          headline: `${l.label}: tomorrow, start ${name(m.start)}${m.bench ? ` for ${name(m.bench)}` : ''}`,
+          detail: `${m.why}. Set it any time before his tip.`,
+          consequence: close ? 60 : 45,
+          deadline: m.by ? Date.parse(m.by) : null,
+          link: `/nba/league/${l.id}`,
+          playerId: m.start,
+        })
+      }
+    }
     // My players' news that got worse: an injury, a downgrade, a lost role. Worth knowing the day it happens.
     for (const n of v.news) {
       if (n.whose !== 'mine' || n.kind !== 'worse') continue
@@ -484,6 +532,11 @@ async function round() {
 
 export function startNbaSeason() {
   if (timer) return
+  const scoreTick = async () => {
+    await refreshScores()
+    setTimeout(scoreTick, gamesOn() ? MIN : 10 * MIN)
+  }
+  setTimeout(scoreTick, 5_000)
   const tick = async () => {
     await round()
     timer = setTimeout(tick, gamesOn() ? 5 * MIN : 15 * MIN)

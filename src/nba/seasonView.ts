@@ -8,7 +8,7 @@ import type { Cat } from './value.js'
 import { CATS } from './value.js'
 import { startingSeats } from './week.js'
 import { buildWeek, checkLineup, Context, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
-import { addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type PairMove, type Pickup } from './adds.js'
+import { addDays, addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type PairMove, type Pickup } from './adds.js'
 import { leagueNews, type NewsItem, type StatusEvent } from './news.js'
 import { allPlay, playoffPlan, power, tradeIdeas, type AllPlay, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
 import type { Alert } from '../server/alerts.js'
@@ -22,6 +22,8 @@ export interface SeasonView {
   phase: 'before-draft' | 'season'
   myTeam: { id: string; name: string } | null
   lineup: LineupCheck | null
+  /** Tomorrow's lineup as set, checked against tomorrow's games: the starts it would lose, a day ahead. */
+  tomorrow: LineupCheck | null
   week: WeekView | null
   budget: Budget | null
   pickups: Pickup[]
@@ -61,7 +63,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   const base: SeasonView = {
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
-    lineup: null, week: null, budget: null, pickups: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
+    lineup: null, tomorrow: null, week: null, budget: null, pickups: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
     standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null,
   }
   if (!drafted || !me) return base
@@ -75,6 +77,10 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     ? CATS.filter((c) => (mine.edges![c] ?? 0.5) < PUNT_EDGE)
     : []
   const lineup = snap.mineToday ? checkLineup(ctx, snap.mineToday, startingSeats(league.roster)) : null
+  // Tomorrow's lineup as set: a starter with no game tomorrow while a bench player has one is a start lost unless
+  // changed (2026-10-20: Harden, Murray and Allen started a Wednesday their teams did not play).
+  const tomorrowDate = addDays(world.today, 1)
+  const tomorrow = snap.mineTomorrow?.date === tomorrowDate ? checkLineup(ctx, snap.mineTomorrow, startingSeats(league.roster), tomorrowDate) : null
   const week = buildWeek(ctx, snap, me.id)
   // Games left in the matchup week for each player on today's lineup: what decides who starts and who streams.
   if (lineup && week) {
@@ -90,7 +96,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   const st = snap.standings.find((s) => s.teamId === me.id || s.mine)
 
   const view: SeasonView = {
-    ...base, lineup, week, budget, pickups: picks, pairs, news, punts, power: pw,
+    ...base, lineup, tomorrow, week, budget, pickups: picks, pairs, news, punts, power: pw,
     allPlay: allPlay(snap.past, me.id, league.scoring),
     playoffs: playoffPlan(ctx, snap, me.id),
     trades: tradeIdeas(ctx, snap, me.id),
@@ -102,6 +108,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   // Names for every id the screen mentions, so the page needs no player file.
   const ids = new Set<string>()
   lineup?.rows.forEach((r) => ids.add(r.id))
+  tomorrow?.rows.forEach((r) => ids.add(r.id))
   picks.forEach((p) => { ids.add(p.add); if (p.drop) ids.add(p.drop) })
   pairs.forEach((p) => p.moves.forEach((m) => { ids.add(m.add); ids.add(m.drop) }))
   news.forEach((n) => ids.add(n.playerId))
@@ -135,7 +142,7 @@ const HOUR = 3600000
 
 /** Whether a lineup move saves a start that would otherwise be lost, rather than swapping in a better one. */
 export const losesStart = (m: { bench: string | null; why: string }) =>
-  !m.bench || /no game today|is (out|injured|suspended|inactive|doubtful)$/.test(m.why)
+  !m.bench || /no game (today|tomorrow)|is (out|injured|suspended|inactive|doubtful)$/.test(m.why)
 
 /**
  * Worst first, as football's tiles are. A lineup move before a tip within three
@@ -165,6 +172,10 @@ export function seasonTile(v: SeasonView, now: number): SeasonTile {
   }
   if (moves.length) {
     return { ...base, urgency: 'soon', action: 'Set lineup', why: moves.length === 1 ? say(moves[0]) : `${moves.length} lineup changes before tonight's games — first: ${say(lost[0] ?? moves[0])}`, score }
+  }
+  const ahead = (v.tomorrow?.moves ?? []).filter(losesStart)
+  if (ahead.length) {
+    return { ...base, urgency: 'soon', action: "Set tomorrow's lineup", why: ahead.length === 1 ? say(ahead[0]) : `${ahead.length} starts lost tomorrow as set — first: ${say(ahead[0])}`, score }
   }
   const streams = v.pickups.filter((p) => p.kind === 'stream')
   const swing = w?.odds ? w.odds.races.filter((r) => r.state === 'swing').map((r) => r.cat) : []

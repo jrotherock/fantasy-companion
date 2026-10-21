@@ -135,12 +135,12 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-today .nl-gamec { white-space: nowrap; }
 .nl-table.nl-today { width: 100%; table-layout: fixed; }
 .nl-today .nl-c-slot { width: 3.5rem; }
-.nl-today .nl-c-player { width: 13rem; }
+.nl-today .nl-c-player { width: 12rem; }
 .nl-today .nl-c-ma { width: 4.4rem; }
 .nl-today .nl-catc { text-align: center; font-family: var(--mono); font-size: 0.78rem; white-space: nowrap; padding-left: 0.3rem; padding-right: 0.3rem; }
 .nl-today th.nl-catc { font-family: inherit; font-size: inherit; text-align: center; }
 .nl-today .nl-thsub { font-size: 0.65rem; color: var(--muted); font-weight: normal; text-transform: none; letter-spacing: 0; }
-.nl-today .nl-c-game { width: 9rem; }
+.nl-today .nl-c-game { width: 11rem; }
 .nl-today .nl-c-wk { width: 4.8rem; }
 .nl-today .nl-c-fp { width: 3.8rem; }
 .nl-today td.nl-fpc { color: var(--ink); font-weight: 600; }
@@ -260,3 +260,6 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-wkp tr.nl-r-benchnote td { font-size: 0.75rem; color: var(--muted); font-style: italic; padding-top: 0; border-bottom: 1px solid var(--line); }
 .nl-wkp tr.nl-total + tr.nl-total td { border-top: 0; }
 .nl-wkp tr.nl-total-other td.l { color: var(--dim); }
+.nl-up { color: var(--green); }
+.nl-down { color: var(--red); }
+.nl-tomorrow { margin-top: 0.6rem; }

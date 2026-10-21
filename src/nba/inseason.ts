@@ -17,6 +17,7 @@ import { daysFrom, projectWeek, seat, startingSeats, type GameOutlook, type Man,
 import { categoryWeek, pointsWeek, type PointsOdds, type SideOutlook, type WeekOdds, type Weights } from './matchup.js'
 import { daysBetween, designation, HEALTHY_PLAY, perGameBox, playChance, withForm, type Designation, type GameLog } from './outlook.js'
 import { typicalWeek, type Member, type Noise } from './strength.js'
+import { teamGame, type LiveGame } from './scores.js'
 
 export interface SeasonLeague {
   id: string
@@ -39,6 +40,8 @@ export interface Snapshot {
   rosters: { team: TeamMeta; players: YPlayer[] }[]
   /** My roster today, with today's seats. */
   mineToday: RosterDay | null
+  /** My roster tomorrow as it is set now (Yahoo keeps a lineup per day), for warning of starts it would lose. */
+  mineTomorrow?: RosterDay | null
   /** The current week's scoreboard, every matchup. */
   scoreboard: NbaMatchup[]
   /** Finished weeks' scoreboards, for all-play. */
@@ -72,6 +75,8 @@ export interface World {
   noise: Noise
   /** Never-list ids: never offered as a pickup or a trade target. */
   never: Set<string>
+  /** Today's games as they stand (score, period, clock), where read. */
+  scores?: LiveGame[]
   now: number
   /** Today's date in US Eastern, the league's calendar. */
   today: string
@@ -320,7 +325,17 @@ export interface LineupRow {
   name: string
   slot: string | null
   positions: string[]
-  game: { vs: string; home: boolean; tip: string | null; started: boolean; /** Tipped long enough ago (2¾ hours) to be over. */ final: boolean } | null
+  game: {
+    vs: string; home: boolean; tip: string | null; started: boolean
+    /** Over: by the live scoreboard where read, else tipped long enough ago (2¾ hours). */
+    final: boolean
+    /** His team's score first, then theirs; where the game stands ("Q2 4:12", "Half", "Final/OT"); won, once over. */
+    score: { us: number; them: number } | null
+    status: string | null
+    won: boolean | null
+    /** The share of the game played, from the period and clock; null without the scoreboard. */
+    played: number | null
+  } | null
   status: Designation
   /** Yahoo's own short code (Q, O, DTD, INJ…), as the football screens show it. */
   code: string | null
@@ -369,8 +384,10 @@ export interface LineupCheck {
  * Players whose games have tipped are locked where they are. Of the rest, the
  * best possible lineup is found and compared with the one set.
  */
-export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): LineupCheck {
-  const { today, now, schedule } = ctx.world
+export function checkLineup(ctx: Context, day: RosterDay, seats: string[], date = ctx.world.today): LineupCheck {
+  const { now, schedule } = ctx.world
+  const today = date
+  const live = date === ctx.world.today ? ctx.world.scores ?? [] : []
   const rows: LineupRow[] = []
   for (const y of day.players) {
     const id = ctx.resolve(y)
@@ -378,8 +395,9 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): Line
     ctx.setStatus(id, y.status)
     const p = ctx.byId.get(id)!
     const g = gameToday(schedule, p.team, today)
-    const started = !!g?.tip && Date.parse(g.tip) <= now
-    const final = !!g?.tip && Date.parse(g.tip) + 2.75 * 3_600_000 <= now
+    const tg = g ? teamGame(live, p.team) : null
+    const started = tg ? tg.state !== 'pre' : !!g?.tip && Date.parse(g.tip) <= now
+    const final = tg ? tg.state === 'post' : !!g?.tip && Date.parse(g.tip) + 2.75 * 3_600_000 <= now
     const next = g ? null : nextGame(schedule, p.team, today)
     rows.push({
       id, name: p.name, slot: y.slot, positions: seatPositions(y.eligible), status: ctx.designation(id),
@@ -389,7 +407,8 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): Line
       tonight: g ? (ctx.outlook(id, today)?.box ?? null) : next ? (ctx.outlook(id, next.date)?.box ?? null) : null,
       live: (y as { box?: Box | null }).box ?? null,
       note: [y.injury, ctx.returnOf(id).text].filter(Boolean).join(' — ') || null,
-      game: g ? { ...g, started, final } : null, play: g ? ctx.play(id, today) : 0,
+      game: g ? { ...g, started, final, score: tg && tg.state !== 'pre' ? { us: tg.us, them: tg.them } : null, status: tg?.status || null, won: tg?.won ?? null, played: tg ? tg.played : null } : null,
+      play: g ? ctx.play(id, today) : 0,
     })
   }
   // Seats already spoken for by players whose game has started.
@@ -417,7 +436,7 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[]): Line
     const out = outs[i] ?? null
     if (!out || !willPlay(out)) lostStarts++
     const why = !out ? 'a seat is open'
-      : !out.game ? `${out.name} has no game today`
+      : !out.game ? `${out.name} has no game ${date === ctx.world.today ? 'today' : 'tomorrow'}`
       : out.play === 0 ? `${out.name} is ${out.status}`
       : `${r.name} is the better start today`
     moves.push({ start: r.id, bench: out?.id ?? null, why, by: r.game?.tip ?? null })
