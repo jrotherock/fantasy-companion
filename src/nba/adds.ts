@@ -65,6 +65,23 @@ export const STREAM_KEEP_MIN = 30
 /** How many of my players are weighed as drops. */
 const DROPS = 5
 
+/** Stream candidates scored for the week: this many, by games in my empty spots times value above the floor. */
+const WEEK_POOL = 30
+/** The floor: the value per game of about the 150th free agent, below which a player adds nothing a stream needs. */
+const WEEK_FLOOR = 150
+
+/**
+ * The free agents worth scoring as this week's streams: games times value per game above a floor, so a third game
+ * always counts for more than a second. Value per game is below zero for nearly every free agent (he is below the
+ * average rostered player), and times games it ranked a man with three games below the same man with two
+ * (2026-10-21: Anfernee Simons, Philadelphia's Thursday and Sunday into Hoops' two emptiest nights, ranked 173rd and
+ * was never scored).
+ */
+export function shortlistForWeek(ids: string[], worth: (id: string) => number, games: (id: string) => number, floor: number, n: number): string[] {
+  const above = (id: string) => Math.max(0.1, worth(id) - floor)
+  return ids.filter((id) => games(id) > 0).sort((a, b) => above(b) * games(b) - above(a) * games(a)).slice(0, n)
+}
+
 /** Season moves checked against what-ifs: the best few, which are the ones a verdict or an alert can name. */
 const CHECKED_SEASON = 6
 
@@ -334,7 +351,15 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
     return !!t && schedulePlays(ctx, d, t)
   }).length
   const forSeason = byWorth.slice(0, SEASON_POOL)
-  const forWeek = [...pool].sort((a, b) => worth(b.id) * weekGames(b.id) - worth(a.id) * weekGames(a.id)).slice(0, 25)
+  // This week's: his games that land in my empty spots (the nights an added player counts without benching anyone),
+  // as many as the week has, with an injured man's games counted only where he is expected to play.
+  const openGames = (id: string) => daysFor(id).filter((d) => {
+    const t = ctx.byId.get(id)?.team
+    return !!t && schedulePlays(ctx, d, t) && (openOn.get(d) ?? 0) > 0 && ctx.play(id, d) > 0.5
+  }).length
+  const floor = worth(byWorth[Math.min(WEEK_FLOOR, byWorth.length - 1)]?.id ?? '') || 0
+  const forWeek = shortlistForWeek(pool.map((p) => p.id), worth, openOn.size ? openGames : weekGames, floor, WEEK_POOL)
+    .map((id) => ctx.byId.get(id)!)
   const cands = [...new Map([...forSeason, ...forWeek].map((p) => [p.id, p])).values()]
 
   // Per category, per game: his z less the dropped player's, in the categories in play; and the week's races that move.

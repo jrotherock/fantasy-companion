@@ -6,7 +6,7 @@ import type { NbaPlayer, Game, YahooWeek } from './types.js'
 import { buildSeasonView, DO, LOOK, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonTile, verdictOf } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
 import { Context, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
-import { addDays, PAIR_MARGIN, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, WHATIFS, whatifFor, type PairMove } from './adds.js'
+import { addDays, PAIR_MARGIN, shortlistForWeek, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, WHATIFS, whatifFor, type PairMove } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
 import { diffStatus } from './news.js'
@@ -309,8 +309,7 @@ function checkPairs(pairs: PairMove[], league: SeasonLeague & { myTeamId: string
 }
 
 /** A league as Yahoo had it on 2026-10-19, from an analysis snapshot: rosters, the schedule, the season about to start. */
-function realLeague(dir: string, base: SeasonLeague & { myTeamId: string }, me: string, playoffStart: number) {
-  const today = '2026-10-19'
+function realLeague(dir: string, base: SeasonLeague & { myTeamId: string }, me: string, playoffStart: number, today = '2026-10-19') {
   const d = JSON.parse(readFileSync(`scripts/nba-season-analysis/${dir}/sched.json`, 'utf8'))
   const byY = new Map(players.filter((p) => p.yahoo).map((p) => [p.yahoo!.yahooId, p]))
   const fixtures: Fixture[] = d.weeks.split('|').map((s: string) => { const [w, a, b, pairs] = s.split(':'); return { week: +w, start: a, end: b, pairs: pairs.split(',').map((x: string) => x.split('-')) } })
@@ -548,4 +547,22 @@ test('the Adds verdict: do this, worth a look, or nothing, by worth and by how s
   assert.equal(at(LOOK.season - 0.01, 10).level, 'none', 'sure but too small: nothing')
   assert.equal(at(DO.season, LOOK.holds - 1).level, 'none', 'big but unsure: nothing')
   assert.match(at(0.05, 4).reasons[0], new RegExp(`${one.name} for ${one.dropName}`), 'the nothing names the best on offer')
+})
+
+test("streams are shortlisted by games in my empty spots above a floor: a third game counts for more, never less", () => {
+  const worth: Record<string, number> = { three: -4, two: -4, better: -1, none: 2 }
+  const games: Record<string, number> = { three: 3, two: 2, better: 2, none: 0 }
+  const order = shortlistForWeek(Object.keys(worth), (id) => worth[id], (id) => games[id], -6, 10)
+  assert.ok(order.indexOf('three') < order.indexOf('two'), 'the same man with a third game ranks higher (value times games ranked him lower)')
+  assert.equal(order.indexOf('better'), 0, '(−1 − −6) × 2 = 10 beats (−4 − −6) × 3 = 6')
+  assert.ok(!order.includes('none'), 'no games in an empty spot: not a stream')
+})
+
+test("Hoops on 2026-10-21: Philadelphia's Thursday and Sunday, Hoops' emptiest nights, put Simons on the stream list", () => {
+  const { league, snap, w } = realLeague('2026-10-21-hoops', { ...hoops, id: 'nba-hoops' }, '4', 18, '2026-10-21')
+  const v = buildSeasonView(league, snap, w)
+  const simons = players.find((p) => p.name === 'Anfernee Simons')!
+  const s = v.pickups.find((p) => p.add === simons.id)
+  assert.ok(s, `Simons offered; offered: ${v.pickups.map((p) => p.name).join(', ')}`)
+  assert.deepEqual(s!.playDays.filter((d) => d.open).map((d) => d.date), ['2026-10-22', '2026-10-25'], 'his Thursday and Sunday go into empty spots')
 })
