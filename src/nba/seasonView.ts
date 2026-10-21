@@ -109,6 +109,8 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     startsOn: (() => { const first = [...snap.weeks].map((w) => w[1]).sort()[0]; return first && first > world.today ? first : null })(),
   }
   view.verdict = verdictOf(view)
+  // The week's plan says what the verdict says: a pair is both of the plan's first steps, at the verdict's time.
+  if (view.verdict?.kind === 'pair' && view.addPlan && view.pairs[0]) view.addPlan = planWithPair(view.addPlan, view.verdict, view.pairs[0])
   // Names for every id the screen mentions, so the page needs no player file.
   const ids = new Set<string>()
   lineup?.rows.forEach((r) => ids.add(r.id))
@@ -340,4 +342,23 @@ export function verdictOf(v: SeasonView): Verdict | null {
   if (st && stGain >= LOOK.stream && holds(st.confidence) >= LOOK.holds) return stream('look')
   const best = up ? `the best, ${up.name} for ${up.dropName}, is ${winsWord(upValue)}${up.confidence ? ` and holds in ${up.confidence.holds} of ${up.confidence.of}` : ''}` : 'nobody on the wire beats your roster'
   return { level: 'none', kind: null, when: null, season: null, week: null, confidence: null, moves: [], headline: 'Nothing worth an add', reasons: [best] }
+}
+
+/**
+ * The week's plan with the verdict's pair in front: both moves at the pair's time, and nothing else that adds or
+ * drops the same players (2026-10-21: the public plan said to make each move now, since neither alone cost the week,
+ * while the verdict said the Monday after, since together they did).
+ */
+export function planWithPair(plan: AddPlan, v: Verdict, pair: PairMove): AddPlan {
+  const names = new Set(pair.moves.flatMap((m) => [m.name, m.dropName]))
+  const rest = plan.steps.filter((st) => !names.has(st.add) && !(st.drop && names.has(st.drop)))
+  const steps = pair.moves.map((m, i) => {
+    const other = pair.moves[1 - i]
+    return {
+      when: v.when ?? 'now', add: m.name, drop: m.dropName,
+      why: `With ${other.name} for ${other.dropName}: ${winsWord(pair.seasonWins)} for both, ${winsWord(m.seasonWins)} for this one alone`,
+      week: i === 0 && v.week ? v.week : null, season: m.seasonWins,
+    }
+  })
+  return { ...plan, steps: [...steps, ...rest] }
 }

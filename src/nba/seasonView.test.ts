@@ -566,3 +566,14 @@ test("Hoops on 2026-10-21: Philadelphia's Thursday and Sunday, Hoops' emptiest n
   assert.ok(s, `Simons offered; offered: ${v.pickups.map((p) => p.name).join(', ')}`)
   assert.deepEqual(s!.playDays.filter((d) => d.open).map((d) => d.date), ['2026-10-22', '2026-10-25'], 'his Thursday and Sunday go into empty spots')
 })
+
+test('when the verdict is a pair, the week plan leads with both moves at the verdict\'s time and repeats neither', () => {
+  const { league, snap, w } = realLeague('2026-10-19-public', publicLeague, '2', 20)
+  const v = buildSeasonView(league, snap, w)
+  assert.equal(v.verdict!.kind, 'pair', 'the public league of 2026-10-19 calls for two moves')
+  const pair = v.pairs[0]
+  const steps = v.addPlan!.steps
+  assert.deepEqual(steps.slice(0, 2).map((st) => [st.add, st.drop, st.when]), pair.moves.map((m) => [m.name, m.dropName, v.verdict!.when]))
+  const names = new Set(pair.moves.flatMap((m) => [m.name, m.dropName]))
+  assert.ok(steps.slice(2).every((st) => !names.has(st.add) && !(st.drop && names.has(st.drop))), 'nothing else adds or drops the same players')
+})
