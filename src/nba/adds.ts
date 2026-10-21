@@ -15,7 +15,7 @@
  */
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
-import { rosterIds, sideOutlook, weekOf, type Context, type Snapshot } from './inseason.js'
+import { rosterIds, sideOutlook, weekOf, type Context, type Snapshot, type Whatif } from './inseason.js'
 import { CATS, type Cat } from './value.js'
 import { addBox, emptyBox } from './yahooSeason.js'
 import { designation } from './outlook.js'
@@ -64,6 +64,9 @@ export const STREAM_KEEP_MIN = 30
 
 /** How many of my players are weighed as drops. */
 const DROPS = 5
+
+/** Season moves checked against what-ifs: the best few, which are the ones a verdict or an alert can name. */
+const CHECKED_SEASON = 6
 
 /** Candidates for a season move: the best this many free agents by per-game value. */
 const SEASON_POOL = 60
@@ -128,6 +131,8 @@ export interface Pickup {
   weekCats: { cat: Cat; before: number; after: number }[]
   /** Other players he could replace, best first: the drop is the user's call. */
   alternatives: { drop: string; dropName: string; weekGain: number; winAfter: number; seasonGain: number; seasonWins: number | null }[]
+  /** How well the move holds up when the players in it turn out other than projected; null where not checked. */
+  confidence: Confidence | null
   /** A stash: an injured player Yahoo will not let onto IL straight from the wire, so the steps. */
   steps: string | null
 }
@@ -181,6 +186,41 @@ export interface PairMove {
   /** This week's chance of winning, before and after both. */
   winBefore: number
   winAfter: number
+  confidence: Confidence | null
+}
+
+/**
+ * How a move holds up against what-ifs: in how many of them it still helps (season moves: matchups won over the
+ * season; streams: this week's chance of winning), and the range of what it adds, low to high (the second-worst and
+ * second-best of ten). A projection is a best guess: a move worth +0.12 wins can be worth nothing if its minutes
+ * come in low (2026-10-21: the screen showed every move as an exact number).
+ */
+export interface Confidence { holds: number; of: number; low: number; high: number }
+
+/** What-ifs per move. */
+export const WHATIFS = 10
+/** The spread of each what-if, one standard deviation: minutes, games played, form in a category. */
+const SPREAD = { minutes: 0.15, games: 0.1, form: 0.08 }
+
+/** A small seeded generator, so the same move gets the same what-ifs on every reading of the screen. */
+function seeded(key: string): () => number {
+  let h = 2166136261
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619)
+  return () => {
+    h = (h + 0x6d2b79f5) | 0
+    let t = Math.imul(h ^ (h >>> 15), 1 | h)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+const normal = (r: () => number) => (r() + r() + r() - 1.5) / 0.5
+const within = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x))
+
+/** One player's what-if number i: his minutes, games and form drawn around his projection. */
+export function whatifFor(id: string, i: number): Whatif {
+  const r = seeded(`${id}#${i}`)
+  const form = Object.fromEntries(CATS.map((c) => [c, within(1 + SPREAD.form * normal(r), 0.75, 1.25)])) as Record<Cat, number>
+  return { minutes: within(1 + SPREAD.minutes * normal(r), 0.6, 1.4), games: within(1 + SPREAD.games * normal(r), 0.6, 1.15), form }
 }
 
 /** The singles a pair is built from: the best this many swaps by season wins. */
@@ -244,7 +284,8 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
   const winsCache = new Map<string, number>()
   const seasonWins = (ids: { id: string; eligible: string[] }[]): number => {
     const key = ids.map((x) => x.id).sort().join(',')
-    const hit = winsCache.get(key); if (hit != null) return hit
+    // Under a what-if the same roster scores differently, so nothing is kept from one.
+    const hit = ctx.whatif ? null : winsCache.get(key); if (hit != null) return hit
     let v = 0
     left.forEach((w, i) => {
       const o = oppSides[i]
@@ -253,7 +294,8 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
       if (ctx.league.scoring === 'categories') { const x = categoryWeek(a, o); v += x.win + x.tie / 2 }
       else v += pointsWeek(a, o, ctx.league.points ?? {}, { mine: null, theirs: null }).win
     })
-    winsCache.set(key, v); return v
+    if (!ctx.whatif) winsCache.set(key, v)
+    return v
   }
   const judged = left.some((w) => w.opp)
   const baseWins = judged ? seasonWins(myIds) : 0
@@ -324,7 +366,7 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
           weekGain: after.gain - base.gain, winBefore: base.win, winAfter: after.win, seasonGain: season(c.id),
           seasonWins: winsGain, seasonWeeks: left.length, scheduled,
           startsThisWeek: weekGames(c.id), waiver: waiverIds.has(c.id),
-          why: `Into your open roster spot (${openSpots} free): nobody dropped`,
+          why: `Into your open roster spot (${openSpots} free): nobody dropped`, confidence: null,
         })
       }
     }
@@ -361,7 +403,7 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
           ? `${waiverIds.has(c.id) ? 'Claim' : 'Add'} him dropping ${ctx.byId.get(d.id)?.name}, move him to IL once he is yours (Yahoo will not add straight to IL), then use the freed spot for another add.${back ? ` Back about ${back}.` : ''}`
           : null,
         weekGain, winBefore: base.win, winAfter: after.win, seasonGain, startsThisWeek: starts,
-        seasonWins: winsGain, seasonWeeks: left.length, scheduled,
+        seasonWins: winsGain, seasonWeeks: left.length, scheduled, confidence: null,
         waiver: waiverIds.has(c.id),
         // The reason reads beside "Drop <name>" on the card and in the plan, so it does not name him again.
         why: stash
@@ -415,12 +457,35 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
       const name = (id: string) => ctx.byId.get(id)?.name ?? id
       pairs.push({
         moves: [a, b].map((t) => ({ add: t.add.id, name: name(t.add.id), drop: t.drop.id, dropName: name(t.drop.id), waiver: waiverIds.has(t.add.id), seasonWins: t.wins })),
-        seasonWins: wins, winBefore: base.win, winAfter: score(roster).win,
+        seasonWins: wins, winBefore: base.win, winAfter: score(roster).win, confidence: null,
       })
     }
     pairs.sort((x, y) => y.seasonWins - x.seasonWins)
   }
-  return { pickups: shown, pairs: pairs.slice(0, 3) }
+  // How each move holds up: the players in it (added and dropped) under each what-if, the rest as projected.
+  const check = (ids: string[], before: { id: string; eligible: string[] }[], after: { id: string; eligible: string[] }[], measure: 'season' | 'week'): Confidence => {
+    const gains: number[] = []
+    for (let i = 0; i < WHATIFS; i++) {
+      ctx.whatif = new Map(ids.map((id) => [id, whatifFor(id, i)]))
+      gains.push(measure === 'season' ? seasonWins(after) - seasonWins(before) : score(after).win - score(before).win)
+    }
+    ctx.whatif = null
+    const sorted = [...gains].sort((a, b) => a - b)
+    return { holds: gains.filter((g) => g > 0).length, of: WHATIFS, low: sorted[1], high: sorted[sorted.length - 2] }
+  }
+  const asAdd = (p: { add: string; positions: string[] }) => ({ id: p.add, eligible: p.positions })
+  let checked = 0
+  for (const p of shown) {
+    const after = [...myIds.filter((x) => x.id !== p.drop), asAdd(p)]
+    if (p.kind === 'stream') p.confidence = check([p.add, ...(p.drop ? [p.drop] : [])], myIds, after, 'week')
+    else if (judged && checked++ < CHECKED_SEASON) p.confidence = check([p.add, ...(p.drop ? [p.drop] : [])], myIds, after, 'season')
+  }
+  const top = pairs.slice(0, 3)
+  for (const pr of top) {
+    const after = [...myIds.filter((x) => !pr.moves.some((m) => m.drop === x.id)), ...pr.moves.map((m) => ({ id: m.add, eligible: ctx.byId.get(m.add)?.positions ?? [] }))]
+    pr.confidence = check(pr.moves.flatMap((m) => [m.add, m.drop]), myIds, after, 'season')
+  }
+  return { pickups: shown, pairs: top }
 }
 
 function scoreWithAddFrom(ctx: Context, mySide: Parameters<typeof sideOutlook>[1], rest: { id: string; eligible: string[] }[],

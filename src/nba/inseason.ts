@@ -104,6 +104,21 @@ export const isStarting = (slot: string | null) => !!slot && !RESERVE.has(slot)
  * Everything about players that every part of the screen needs: who a Yahoo
  * player is, his form, whether he plays, what a game of his is worth.
  */
+/**
+ * How a player might turn out against his projection: his minutes (every line scales with them), his share of games
+ * played, and his form in each category (a shooter's percentage moves his makes, not his attempts).
+ */
+export interface Whatif { minutes: number; games: number; form: Record<Cat, number> }
+
+export function applyWhatif(o: GameOutlook, w: Whatif): GameOutlook {
+  const b = { ...o.box }
+  for (const k of Object.keys(b) as (keyof Box)[]) b[k] *= w.minutes
+  b.fgm *= w.form.fg; b.ftm *= w.form.ft
+  b.fgm = Math.min(b.fgm, b.fga); b.ftm = Math.min(b.ftm, b.fta)
+  for (const c of ['tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to'] as const) b[c] *= w.form[c]
+  return { box: b, play: Math.min(HEALTHY_PLAY, o.play * w.games) }
+}
+
 /** A rotation player, for sharing an absent teammate's minutes; and the most anyone is given. */
 const ROTATION_MIN = 12
 const MAX_MIN = 36
@@ -186,6 +201,18 @@ export class Context {
   }
 
   outlook(id: string, date: string): GameOutlook | null {
+    const o = this.baseOutlook(id, date)
+    const w = this.whatif?.get(id)
+    return o && w ? applyWhatif(o, w) : o
+  }
+
+  /**
+   * A what-if for a few players, while a move is checked against it: their minutes, games and form as they might
+   * turn out rather than as projected. Null the rest of the time.
+   */
+  whatif: Map<string, Whatif> | null = null
+
+  private baseOutlook(id: string, date: string): GameOutlook | null {
     const p = this.byId.get(id)
     if (!p) return null
     const sleeper = this.world.dayProj.get(`${id}|${date}`)

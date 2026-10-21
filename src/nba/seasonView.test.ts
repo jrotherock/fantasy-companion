@@ -3,10 +3,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import type { YPlayer } from '../server/yahooParse.js'
 import type { NbaPlayer, Game, YahooWeek } from './types.js'
-import { buildSeasonView, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonTile } from './seasonView.js'
+import { buildSeasonView, DO, LOOK, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonTile, verdictOf } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
-import { Context, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type World } from './inseason.js'
-import { addDays, PAIR_MARGIN, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, type PairMove } from './adds.js'
+import { Context, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
+import { addDays, PAIR_MARGIN, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, WHATIFS, whatifFor, type PairMove } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
 import { diffStatus } from './news.js'
@@ -202,8 +202,9 @@ function fixturesFor(league: SeasonLeague): Fixture[] {
 }
 
 /** The same measure worked out by hand: each week left from tomorrow, against the opponent the schedule names. */
-function winsByHand(league: SeasonLeague & { myTeamId: string }, snap: Snapshot, w: World, ids: { id: string; eligible: string[] }[]): number {
+function winsByHand(league: SeasonLeague & { myTeamId: string }, snap: Snapshot, w: World, ids: { id: string; eligible: string[] }[], whatif: Map<string, Whatif> | null = null): number {
   const ctx = new Context(league, w)
+  ctx.whatif = whatif
   for (const r of snap.rosters) for (const y of r.players) { const id = ctx.resolve(y); if (id) ctx.setStatus(id, y.status) }
   const seats = startingSeats(league.roster)
   const tomorrow = addDays(w.today, 1)
@@ -512,4 +513,39 @@ test("tomorrow's lineup as set: a starter whose team is off while a bench player
   // Read for another day (yesterday's read of "tomorrow"): not used.
   snap.mineTomorrow = { ...snap.mineToday!, date: today }
   assert.equal(buildSeasonView(hoops, snap, world(today)).tomorrow, null)
+})
+
+test("a move's confidence: the players in it re-scored under ten what-ifs, the rest as projected, worked out by hand", () => {
+  const { league, snap, w, myIds } = realLeague('2026-10-19-public', publicLeague, '2', 20)
+  const v = buildSeasonView(league, snap, w)
+  const p = v.pickups.find((x) => x.kind !== 'stream' && x.drop && x.confidence)!
+  assert.ok(p, 'a checked season move')
+  const after = [...myIds.filter((x) => x.id !== p.drop), { id: p.add, eligible: [...players.find((x) => x.id === p.add)!.positions, 'Util'] }]
+  const gains = Array.from({ length: WHATIFS }, (_, i) => {
+    const wi = new Map([[p.add, whatifFor(p.add, i)], [p.drop!, whatifFor(p.drop!, i)]])
+    return winsByHand(league, snap, w, after, wi) - winsByHand(league, snap, w, myIds, wi)
+  })
+  const sorted = [...gains].sort((a, b) => a - b)
+  assert.equal(p.confidence!.holds, gains.filter((g) => g > 0).length)
+  assert.ok(Math.abs(p.confidence!.low - sorted[1]) < 1e-6 && Math.abs(p.confidence!.high - sorted[WHATIFS - 2]) < 1e-6, `${p.confidence!.low} ${p.confidence!.high} vs ${sorted[1]} ${sorted[WHATIFS - 2]}`)
+  assert.ok(p.confidence!.high > p.confidence!.low, 'the what-ifs move it')
+  // The same move gets the same what-ifs every time.
+  assert.deepEqual(buildSeasonView(league, snap, w).pickups.find((x) => x.add === p.add && x.drop === p.drop)!.confidence, p.confidence)
+})
+
+test('the Adds verdict: do this, worth a look, or nothing, by worth and by how sure; the home tile says the same', () => {
+  const { league, snap, w } = realLeague('2026-10-19-public', publicLeague, '2', 20)
+  const v = buildSeasonView(league, snap, w)
+  assert.ok(v.verdict && v.verdict.level !== 'none', 'the public league has a move')
+  const t = seasonTile({ ...v, lineup: v.lineup ? { ...v.lineup, moves: [] } : null, tomorrow: null }, w.now)
+  assert.ok(t.why.startsWith(v.verdict!.headline), `${t.why} / ${v.verdict!.headline}`)
+  // Made by hand: one season move, then its worth and its confidence moved across the bars.
+  const one = v.pickups.find((x) => x.kind !== 'stream' && x.drop)!
+  const at = (season: number, holds: number) => verdictOf({ ...v, pairs: [], addPlan: null, pickups: [{ ...one, seasonWins: season, confidence: { holds, of: 10, low: 0, high: season } }] })!
+  assert.equal(at(DO.season, DO.holds).level, 'do')
+  assert.equal(at(DO.season, DO.holds - 1).level, 'look', 'worth it but not sure enough: a look')
+  assert.equal(at(LOOK.season, LOOK.holds).level, 'look')
+  assert.equal(at(LOOK.season - 0.01, 10).level, 'none', 'sure but too small: nothing')
+  assert.equal(at(DO.season, LOOK.holds - 1).level, 'none', 'big but unsure: nothing')
+  assert.match(at(0.05, 4).reasons[0], new RegExp(`${one.name} for ${one.dropName}`), 'the nothing names the best on offer')
 })

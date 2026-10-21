@@ -267,3 +267,17 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-help { color: var(--green); }
 .nl-hurt { color: color-mix(in srgb, var(--red) 70%, var(--ink)); }
 .nl-flat { color: var(--amber); }
+
+/* The Adds verdict: one card, its level in the left rule and the label. */
+.nl-verdictcard { border: 1px solid var(--line); border-left: 4px solid var(--muted); border-radius: 6px; background: var(--surface); padding: 0.75rem 0.9rem; margin: 0.6rem 0 0.8rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.nl-verdictcard.do { border-left-color: var(--green); }
+.nl-verdictcard.look { border-left-color: var(--amber); }
+.nl-vk { font-family: var(--mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.nl-verdictcard.do .nl-vk { color: var(--green); }
+.nl-verdictcard.look .nl-vk { color: var(--amber); }
+.nl-vh { font-family: var(--cond); font-weight: 600; font-size: 1.45rem; line-height: 1.15; }
+.nl-vr { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.9rem; }
+.nl-vwhy { margin: 0; padding-left: 1.1rem; color: var(--dim); font-size: 0.85rem; }
+.nl-holds { font-family: var(--mono); font-size: 0.78rem; }
+.nl-alloptions > summary { cursor: pointer; font-family: var(--mono); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); padding: 0.4rem 0; }
+.nl-alloptions > summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }

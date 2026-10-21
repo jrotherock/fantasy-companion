@@ -851,6 +851,9 @@ function Adds({ v }: { v: SeasonView }) {
           <div className="nl-dim">{b.note}</div>
         </div>
       )}
+      <VerdictCard v={v} />
+      <details className="nl-alloptions">
+        <summary>All options <span className="nl-dim">· the week's plan, every move scored, how sure each is</span></summary>
       {v.addPlan && v.addPlan.steps.length > 0 && (
         <Section title="This week's plan" hint={`${v.addPlan.left} add${v.addPlan.left === 1 ? '' : 's'} left${v.addPlan.reserve ? `, ${v.addPlan.reserve} kept for an injury` : ''}`}>
           <ol className="nl-plan">
@@ -869,7 +872,7 @@ function Adds({ v }: { v: SeasonView }) {
         <Section title="Two moves together" hint="worth more than any one move by itself">
           {v.pairs.map((pr, i) => (
             <div key={i} className="nl-pick">
-              <div className="nl-pickh"><span className="nl-kind upgrade">pair</span> <b>Rest of season: <SeasonWins w={pr.seasonWins} /></b> · <WeekWin before={pr.winBefore} after={pr.winAfter} prefix="this week: win " /></div>
+              <div className="nl-pickh"><span className="nl-kind upgrade">pair</span> <b>Rest of season: <SeasonWins w={pr.seasonWins} /></b> · <WeekWin before={pr.winBefore} after={pr.winAfter} prefix="this week: win " />{pr.confidence && <> · <Holds c={pr.confidence} /></>}</div>
               {pr.moves.map((m) => (
                 <div key={m.add} className="nl-pickd">
                   <b>Add {m.name}</b>, drop {m.dropName} <span className="nl-dim">(<span className={effect(m.seasonWins, 0.03)}>{wins(m.seasonWins)}</span> alone{m.waiver ? ' · waivers' : ''})</span>
@@ -889,8 +892,40 @@ function Adds({ v }: { v: SeasonView }) {
         {streams.map((p, i) => <PickupRow key={p.add} p={p} cats={cats} over={b ? i >= b.forStreams : false} />)}
       </Section>
       {v.punts.length > 0 && <p className="nl-note">Your roster is not competing in {v.punts.map((c) => LABEL[c]).join(', ')}, so season value leaves {v.punts.length === 1 ? 'it' : 'them'} out. A stream counts every category: any category won this week counts.</p>}
+      <p className="nl-note">Each move is re-scored under ten what-ifs: the players in it with their minutes up or down by about 15%, games played by about 10%, and form in each category by about 8%. "Holds" is how many of the ten it still helps in; the range is what it adds from a low case to a high one.</p>
+      </details>
     </>
   )
+}
+
+/**
+ * The one thing the Adds screen says first, per league: do this, worth a look, or nothing worth an add, with the move,
+ * when, why, and how sure (2026-10-21: every move was listed at once, small and large, sure and unsure).
+ */
+function VerdictCard({ v }: { v: SeasonView }) {
+  const d = v.verdict
+  if (!d) return null
+  const word = d.level === 'do' ? 'Do this' : d.level === 'look' ? 'Worth a look' : 'Nothing worth an add'
+  return (
+    <div className={`nl-verdictcard ${d.level}`}>
+      <div className="nl-vk">{word}{d.when && d.level !== 'none' ? <span className="nl-dim"> · {d.when}</span> : null}</div>
+      {d.level !== 'none' && <div className="nl-vh">{d.headline}</div>}
+      <div className="nl-vr">
+        {d.season != null && <span>Rest of season <SeasonWins w={d.season} /></span>}
+        {d.week && <WeekWin before={d.week.before} after={d.week.after} prefix="This week " />}
+        {d.confidence && <Holds c={d.confidence} week={d.kind === 'stream'} />}
+      </div>
+      {d.reasons.length > 0 && <ul className="nl-vwhy">{d.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+    </div>
+  )
+}
+
+/** How sure a move is: holds in N of ten what-ifs, and its range low to high. Green 8+, yellow 6–7, red under 6. */
+function Holds({ c, week }: { c: { holds: number; of: number; low: number; high: number }; week?: boolean }) {
+  const tone = c.holds >= 8 ? 'nl-help' : c.holds >= 6 ? 'nl-flat' : 'nl-hurt'
+  // A season move in matchups won; a stream in points of this week's chance of winning.
+  const r = (x: number) => (x >= 0 ? '+' : '−') + (week ? `${Math.round(Math.abs(x) * 100)} pts` : Math.abs(x).toFixed(2))
+  return <span className={`nl-holds ${tone}`} title={`Holds (still helps) in ${c.holds} of ${c.of} what-ifs; from ${r(c.low)} in a low case to ${r(c.high)} in a high one`}>holds {c.holds}/{c.of} <span className="nl-dim">({r(c.low)} to {r(c.high)})</span></span>
 }
 
 /**
@@ -926,6 +961,7 @@ function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: 
         {p.kind !== 'stream' && <SeasonGain p={p} />}
         {p.kind !== 'stream' && ' · '}
         <WeekWin before={p.winBefore} after={p.winAfter} extra={`(${wk(p.weekGain)})`} />
+        {p.confidence && <> · <Holds c={p.confidence} week={p.kind === 'stream'} /></>}
         {over && <span> · beyond your pace</span>}
       </div>
       {cats && p.seasonCats.length > 0 && p.kind !== 'stream' && (

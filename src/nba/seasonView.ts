@@ -42,6 +42,8 @@ export interface SeasonView {
   startsOn: string | null
   /** The week's adds as a plan, and the season's category plan (categories leagues). */
   addPlan: AddPlan | null
+  /** The one thing the Adds screen says first: do this, worth a look, or nothing worth an add. */
+  verdict: Verdict | null
   catPlan: CategoryPlan | null
 }
 
@@ -64,7 +66,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
     lineup: null, tomorrow: null, week: null, budget: null, pickups: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
-    standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null,
+    standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null, verdict: null,
   }
   if (!drafted || !me) return base
 
@@ -102,9 +104,11 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     trades: tradeIdeas(ctx, snap, me.id),
     standing: st ? { rank: st.rank, w: st.wins, l: st.losses, t: st.ties } : null,
     addPlan: addPlan(picks, budget, world.today, week?.end ?? null),
+    verdict: null,
     catPlan: league.scoring === 'categories' && mine?.edges ? categoryPlan(ctx, snap, mine.edges, punts) : null,
     startsOn: (() => { const first = [...snap.weeks].map((w) => w[1]).sort()[0]; return first && first > world.today ? first : null })(),
   }
+  view.verdict = verdictOf(view)
   // Names for every id the screen mentions, so the page needs no player file.
   const ids = new Set<string>()
   lineup?.rows.forEach((r) => ids.add(r.id))
@@ -177,16 +181,11 @@ export function seasonTile(v: SeasonView, now: number): SeasonTile {
   if (ahead.length) {
     return { ...base, urgency: 'soon', action: "Set tomorrow's lineup", why: ahead.length === 1 ? say(ahead[0]) : `${ahead.length} starts lost tomorrow as set — first: ${say(ahead[0])}`, score }
   }
-  const streams = v.pickups.filter((p) => p.kind === 'stream')
-  const swing = w?.odds ? w.odds.races.filter((r) => r.state === 'swing').map((r) => r.cat) : []
-  if (streams.length && (v.budget?.forStreams ?? 0) > 0 && score?.win != null && score.win > 0.15 && score.win < 0.85) {
-    const s = streams[0]
-    return { ...base, urgency: 'soon', action: 'Stream', why: `${s.name}: ${s.why}${swing.length ? ` · in play: ${swing.join(', ')}` : ''}`, score }
-  }
-  const upgrades = v.pickups.filter((p) => p.kind === 'upgrade')
-  if (upgrades.length) {
-    const u = upgrades[0]
-    return { ...base, urgency: 'watch', action: 'Pick up', why: `${u.name} for ${u.dropName} — ${u.why.toLowerCase()}`, score }
+  const swing = w?.odds ? w.odds.races.filter((r) => r.state === 'swing').map((r) => CAT_WORD[r.cat]) : []
+  // The Adds screen's verdict, word for word, so the tile and the screen name the same move.
+  const vd = v.verdict
+  if (vd && vd.level !== 'none') {
+    return { ...base, urgency: vd.level === 'do' ? 'soon' : 'watch', action: vd.kind === 'stream' ? 'Stream' : vd.level === 'do' ? 'Pick up' : 'Worth a look', why: `${vd.headline}${vd.when ? ` — ${vd.when}` : ''}${vd.reasons[0] ? ` · ${vd.reasons[0]}` : ''}`, score }
   }
   const worse = v.news.find((n) => n.whose === 'mine' && n.kind === 'worse')
   if (worse) return { ...base, urgency: 'watch', action: 'News', why: worse.headline, score }
@@ -218,7 +217,9 @@ export function pickupAlerts(v: SeasonView, link: string): Alert[] {
   if (v.phase !== 'season') return out
   const name = (id: string | null) => (id ? v.players[id]?.name ?? id : '')
   const L = v.league
-  const best = v.pickups.filter((p) => p.kind !== 'stream' && p.drop && (p.seasonWins ?? 0) >= NOTIFY_WINS).sort((a, b) => (b.seasonWins ?? 0) - (a.seasonWins ?? 0))[0]
+  // Only a move that holds up in most what-ifs is worth interrupting for.
+  const sure = (c: { holds: number } | null) => (c?.holds ?? 0) >= DO.holds
+  const best = v.pickups.filter((p) => p.kind !== 'stream' && p.drop && (p.seasonWins ?? 0) >= NOTIFY_WINS && sure(p.confidence)).sort((a, b) => (b.seasonWins ?? 0) - (a.seasonWins ?? 0))[0]
   if (best) {
     out.push({
       id: `nba-pickup:${L.id}:${best.add}:${best.drop}`, leagueId: L.id, rule: 'nba-pickup',
@@ -227,7 +228,7 @@ export function pickupAlerts(v: SeasonView, link: string): Alert[] {
       consequence: Math.round(35 + 20 * Math.min(1, best.seasonWins!)), deadline: null, link, playerId: best.add,
     })
   }
-  const pair = v.pairs.find((p) => p.seasonWins >= NOTIFY_PAIR_WINS)
+  const pair = v.pairs.find((p) => p.seasonWins >= NOTIFY_PAIR_WINS && sure(p.confidence))
   if (pair) {
     const [a, b] = pair.moves
     out.push({
@@ -238,7 +239,7 @@ export function pickupAlerts(v: SeasonView, link: string): Alert[] {
     })
   }
   const stream = (v.budget?.forStreams ?? 0) > 0 && v.week
-    ? v.pickups.filter((p) => p.kind === 'stream' && p.winAfter - p.winBefore >= NOTIFY_STREAM).sort((a, b) => (b.winAfter - b.winBefore) - (a.winAfter - a.winBefore))[0]
+    ? v.pickups.filter((p) => p.kind === 'stream' && p.winAfter - p.winBefore >= NOTIFY_STREAM && sure(p.confidence)).sort((a, b) => (b.winAfter - b.winBefore) - (a.winAfter - a.winBefore))[0]
     : undefined
   if (stream && v.week) {
     out.push({
@@ -249,4 +250,94 @@ export function pickupAlerts(v: SeasonView, link: string): Alert[] {
     })
   }
   return out
+}
+
+// ── The Adds verdict ───────────────────────────────────────────────────────
+
+export interface Verdict {
+  level: 'do' | 'look' | 'none'
+  /** "Add Miles Bridges, drop Andrew Nembhard", or for a pair both moves; for nothing, a line on why. */
+  headline: string
+  moves: { add: string; name: string; drop: string | null; dropName: string | null; waiver: boolean }[]
+  kind: 'season' | 'pair' | 'stream' | null
+  /** When: "now", "claim now", or the Monday after this week. */
+  when: string | null
+  /** The two or three things that make it the move. */
+  reasons: string[]
+  season: number | null
+  week: { before: number; after: number } | null
+  confidence: { holds: number; of: number; low: number; high: number } | null
+}
+
+/** A verdict's bar: "do this" takes a move worth this much that holds in this many of ten what-ifs. */
+export const DO = { season: 0.25, pair: 0.5, stream: 0.08, holds: 8 }
+/** "Worth a look": smaller, or less sure. */
+export const LOOK = { season: 0.1, stream: 0.05, holds: 6 }
+
+const CAT_WORD: Record<Cat, string> = { fg: 'FG%', ft: 'FT%', tpm: '3PM', pts: 'PTS', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO' }
+const pctWord = (x: number) => `${Math.round(x * 100)}%`
+const winsWord = (w: number) => `${w >= 0 ? '+' : '−'}${Math.abs(w).toFixed(2)} wins`
+
+/**
+ * One verdict per league, from the moves already scored and checked: the best season move (as the week's plan
+ * times it, now or the Monday after), a pair worth a good deal more than it, or a stream for a week in play. "Do
+ * this" needs a move worth enough that holds up in eight of ten what-ifs; "worth a look" less; otherwise nothing,
+ * with the best on offer named so the "nothing" is checkable (2026-10-21: the screen listed every move at once,
+ * small and large, sure and unsure; the home tile named a different move from the plan).
+ */
+export function verdictOf(v: SeasonView): Verdict | null {
+  if (v.phase !== 'season') return null
+  const cats = v.league.scoring === 'categories'
+  const holds = (c: Verdict['confidence']) => c?.holds ?? 0
+  const step = v.addPlan?.steps.find((st) => st.season != null) ?? null
+  const ups = v.pickups.filter((p) => p.kind !== 'stream' && p.drop)
+  const up = (step ? ups.find((p) => p.name === step.add && p.dropName === step.drop) : null) ?? ups[0] ?? null
+  // The plan's value for the move: on the Monday, the season gain less this week's loss.
+  const upValue = up ? (step && step.add === up.name ? step.season ?? up.seasonWins ?? 0 : up.seasonWins ?? 0) : 0
+  const upWhen = up ? (step && step.add === up.name ? step.when : up.waiver ? 'claim now' : 'now') : null
+  const pair = v.pairs[0] ?? null
+  const win = v.week?.odds?.win ?? v.week?.points?.win ?? null
+  const inPlay = win != null && win > 0.3 && win < 0.7
+  const streams = (v.budget?.forStreams ?? 0) > 0 && inPlay ? v.pickups.filter((p) => p.kind === 'stream').sort((a, b) => (b.winAfter - b.winBefore) - (a.winAfter - a.winBefore)) : []
+  const st = streams[0] ?? null
+  const stGain = st ? st.winAfter - st.winBefore : 0
+
+  const reasonsOf = (p: SeasonView['pickups'][number], extra: string[] = []) => {
+    const r: string[] = []
+    const ups2 = p.seasonCats.filter((c) => c.diff > 0).slice(0, 3).map((c) => '+' + CAT_WORD[c.cat])
+    if (cats && ups2.length && p.kind !== 'stream') r.push(`${ups2.join(', ')} over ${p.dropName}`)
+    if (p.kind === 'stream' && p.playDays.length) r.push(`${p.playDays.length} game${p.playDays.length === 1 ? '' : 's'} this week, ${p.playDays.filter((d) => d.open).length} into empty spots`)
+    if (cats && p.kind === 'stream' && p.weekCats.length) r.push(p.weekCats.filter((c) => c.after > c.before).slice(0, 2).map((c) => `${CAT_WORD[c.cat]} ${pctWord(c.before)}→${pctWord(c.after)}`).join(', '))
+    return [...r.filter(Boolean), ...extra]
+  }
+  const one = (p: SeasonView['pickups'][number]) => ({ add: p.add, name: p.name, drop: p.drop, dropName: p.dropName, waiver: p.waiver })
+
+  // A pair first when it is worth a good deal more than the best single move and holds up. Like a single move in the
+  // week's plan, one that costs this week waits for the Monday after it, worth that loss more.
+  const pairCost = pair ? Math.max(0, pair.winBefore - pair.winAfter) : 0
+  const monday = v.week && pairCost > 0.03 ? addDays(v.week.end, 1) : null
+  const pairValue = pair ? pair.seasonWins + (monday ? pairCost : 0) : 0
+  if (pair && pairValue >= DO.pair && pairValue >= upValue + DO.season && holds(pair.confidence) >= DO.holds) {
+    return {
+      level: 'do', kind: 'pair', when: monday ? `${new Date(`${monday}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}, after this week` : 'now',
+      season: pairValue, week: monday ? null : { before: pair.winBefore, after: pair.winAfter }, confidence: pair.confidence,
+      headline: pair.moves.map((m, i) => `${i ? 'add' : 'Add'} ${m.name} for ${m.dropName}`).join(' and '),
+      moves: pair.moves.map((m) => ({ add: m.add, name: m.name, drop: m.drop, dropName: m.dropName, waiver: m.waiver })),
+      reasons: [`Each alone: ${pair.moves.map((m) => `${m.name} ${winsWord(m.seasonWins)}`).join(', ')}; together they keep your seats covered`],
+    }
+  }
+  const season = (level: Verdict['level']): Verdict => ({
+    level, kind: 'season', when: upWhen, season: upValue, week: upWhen && /after this week/.test(upWhen) ? null : { before: up!.winBefore, after: up!.winAfter }, confidence: up!.confidence,
+    headline: `Add ${up!.name}, drop ${up!.dropName}`, moves: [one(up!)], reasons: reasonsOf(up!),
+  })
+  const stream = (level: Verdict['level']): Verdict => ({
+    level, kind: 'stream', when: st!.waiver ? 'claim now' : 'now', season: st!.seasonWins, week: { before: st!.winBefore, after: st!.winAfter }, confidence: st!.confidence,
+    headline: `Stream ${st!.name} for ${st!.dropName}`, moves: [one(st!)], reasons: reasonsOf(st!),
+  })
+  if (up && upValue >= DO.season && holds(up.confidence) >= DO.holds) return season('do')
+  if (st && stGain >= DO.stream && holds(st.confidence) >= DO.holds) return stream('do')
+  if (up && upValue >= LOOK.season && holds(up.confidence) >= LOOK.holds) return season('look')
+  if (st && stGain >= LOOK.stream && holds(st.confidence) >= LOOK.holds) return stream('look')
+  const best = up ? `the best, ${up.name} for ${up.dropName}, is ${winsWord(upValue)}${up.confidence ? ` and holds in ${up.confidence.holds} of ${up.confidence.of}` : ''}` : 'nobody on the wire beats your roster'
+  return { level: 'none', kind: null, when: null, season: null, week: null, confidence: null, moves: [], headline: 'Nothing worth an add', reasons: [best] }
 }
