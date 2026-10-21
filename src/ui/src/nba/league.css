@@ -263,3 +263,7 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-up { color: var(--green); }
 .nl-down { color: var(--red); }
 .nl-tomorrow { margin-top: 0.6rem; }
+/* A move's effect: green helps, a softer red hurts, yellow changes nothing worth the name. */
+.nl-help { color: var(--green); }
+.nl-hurt { color: color-mix(in srgb, var(--red) 70%, var(--ink)); }
+.nl-flat { color: var(--amber); }

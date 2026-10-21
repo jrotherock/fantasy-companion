@@ -477,7 +477,12 @@ export const addDays = (d: string, n: number) => {
  */
 export interface AddPlan {
   left: number
-  steps: { when: string; add: string; drop: string | null; why: string }[]
+  steps: {
+    when: string; add: string; drop: string | null; why: string
+    /** This week's chance of winning before and after, where the move is made this week; and its season wins. */
+    week: { before: number; after: number } | null
+    season: number | null
+  }[]
   reserve: number
 }
 
@@ -508,10 +513,10 @@ export function addPlan(picks: Pickup[], budget: Budget | null, today: string, w
   for (const { p, later, value } of ups) {
     if (dropped.has(p.drop ?? '') || used.has(p.add)) continue
     if (later) {
-      steps.push({ when: `${dayWord(monday!)}, after this week`, add: p.name, drop: p.dropName, why: `${p.why}; +${value.toFixed(2)} wins made then, against +${p.seasonWins!.toFixed(2)} now, which costs this week ${pct(p.winBefore)} → ${pct(p.winAfter)}${p.waiver ? '' : ' (if he is still there)'}` })
+      steps.push({ when: `${dayWord(monday!)}, after this week`, add: p.name, drop: p.dropName, why: `${p.why}; +${value.toFixed(2)} wins made then, against +${p.seasonWins!.toFixed(2)} now, which costs this week ${pct(p.winBefore)} → ${pct(p.winAfter)}${p.waiver ? '' : ' (if he is still there)'}`, week: null, season: value })
     } else {
       if (!spend) continue
-      steps.push({ when: p.waiver ? 'claim now (clears in a day)' : 'now', add: p.name, drop: p.dropName, why: `${p.why}; this week ${pct(p.winBefore)} → ${pct(p.winAfter)}` })
+      steps.push({ when: p.waiver ? 'claim now (clears in a day)' : 'now', add: p.name, drop: p.dropName, why: p.why, week: { before: p.winBefore, after: p.winAfter }, season: p.seasonWins })
       spend--
     }
     used.add(p.add); if (p.drop) dropped.add(p.drop)
@@ -527,6 +532,7 @@ export function addPlan(picks: Pickup[], budget: Budget | null, today: string, w
       when: last ? `after ${last.name}'s last game (${weekday(last.playDays.at(-1)!.date)})` : p.waiver ? 'claim now' : 'now',
       add: p.name, drop: last ? last.name : p.dropName,
       why: `plays ${p.playDays.map((d) => weekday(d.date)).join(', ')}, ${p.playDays.filter((d) => d.open).length} into empty spots`,
+      week: last ? null : { before: p.winBefore, after: p.winAfter }, season: null,
     })
     last = p; spend--
   }

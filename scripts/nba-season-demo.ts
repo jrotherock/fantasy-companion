@@ -131,6 +131,8 @@ const snap = {
   weeks, rosters: teamsRows,
   mineToday: { team: meta(mineIdx), date: today, players: teamsRows[mineIdx].players.map((y, j) => ({ ...y, box: liveBox(rosters[mineIdx][j]) })) },
   scoreboard, past, standings, waivers, transactions: [], statusEvents,
+  // Tomorrow's lineup as set: today's, as Yahoo keeps it until changed.
+  mineTomorrow: { team: meta(mineIdx), date: new Date(Date.parse(today + 'T12:00:00Z') + 86400000).toISOString().slice(0, 10), players: teamsRows[mineIdx].players.map((y) => ({ ...y, box: null })) },
   // This week's lineups and lines day by day, mine and my opponent's, as the server reads them: each past day the
   // roster as seated, with a line for every player whose team played (a bench player's line does not count).
   weekDays: (() => {

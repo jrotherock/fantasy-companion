@@ -855,7 +855,8 @@ function Adds({ v }: { v: SeasonView }) {
         <Section title="This week's plan" hint={`${v.addPlan.left} add${v.addPlan.left === 1 ? '' : 's'} left${v.addPlan.reserve ? `, ${v.addPlan.reserve} kept for an injury` : ''}`}>
           <ol className="nl-plan">
             {v.addPlan.steps.map((st, i) => (
-              <li key={i}><b>Add {st.add}</b>{st.drop && <>, drop {st.drop}</>} <span className="nl-dim">— {st.when}</span><div className="nl-dim">{st.why}</div></li>
+              <li key={i}><b>Add {st.add}</b>{st.drop && <>, drop {st.drop}</>} <span className="nl-dim">— {st.when}</span>
+                <div className="nl-dim">{st.why}{st.season != null && <> · rest of season <SeasonWins w={st.season} /></>}{st.week && <> · <WeekWin before={st.week.before} after={st.week.after} prefix="this week " /></>}</div></li>
             ))}
           </ol>
         </Section>
@@ -868,10 +869,10 @@ function Adds({ v }: { v: SeasonView }) {
         <Section title="Two moves together" hint="worth more than any one move by itself">
           {v.pairs.map((pr, i) => (
             <div key={i} className="nl-pick">
-              <div className="nl-pickh"><span className="nl-kind upgrade">pair</span> <b>Rest of season: {wins(pr.seasonWins)}</b> <span className="nl-dim">· this week: win {pct(pr.winBefore)} → {pct(pr.winAfter)}</span></div>
+              <div className="nl-pickh"><span className="nl-kind upgrade">pair</span> <b>Rest of season: <SeasonWins w={pr.seasonWins} /></b> · <WeekWin before={pr.winBefore} after={pr.winAfter} prefix="this week: win " /></div>
               {pr.moves.map((m) => (
                 <div key={m.add} className="nl-pickd">
-                  <b>Add {m.name}</b>, drop {m.dropName} <span className="nl-dim">({wins(m.seasonWins)} alone{m.waiver ? ' · waivers' : ''})</span>
+                  <b>Add {m.name}</b>, drop {m.dropName} <span className="nl-dim">(<span className={effect(m.seasonWins, 0.03)}>{wins(m.seasonWins)}</span> alone{m.waiver ? ' · waivers' : ''})</span>
                 </div>
               ))}
             </div>
@@ -893,12 +894,24 @@ function Adds({ v }: { v: SeasonView }) {
 }
 
 /**
+ * What a move does, coloured by effect (2026-10-21: the week's win change read in white, like everything else):
+ * green where it helps, a softer red where it hurts, yellow where it changes nothing worth the name.
+ */
+const effect = (d: number, eps: number) => (d > eps ? 'nl-help' : d < -eps ? 'nl-hurt' : 'nl-flat')
+/** This week's chance of winning, before and after, coloured by the change. */
+function WeekWin({ before, after, extra, prefix = 'This week: win ' }: { before: number; after: number; extra?: string; prefix?: string }) {
+  const d = after - before
+  return <span className={effect(d, 0.01)}>{prefix}{pct(before)} → {pct(after)}{extra ? ` ${extra}` : ''}{d < -0.02 ? ' — costs this week' : Math.abs(d) <= 0.01 ? ' — no change this week' : ''}</span>
+}
+/** Matchups won over the season, coloured by sign. */
+const SeasonWins = ({ w }: { w: number }) => <b className={effect(w, 0.03)}>{wins(w)}</b>
+
+/**
  * One pickup: who to add and drop, whether he is a free agent (now) or on waivers (a claim, a day), what it does for
  * the rest of the season and, separately, for this week, which can disagree; the other players he could replace.
  */
 function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: boolean; over?: boolean }) {
   const wk = (g: number) => (cats ? `${g >= 0 ? '+' : ''}${g.toFixed(2)} cats` : `${g >= 0 ? '+' : ''}${g.toFixed(0)} pts`)
-  const weekCost = p.winAfter < p.winBefore - 0.02
   return (
     <div className={`nl-pick${over ? ' over' : ''}`}>
       <div className="nl-pickh">
@@ -912,7 +925,7 @@ function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: 
       <div className="nl-pickd nl-dim">
         {p.kind !== 'stream' && <SeasonGain p={p} />}
         {p.kind !== 'stream' && ' · '}
-        <span className={weekCost ? 'nl-cost' : ''}>This week: win {pct(p.winBefore)} → {pct(p.winAfter)} ({wk(p.weekGain)}){weekCost ? ' — costs this week' : ''}</span>
+        <WeekWin before={p.winBefore} after={p.winAfter} extra={`(${wk(p.weekGain)})`} />
         {over && <span> · beyond your pace</span>}
       </div>
       {cats && p.seasonCats.length > 0 && p.kind !== 'stream' && (
@@ -933,7 +946,7 @@ function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: 
       )}
       {p.steps && <div className="nl-steps">{p.steps}</div>}
       {p.alternatives.length > 0 && (
-        <div className="nl-pickd nl-dim">Or drop: {p.alternatives.map((a, i) => <span key={a.drop}>{i ? ' · ' : ''}{a.dropName} <span title="this week's win chance after the move">(week {pct(a.winAfter)}, season {a.seasonWins != null ? wins(a.seasonWins) : `+${Math.round(a.seasonGain)}`})</span></span>)}</div>
+        <div className="nl-pickd nl-dim">Or drop: {p.alternatives.map((a, i) => <span key={a.drop}>{i ? ' · ' : ''}{a.dropName} <span title="this week's win chance after the move, and matchups won over the season">(week <span className={effect(a.winAfter - p.winBefore, 0.01)}>{pct(a.winAfter)}</span>, season {a.seasonWins != null ? <span className={effect(a.seasonWins, 0.03)}>{wins(a.seasonWins)}</span> : `+${Math.round(a.seasonGain)}`})</span></span>)}</div>
       )}
     </div>
   )
@@ -953,7 +966,7 @@ function SeasonGain({ p }: { p: SeasonView['pickups'][number] }) {
   const how = p.scheduled
     ? `Every week left in the regular season (${p.seasonWeeks}), each against that week's opponent, with every player at his own rate of games played: matchups expected won, before and after the move. A pickup who fills spots left empty counts in full; one who would mostly sit barely counts.`
     : `The ${p.seasonWeeks} regular-season weeks left, with this week's opponent standing in for every week until the league's schedule is read.`
-  return <span title={how}>Rest of season: <b>{wins(p.seasonWins)}</b>{p.scheduled ? '' : ' (vs this week’s opponent)'}</span>
+  return <span title={how}>Rest of season: <SeasonWins w={p.seasonWins} />{p.scheduled ? '' : ' (vs this week’s opponent)'}</span>
 }
 
 type ViewRow = { id: string; name: string; team: string | null; stats: Record<string, number>; scope: Record<string, 'all' | 'league'>; min: number | null; gp: number | null }
