@@ -330,96 +330,164 @@ function Today({ v }: { v: SeasonView }) {
       </div>
       {gamesToday
         ? <>
-            <RosterGroup title="Playing tonight" rows={tonight} points={v.league.points} />
+            <RosterGroup title="Playing tonight" rows={tonight} points={v.league.points} total />
             <RosterGroup title="No game today" rows={noGame} points={v.league.points} />
           </>
         : <RosterGroup title={v.startsOn ? 'Your roster' : 'Next games'} rows={[...tonight, ...noGame]} preseason={!!v.startsOn} points={v.league.points} />}
       {hurt.length > 0 && <RosterGroup title="Out or on IL" rows={hurt} preseason={!!v.startsOn} points={v.league.points} />}
-      <p className="nl-note">Yahoo locks each player at his game's tip. The categories are his projection for tonight, or for his next game; once his game starts they show what he has done (FG and FT as made/attempted), read from Yahoo about every ten minutes, with the projection underneath. "Games" is how many games his team plays in the matchup week from today on.</p>
+      <p className="nl-note">Yahoo locks each player at his game's tip. Once his game starts, each cell is what he has done, read from Yahoo about every ten minutes, shaded green where he is ahead of his projection and red where he is behind, deeper the further (part way through a game, against the share of it played so far). Before then, the italic numbers are his projection for tonight or his next game. "Games" is how many games his team plays in the matchup week from today on.</p>
     </>
   )
 }
 
-/** A group of today's roster: slot, player and tag, the game (or the next one), tonight's line, games left this week. */
-/** Today's category columns, in Yahoo's order. */
-const TCOLS: { key: string; label: string; cell: (b: Box, whole: boolean) => string }[] = [
-  { key: 'fg', label: 'FG%', cell: (b, whole) => (whole ? `${b.fgm}/${b.fga}` : rate(b.fgm, b.fga)) },
-  { key: 'ft', label: 'FT%', cell: (b, whole) => (whole ? `${b.ftm}/${b.fta}` : rate(b.ftm, b.fta)) },
-  { key: 'tpm', label: '3PTM', cell: (b, whole) => one(b.tpm, whole) },
-  { key: 'pts', label: 'PTS', cell: (b) => Math.round(b.pts).toString() },
-  { key: 'reb', label: 'REB', cell: (b, whole) => one(b.reb, whole) },
-  { key: 'ast', label: 'AST', cell: (b, whole) => one(b.ast, whole) },
-  { key: 'stl', label: 'ST', cell: (b, whole) => one(b.stl, whole) },
-  { key: 'blk', label: 'BLK', cell: (b, whole) => one(b.blk, whole) },
-  { key: 'to', label: 'TO', cell: (b, whole) => one(b.to, whole) },
+// ── Up or down, and by how much ──
+
+type Box = NonNullable<NonNullable<SeasonView['lineup']>['rows'][number]['tonight']>
+type CatKey = 'fg' | 'ft' | 'tpm' | 'pts' | 'reb' | 'ast' | 'stl' | 'blk' | 'to'
+/** What a full shade takes in each counting category, a game's worth or so. */
+const UNIT: Record<string, number> = { tpm: 1.5, pts: 6, reb: 3, ast: 3, stl: 1, blk: 1, to: 1.5 }
+const clamp1 = (x: number) => Math.max(-1, Math.min(1, x))
+/**
+ * How far a line runs from what it is measured against: −1 well short, 1 well past; 0 for about the same. A
+ * percentage on a handful of attempts says little, so it is shaded less. Turnovers: fewer is better.
+ */
+function heat(cat: CatKey, a: Box, p: Box): number {
+  if (cat === 'fg' || cat === 'ft') {
+    const m = cat === 'fg' ? 'fgm' : 'ftm', at = cat === 'fg' ? 'fga' : 'fta'
+    if (!a[at] || !p[at]) return 0
+    const d = a[m] / a[at] - p[m] / p[at]
+    return clamp1((d / 0.12) * Math.min(1, a[at] / Math.max(1, p[at])))
+  }
+  const x = (a[cat] - p[cat]) / Math.max(UNIT[cat], p[cat] * 0.5)
+  return clamp1(cat === 'to' ? -x : x)
+}
+/** A shade for a cell: green up, red down, deeper the further; nothing for about the same. */
+const shade = (x: number) => (Math.abs(x) < 0.15 ? undefined : { background: `color-mix(in srgb, var(${x > 0 ? '--green' : '--red'}) ${Math.round(8 + Math.abs(x) * 26)}%, transparent)` })
+const scaleBox = (b: Box, f: number): Box => Object.fromEntries(Object.entries(b).map(([k, x]) => [k, (x as number) * f])) as unknown as Box
+const sumBox = (bs: Box[]): Box => bs.reduce((a, b) => Object.fromEntries(Object.keys(a).map((k) => [k, (a as any)[k] + (b as any)[k]])) as Box, { fgm: 0, fga: 0, ftm: 0, fta: 0, tpm: 0, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0 } as Box)
+
+/** Today's columns, in Yahoo's order: makes and attempts beside each percentage, then the counting categories. */
+const TCOLS: { key: string; label: string; cat: CatKey | null; cell: (b: Box, real: boolean) => string }[] = [
+  { key: 'fgma', label: 'FGM/A', cat: null, cell: (b, real) => (real ? `${b.fgm}/${b.fga}` : `${b.fgm.toFixed(1)}/${b.fga.toFixed(1)}`) },
+  { key: 'fg', label: 'FG%', cat: 'fg', cell: (b) => rate(b.fgm, b.fga) },
+  { key: 'ftma', label: 'FTM/A', cat: null, cell: (b, real) => (real ? `${b.ftm}/${b.fta}` : `${b.ftm.toFixed(1)}/${b.fta.toFixed(1)}`) },
+  { key: 'ft', label: 'FT%', cat: 'ft', cell: (b) => rate(b.ftm, b.fta) },
+  { key: 'tpm', label: '3PTM', cat: 'tpm', cell: (b, real) => one(b.tpm, real) },
+  { key: 'pts', label: 'PTS', cat: 'pts', cell: (b) => Math.round(b.pts).toString() },
+  { key: 'reb', label: 'REB', cat: 'reb', cell: (b, real) => one(b.reb, real) },
+  { key: 'ast', label: 'AST', cat: 'ast', cell: (b, real) => one(b.ast, real) },
+  { key: 'stl', label: 'ST', cat: 'stl', cell: (b, real) => one(b.stl, real) },
+  { key: 'blk', label: 'BLK', cat: 'blk', cell: (b, real) => one(b.blk, real) },
+  { key: 'to', label: 'TO', cat: 'to', cell: (b, real) => one(b.to, real) },
 ]
 const one = (x: number, whole: boolean) => (whole ? Math.round(x).toString() : x.toFixed(1))
 const rate = (m: number, a: number) => (a > 0 ? (m / a).toFixed(3).replace(/^0/, '') : '—')
-type Box = NonNullable<NonNullable<SeasonView['lineup']>['rows'][number]['tonight']>
 /** Fantasy points from a line at a points league's weights. */
 const fpOf = (b: Box, w: NonNullable<SeasonView['league']['points']>) =>
   (w.pts ?? 0) * b.pts + (w.reb ?? 0) * b.reb + (w.ast ?? 0) * b.ast + (w.stl ?? 0) * b.stl + (w.blk ?? 0) * b.blk + (w.to ?? 0) * b.to + (w.tpm ?? 0) * b.tpm
+const fpHeat = (a: number, p: number) => clamp1((a - p) / Math.max(8, p * 0.4))
+const isZero = (b: Box, c: { key: string; cat: CatKey | null }) => c.cat && c.cat !== 'fg' && c.cat !== 'ft' ? (b as any)[c.cat] === 0 : c.key === 'fgma' ? b.fga === 0 : c.key === 'ftma' ? b.fta === 0 : false
 
-/** A group of today's roster: slot, player and tag, the game (or the next one), his line by category, games in the week. */
-function RosterGroup({ title, rows, preseason, points }: { title: string; rows: NonNullable<SeasonView['lineup']>['rows']; preseason?: boolean; points: SeasonView['league']['points'] }) {
+type TodayRow = NonNullable<SeasonView['lineup']>['rows'][number]
+const GAME_MS = 2.4 * 3_600_000
+/** Where a row stands tonight: a game going, one finished, one to come, or none. */
+const stateOf = (r: TodayRow) => (!r.game ? 'none' : !r.game.started ? 'upcoming' : r.game.final ? 'final' : 'live')
+/**
+ * His projection, as much of it as the game has had time for: the whole of it once final; part way through a live
+ * game, the share of a game's length since tip (Yahoo sends no clock, so this is an estimate).
+ */
+function paceOf(r: TodayRow, now: number): Box | null {
+  if (!r.tonight) return null
+  return scaleBox(r.tonight, playedShare(r, now))
+}
+/** The share of his game played so far: all of it once final; otherwise time since tip over a game's length. */
+const playedShare = (r: TodayRow, now: number) => (stateOf(r) === 'final' ? 1 : Math.max(0.1, Math.min(1, (now - (r.game?.tip ? Date.parse(r.game.tip) : now)) / GAME_MS)))
+/** Early in a game a steal or two swings the pace a long way, so the shade deepens as the game goes on. */
+const sure = (r: TodayRow, now: number) => 0.35 + 0.65 * playedShare(r, now)
+const ACTIVE_SLOT = (slot: string | null) => !!slot && !['BN', 'IL', 'IL+'].includes(slot)
+
+/**
+ * A group of today's roster: slot, player and tag, the game (or the next one), his line by category, games left in
+ * the week. A game going or done shows what he has done, one number a cell, shaded by how far it runs from his
+ * projection (green up, red down, deeper the further); a game to come shows the projection, in italics. A game in
+ * progress tints the row; a player with no game is dimmed. The group playing tonight ends with what my starters have
+ * done so far (2026-10-20: the projection under each live number read as a second number, and too faint to read).
+ */
+function RosterGroup({ title, rows, preseason, points, total }: { title: string; rows: TodayRow[]; preseason?: boolean; points: SeasonView['league']['points']; total?: boolean }) {
   if (!rows.length) return null
   const tonight = rows.some((r) => r.game)
-  // Every group has the same columns at the same widths, so they line up down the page.
+  const now = Date.now()
+  const counted = rows.filter((r) => r.live && r.game?.started && ACTIVE_SLOT(r.slot))
+  const tot = counted.length ? sumBox(counted.map((r) => r.live!)) : null
+  const totPace = counted.length ? sumBox(counted.map((r) => paceOf(r, now) ?? r.live!)) : null
   return (
     <>
       <div className="nl-subh nl-grouph">{title} <span className="nl-dim">· {rows.length}</span></div>
-      <table className="nl-table nl-today">
-        <colgroup>
-          <col className="nl-c-slot" /><col className="nl-c-player" /><col className="nl-c-game" />
-          {points && <col className="nl-c-fp" />}
-          {TCOLS.map((c) => <col key={c.key} className="nl-c-cat" />)}
-          <col className="nl-c-wk" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th className="l">Slot</th>
-            <th className="l">Player</th>
-            <th className="l">{tonight ? 'Tonight' : 'Next game'}</th>
-            {points && <th className="nl-catc nl-fpc" title="Fantasy points at this league's scoring">FP</th>}
-            {TCOLS.map((c) => <th key={c.key} className="nl-catc">{c.label}</th>)}
-            <th className="nl-wkc" title={preseason ? 'Games his team plays in week 1' : 'Games his team has left in this matchup week, today included'}>Games<div className="nl-thsub">{preseason ? 'in wk 1' : 'left in wk'}</div></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id}>
-              <td className="l nl-slotc">{r.slot ?? '—'}</td>
-              <td className="l nl-playerc">{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>{r.status !== 'healthy' && <InjuryTag r={r} />}<div className="nl-line-m"><RowLine r={r} /></div></td>
-              <td className="l nl-dim nl-gamec">{r.game
-                ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · {r.game.started ? <span className={`nl-locked ${!r.game.final && r.live ? 'on' : ''}`}>{r.game.final ? 'final' : r.live ? 'live' : 'locked'}</span> : <>locks {time(r.game.tip)}</>}</>
-                : r.next ? `${dateWord(r.next.date)} ${r.next.home ? 'v' : '@'} ${r.next.vs}` : '—'}</td>
-              {points && (
-                <td className="nl-catc nl-fpc">
-                  {r.live
-                    ? <><b>{fpOf(r.live, points).toFixed(1)}</b>{r.tonight && <div className="nl-dim nl-proj">{fpOf(r.tonight, points).toFixed(1)}</div>}</>
-                    : r.tonight ? fpOf(r.tonight, points).toFixed(1) : ''}
-                </td>
-              )}
-              {TCOLS.map((c) => (
-                <td key={c.key} className="nl-catc">
-                  {r.live
-                    ? <><b>{c.cell(r.live, true)}</b>{r.tonight && <div className="nl-dim nl-proj">{c.cell(r.tonight, false)}</div>}</>
-                    : r.tonight ? <span className="nl-dim">{c.cell(r.tonight, false)}</span> : ''}
-                </td>
-              ))}
-              <td className="nl-wkc">{r.weekGames ?? ''}</td>
+      <div className="nl-scroll">
+        <table className="nl-table nl-today">
+          <colgroup>
+            <col className="nl-c-slot" /><col className="nl-c-player" /><col className="nl-c-game" />
+            {points && <col className="nl-c-fp" />}
+            {TCOLS.map((c) => <col key={c.key} className={c.cat ? 'nl-c-cat' : 'nl-c-ma'} />)}
+            <col className="nl-c-wk" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className="l">Slot</th>
+              <th className="l">Player</th>
+              <th className="l">{tonight ? 'Tonight' : 'Next game'}</th>
+              {points && <th className="nl-catc nl-fpc" title="Fantasy points at this league's scoring">FP</th>}
+              {TCOLS.map((c) => <th key={c.key} className="nl-catc">{c.label}</th>)}
+              <th className="nl-wkc" title={preseason ? 'Games his team plays in week 1' : 'Games his team has left in this matchup week, today included'}>Games<div className="nl-thsub">{preseason ? 'in wk 1' : 'left in wk'}</div></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const st = stateOf(r)
+              const real = (st === 'live' || st === 'final') && r.live ? r.live : null
+              const pace = real ? paceOf(r, now) : null
+              const line = real ?? r.tonight
+              return (
+                <tr key={r.id} className={`nl-r-${st}${ACTIVE_SLOT(r.slot) ? '' : ' nl-r-bench'}`}>
+                  <td className="l nl-slotc">{r.slot ?? '—'}</td>
+                  <td className="l nl-playerc">{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>{r.status !== 'healthy' && <> <InjuryTag r={r} /></>}<div className="nl-line-m"><RowLine r={r} /></div></td>
+                  <td className="l nl-gamec">{r.game
+                    ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · {st === 'final' ? <i className="nl-final">final</i> : st === 'live' ? <b className="nl-live">live</b> : <span className="nl-dim">{time(r.game.tip)} · proj</span>}</>
+                    : r.next ? <span className="nl-dim">{dateWord(r.next.date)} {r.next.home ? 'v' : '@'} {r.next.vs} · proj</span> : '—'}</td>
+                  {points && (
+                    <td className={`nl-catc nl-fpc${real ? '' : ' nl-projv'}`} style={real && pace ? shade(fpHeat(fpOf(real, points), fpOf(pace, points)) * sure(r, now)) : undefined}>
+                      {line ? (real ? <b>{fpOf(real, points).toFixed(1)}</b> : fpOf(line, points).toFixed(1)) : ''}
+                    </td>
+                  )}
+                  {TCOLS.map((c) => (
+                    <td key={c.key} className={`nl-catc${real ? (isZero(real, c) ? ' nl-zero' : '') : ' nl-projv'}`} style={real && pace && c.cat ? shade(heat(c.cat, real, pace) * sure(r, now)) : undefined}>
+                      {line ? c.cell(line, !!real) : ''}
+                    </td>
+                  ))}
+                  <td className="nl-wkc">{r.weekGames ?? ''}</td>
+                </tr>
+              )
+            })}
+            {total && tot && totPace && (
+              <tr className="nl-total">
+                <td className="l" colSpan={3}>Tonight so far · {counted.length} starter{counted.length === 1 ? '' : 's'}<div className="nl-line-m"><b>{lineOf(tot, true)}</b> · FG {rate(tot.fgm, tot.fga)} · FT {rate(tot.ftm, tot.fta)}</div></td>
+                {points && <td className="nl-catc nl-fpc" style={shade(fpHeat(fpOf(tot, points), fpOf(totPace, points)))}><b>{fpOf(tot, points).toFixed(1)}</b></td>}
+                {TCOLS.map((c) => <td key={c.key} className="nl-catc" style={c.cat ? shade(heat(c.cat, tot, totPace)) : undefined}>{c.cell(tot, true)}</td>)}
+                <td />
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </>
   )
 }
 
 /** On a phone, where the category columns do not fit: the line under his name. */
-function RowLine({ r }: { r: NonNullable<SeasonView['lineup']>['rows'][number] }) {
-  if (r.live) return <><b>{lineOf(r.live, true)}</b>{r.tonight && <div className="nl-dim nl-proj">proj {lineOf(r.tonight)}</div>}</>
-  return r.tonight ? <span className="nl-dim">{lineOf(r.tonight)}</span> : null
+function RowLine({ r }: { r: TodayRow }) {
+  const st = stateOf(r)
+  if ((st === 'live' || st === 'final') && r.live) return <><b>{lineOf(r.live, true)}</b> · {r.live.fgm}/{r.live.fga} FG · {r.live.ftm}/{r.live.fta} FT</>
+  return r.tonight ? <span className="nl-projv">proj {lineOf(r.tonight)}</span> : null
 }
 
 /** A game in one short line: 18p 5r 6a 2·3 1.2s 0.4b. A real line (whole) has no tenths. */
@@ -468,9 +536,10 @@ function boxCell(b: WBox, c: Cat): string {
  * players has a game and a spot, empty where nobody of mine plays. Empty spots are where an added player's game counts,
  * so the headline names the best days for that; the opponent's starters sit beside for the race in games played.
  */
-function DaysLeft({ w }: { w: NonNullable<SeasonView['week']> }) {
+function DaysLeft({ w, today }: { w: NonNullable<SeasonView['week']>; today: string }) {
   const seats = Math.max(1, ...w.days.map((d) => d.mine + d.open))
-  const best = [...w.days].filter((d) => d.open >= 2).sort((a, b) => b.open - a.open).slice(0, 3).sort((a, b) => a.date.localeCompare(b.date))
+  // An add counts from tomorrow, so today is never one of the best days to add (2026-10-20: it named Tuesday at 9pm).
+  const best = [...w.days].filter((d) => d.date > today && d.open >= 2).sort((a, b) => b.open - a.open).slice(0, 3).sort((a, b) => a.date.localeCompare(b.date))
   const gap = Math.round(w.startsLeft.mine - w.startsLeft.theirs)
   return (
     <>
@@ -479,7 +548,7 @@ function DaysLeft({ w }: { w: NonNullable<SeasonView['week']> }) {
         {gap < 0 ? ` (${-gap} fewer).` : gap > 0 ? ` (${gap} more).` : '.'}{' '}
         {best.length
           ? <>Best days to add a player: <b>{best.map((d) => day(d.date)).join(', ')}</b>, the days with the most empty spots.</>
-          : 'Your spots are nearly full every day: an added player would mostly sit.'}
+          : w.days.some((d) => d.date > today) ? 'Your spots are nearly full every day left: an added player would mostly sit.' : 'No days left this week to add a player for.'}
       </p>
       <div className="nl-dl">
         {w.days.map((d) => (
@@ -502,10 +571,160 @@ function DaysLeft({ w }: { w: NonNullable<SeasonView['week']> }) {
   )
 }
 
+type SoFarRow = NonNullable<NonNullable<SeasonView['week']>['soFar']>['mine'][number]
+type WeekRow = { id: string; name: string; gp: number | null; gs: number; mpg: number | null; box: Box; proj: Box | null; bench: Box | null }
+
+/** A side's so-far rows, kept to one day when one is picked: what counted, its projection, what sat on the bench. */
+function soFarRows(rows: SoFarRow[], day: string): WeekRow[] {
+  return rows.map((r) => {
+    const ds = r.days.filter((d) => day === 'all' || d.date === day)
+    const on = ds.filter((d) => d.active), off = ds.filter((d) => !d.active)
+    return { id: r.id, name: r.name, gp: ds.length, gs: on.length, mpg: null, box: sumBox(on.map((d) => d.box)), proj: sumBox(on.map((d) => d.proj)), bench: off.length ? sumBox(off.map((d) => d.box)) : null }
+  }).filter((r) => r.gp > 0).sort((a, b) => b.gs - a.gs || b.box.pts - a.box.pts)
+}
+
+/** Two lines side by side, category by category: who leads (green for the leader's cell, red for the other) and by how much. */
+function vsHeat(cat: CatKey, a: Box, b: Box): number {
+  if (cat === 'fg' || cat === 'ft') {
+    const m = cat === 'fg' ? 'fgm' : 'ftm', at = cat === 'fg' ? 'fga' : 'fta'
+    if (!a[at] || !b[at]) return 0
+    return clamp1((a[m] / a[at] - b[m] / b[at]) / 0.06)
+  }
+  const x = (a[cat] - b[cat]) / Math.max(UNIT[cat] * 2, ((a[cat] + b[cat]) / 2) * 0.35)
+  return clamp1(cat === 'to' ? -x : x)
+}
+const benchWords = (b: Box) => [b.pts ? `${Math.round(b.pts)} pts` : '', b.reb ? `${Math.round(b.reb)} reb` : '', b.ast ? `${Math.round(b.ast)} ast` : '', b.tpm ? `${Math.round(b.tpm)} 3s` : '', b.stl ? `${Math.round(b.stl)} stl` : '', b.blk ? `${Math.round(b.blk)} blk` : ''].filter(Boolean).join(', ')
+
+/**
+ * The week's players three ways: so far (what counted, game by game in active spots, each cell shaded by how far it
+ * ran from his projection for those games, and the two sides' totals shaded against each other), the rest of the week
+ * (expected starts and what they produce), or the whole week (both). The so-far totals are the tiles' "so far"
+ * (2026-10-20: once games had started the table was still projections, and nothing showed who made up the tiles).
+ */
+function WeekPlayers({ v, w, side, setSide, mode, setMode, dayPick, setDayPick, swingCats, fpw }: {
+  v: SeasonView; w: NonNullable<SeasonView['week']>; side: 'mine' | 'theirs'; setSide: (s: 'mine' | 'theirs') => void
+  mode: 'sofar' | 'rest' | 'whole'; setMode: (m: 'sofar' | 'rest' | 'whole') => void; dayPick: string; setDayPick: (d: string) => void
+  swingCats: Set<Cat>; fpw: SeasonView['league']['points']
+}) {
+  const sf = w.soFar
+  const m = mode === 'sofar' && !sf ? 'rest' : mode
+  const restOf = (rs: NonNullable<SeasonView['week']>['players']): WeekRow[] => rs.map((p) => ({ id: p.id, name: p.name, gp: null, gs: p.starts, mpg: p.mpg, box: p.box as Box, proj: null, bench: null }))
+  const restRows = restOf(side === 'theirs' ? w.oppPlayers : w.players)
+  const soRows = sf ? soFarRows(side === 'theirs' ? sf.theirs : sf.mine, m === 'whole' ? 'all' : dayPick) : []
+  let rows: WeekRow[]
+  if (m === 'sofar') rows = soRows
+  else if (m === 'rest') rows = restRows
+  else {
+    const byId = new Map<string, WeekRow>()
+    for (const r of soRows) byId.set(r.id, { ...r, proj: null })
+    for (const r of restRows) {
+      const o = byId.get(r.id)
+      byId.set(r.id, o ? { ...o, gs: o.gs + r.gs, mpg: r.mpg, box: sumBox([o.box, r.box]) } : r)
+    }
+    rows = [...byId.values()].sort((a, b) => b.gs - a.gs)
+  }
+  const usDay = (rs: SoFarRow[]) => sumBox(soFarRows(rs, dayPick).map((r) => r.box))
+  const us = sf ? usDay(sf.mine) : null, them = sf ? usDay(sf.theirs) : null
+  const cats = !fpw
+  const cols = YCOLS
+  const real = m === 'sofar'
+  const total = sumBox(rows.map((r) => r.box))
+  return (
+    <>
+      <div className="nl-weekbar">
+        <div className="nl-sidepick" role="tablist" aria-label="What the table shows">
+          {sf && <button role="tab" aria-selected={m === 'sofar'} className={m === 'sofar' ? 'on' : ''} onClick={() => setMode('sofar')}>So far</button>}
+          <button role="tab" aria-selected={m === 'rest'} className={m === 'rest' ? 'on' : ''} onClick={() => setMode('rest')}>Rest of week</button>
+          {sf && <button role="tab" aria-selected={m === 'whole'} className={m === 'whole' ? 'on' : ''} onClick={() => setMode('whole')}>Whole week</button>}
+        </div>
+        {w.oppPlayers.length > 0 && (
+          <div className="nl-sidepick" role="tablist" aria-label="Whose players">
+            <button role="tab" aria-selected={side === 'mine'} className={side === 'mine' ? 'on' : ''} onClick={() => setSide('mine')}>Yours</button>
+            <button role="tab" aria-selected={side === 'theirs'} className={side === 'theirs' ? 'on' : ''} onClick={() => setSide('theirs')}>{w.opponent?.name ?? 'Opponent'}</button>
+          </div>
+        )}
+      </div>
+      {m === 'sofar' && sf && sf.days.length > 1 && (
+        <div className="nl-daychips" role="tablist" aria-label="Which day">
+          {['all', ...sf.days].map((d) => <button key={d} role="tab" aria-selected={dayPick === d} className={dayPick === d ? 'on' : ''} onClick={() => setDayPick(d)}>{d === 'all' ? 'All days' : day(d)}</button>)}
+        </div>
+      )}
+      <div className="nl-scroll">
+        <table className="nl-table nl-wkp">
+          <thead><tr>
+            <th className="l">Player</th>
+            {m === 'sofar'
+              ? <><th title="Games played">GP</th><th title="Games in an active spot: the ones that counted">GS</th></>
+              : <><th title={m === 'rest' ? 'Expected starts from here: his games with a lineup spot, less his chance of sitting hurt' : 'Games that counted plus expected starts from here'}>Starts</th><th title="Projected minutes a game">MPG</th></>}
+            {fpw && <th title="Fantasy points at this league's scoring">FP</th>}
+            {cols.map((c) => <th key={c.key} className={cats && !real && c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dimh' : ''} title={cats && !real && c.cat && swingCats.has(c.cat) ? 'In play this week' : undefined}>{c.label}</th>)}
+          </tr></thead>
+          <tbody>
+            {!rows.length && <tr><td className="l nl-dim" colSpan={cols.length + 4}>{m === 'sofar' ? 'Nobody has played on this day.' : 'No games left this week.'}</td></tr>}
+            {rows.map((p) => (
+              <Fragment key={p.id}>
+                <tr className={m === 'sofar' && p.gs === 0 ? 'nl-r-benchonly' : p.gs < 0.5 && m !== 'sofar' ? 'nl-idle' : ''}>
+                  <td className="l">{p.name}</td>
+                  {m === 'sofar' ? <><td>{p.gp}</td><td>{p.gs}</td></> : <><td>{p.gs.toFixed(1)}</td><td>{p.mpg != null ? p.mpg.toFixed(0) : '—'}</td></>}
+                  {fpw && <td style={real && p.proj && p.gs ? shade(fpHeat(fpOf(p.box, fpw), fpOf(p.proj, fpw))) : undefined}>{real && !p.gs ? '—' : <b>{real ? fpOf(p.box, fpw).toFixed(1) : fpOf(p.box, fpw).toFixed(0)}</b>}</td>}
+                  {cols.map((c) => (
+                    <td key={c.key} className={`${cats && c.cat && swingCats.has(c.cat) && !real ? 'nl-inplay' : c.dim ? 'nl-dim' : ''}${real && p.gs && isZero(p.box, { key: c.key, cat: c.cat as CatKey | null }) ? ' nl-zero' : ''}`}
+                      style={real && p.proj && p.gs && c.cat ? shade(heat(c.cat as CatKey, p.box, p.proj)) : undefined}>
+                      {real && !p.gs ? '—' : real ? realCell(c.key, p.box) : c.cell(p.box)}
+                    </td>
+                  ))}
+                </tr>
+                {m === 'sofar' && p.bench && benchWords(p.bench) && (
+                  <tr className="nl-r-benchnote"><td className="l" colSpan={cols.length + 3 + (fpw ? 1 : 0)}>On the bench {(p.gp ?? 0) - p.gs === 1 ? 'for 1 game' : `for ${(p.gp ?? 0) - p.gs} games`}: {benchWords(p.bench)}{fpw ? ` (${fpOf(p.bench, fpw).toFixed(1)} FP)` : ''} — did not count</td></tr>
+                )}
+              </Fragment>
+            ))}
+            {m === 'sofar' && us && them
+              ? (['mine', 'theirs'] as const).map((who) => {
+                  const a = who === 'mine' ? us : them, b = who === 'mine' ? them : us
+                  return (
+                    <tr key={who} className={`nl-total${who === side ? '' : ' nl-total-other'}`}>
+                      <td className="l">{who === 'mine' ? 'You' : (w.opponent?.name ?? 'Them')} · counted</td><td /><td />
+                      {fpw && <td style={shade(fpHeat(fpOf(a, fpw), fpOf(b, fpw)))}><b>{fpOf(a, fpw).toFixed(1)}</b></td>}
+                      {cols.map((c) => <td key={c.key} style={c.cat ? shade(vsHeat(c.cat as CatKey, a, b)) : undefined}>{realCell(c.key, a)}</td>)}
+                    </tr>
+                  )
+                })
+              : rows.length > 0 && (
+                <tr className="nl-total"><td className="l">{side === 'mine' ? 'Your week' : 'Their week'}</td><td>{rows.reduce((a, p) => a + p.gs, 0).toFixed(0)}</td><td />
+                  {fpw && <td><b>{fpOf(total, fpw).toFixed(0)}</b></td>}
+                  {cols.map((c) => <td key={c.key} className={cats && c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dim' : ''}>{c.cell(total)}</td>)}</tr>
+              )}
+          </tbody>
+        </table>
+      </div>
+      <p className="nl-note">
+        {m === 'sofar'
+          ? <>What counted: each player's games in an active spot, from Yahoo's lineups day by day; games on the bench are listed under him and did not count. Each cell is shaded green where he ran ahead of his projection for those games and red where he fell short, deeper the further. The last two lines are the two sides' totals, each category shaded for whoever leads and by how much{cats ? '; they are the tiles\u2019 "so far"' : ''}.</>
+          : m === 'rest'
+            ? <>Expected starts from here times his line, seated night by night{fpw ? '; FP is that at this league\u2019s scoring, the sum of which plus the points so far is the projected week above' : ''}.{cats && <> Highlighted columns are this week's categories in play (35–65%): the players strongest in them are the ones not to bench, and what a stream should bring.</>}</>
+            : <>What counted so far plus what is expected from here: the whole week, player by player.</>}
+      </p>
+    </>
+  )
+}
+
+/** A real week's cell: whole counts and made/attempted, the percentages to three places. */
+function realCell(key: string, b: Box): string {
+  if (key === 'fgma') return `${Math.round(b.fgm)}/${Math.round(b.fga)}`
+  if (key === 'ftma') return `${Math.round(b.ftm)}/${Math.round(b.fta)}`
+  if (key === 'fg') return rate(b.fgm, b.fga)
+  if (key === 'ft') return rate(b.ftm, b.fta)
+  return Math.round((b as any)[key]).toString()
+}
+
 function Week({ v }: { v: SeasonView }) {
   const w = v.week
   // Whose players the table shows: mine by default, the opponent's on a tap (one table, not two).
   const [side, setSide] = useState<'mine' | 'theirs'>('mine')
+  // What the table shows: what has counted so far (once anyone has played), what is still to come, or both.
+  const [mode, setMode] = useState<'sofar' | 'rest' | 'whole'>(() => (v.week?.soFar ? 'sofar' : 'rest'))
+  const [dayPick, setDayPick] = useState<string>('all')
   if (!w) return <div className="ckempty">No matchup this week.</div>
   const rows = side === 'theirs' && w.oppPlayers.length ? w.oppPlayers : w.players
   // A points league's weights: the table leads with each player's fantasy points (it showed only for categories).
@@ -557,39 +776,16 @@ function Week({ v }: { v: SeasonView }) {
         </div>
       )}
       {w.players.length > 0 && (
-        <Section title="Players this week" hint="expected starts and what they produce">
-          {w.oppPlayers.length > 0 && (
-            <div className="nl-sidepick" role="tablist" aria-label="Whose players">
-              <button role="tab" aria-selected={side === 'mine'} className={side === 'mine' ? 'on' : ''} onClick={() => setSide('mine')}>Yours</button>
-              <button role="tab" aria-selected={side === 'theirs'} className={side === 'theirs' ? 'on' : ''} onClick={() => setSide('theirs')}>{w.opponent?.name ?? 'Opponent'}</button>
-            </div>
-          )}
-          <div className="nl-scroll">
-            <table className="nl-table nl-wkp">
-              <thead><tr><th className="l">Player</th><th title="Expected starts this week: his games with a lineup spot, less his chance of sitting hurt">Starts</th><th title="Projected minutes a game">MPG</th>
-                {fpw && <th title="Fantasy points from his expected starts, at this league's scoring">FP</th>}
-                {YCOLS.map((c) => <th key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dimh' : ''} title={c.cat && swingCats.has(c.cat) ? 'In play this week' : undefined}>{c.label}</th>)}</tr></thead>
-              <tbody>
-                {rows.map((p) => (
-                  <tr key={p.id} className={p.starts < 0.5 ? 'nl-idle' : ''}>
-                    <td className="l">{p.name}</td><td>{p.starts.toFixed(1)}</td><td>{p.mpg != null ? p.mpg.toFixed(0) : '—'}</td>
-                    {fpw && <td><b>{fpOf(p.box, fpw).toFixed(0)}</b></td>}
-                    {YCOLS.map((c) => <td key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dim' : ''}>{c.cell(p.box)}</td>)}
-                  </tr>
-                ))}
-                <tr className="nl-total"><td className="l">{side === 'mine' ? 'Your week' : 'Their week'}</td><td>{rows.reduce((a, p) => a + p.starts, 0).toFixed(0)}</td><td />
-                  {fpw && <td><b>{rows.reduce((a, p) => a + fpOf(p.box, fpw), 0).toFixed(0)}</b></td>}
-                  {YCOLS.map((c) => { const t = rows.reduce((a, p) => addBoxUI(a, p.box), emptyBoxUI()); return <td key={c.key} className={c.cat && swingCats.has(c.cat) ? 'nl-inplay' : c.dim ? 'nl-dim' : ''}>{c.cell(t)}</td> })}</tr>
-              </tbody>
-            </table>
-          </div>
-          <p className="nl-note">Expected starts times his per-game line{fpw ? '; FP is that at this league\u2019s scoring, the sum of which is the projected week above' : ''}. Highlighted columns are this week's categories in play (35–65%): the players strongest in them are the ones not to bench, and what a stream should bring.</p>
+        <Section title="Players this week" hint={mode === 'sofar' ? 'what has counted, player by player' : mode === 'rest' ? 'expected starts from here and what they produce' : 'what has counted plus what is expected from here'}>
+          <WeekPlayers v={v} w={w} side={side} setSide={setSide} mode={mode} setMode={setMode} dayPick={dayPick} setDayPick={setDayPick} swingCats={swingCats} fpw={fpw} />
         </Section>
       )}
       <Section title="Days left" hint="your lineup spots, day by day">
-        <DaysLeft w={w} />
+        <DaysLeft w={w} today={v.today} />
       </Section>
-      <p className="nl-note">Each category is the week so far plus what both lineups are expected to do from here, seated day by day. A race at 35–65% is in play: that is where a stream helps.</p>
+      {w.odds
+        ? <p className="nl-note">Each category is the week so far plus what both lineups are expected to do from here, seated day by day. A race at 35–65% is in play: that is where a stream helps.</p>
+        : <p className="nl-note">The projected week is the points so far plus what both lineups are expected to score from here, seated day by day.</p>}
     </>
   )
 }

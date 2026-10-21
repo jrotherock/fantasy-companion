@@ -49,7 +49,12 @@ export interface Snapshot {
   transactions: YTransaction[]
   /** Every regular-season week's pairings, by team id: who plays whom for the rest of the season. */
   fixtures?: Fixture[]
+  /** This matchup week's lineups and lines day by day, mine and my opponent's: what has counted so far. */
+  weekDays?: WeekDays
 }
+
+/** By team id, then by date: the day's roster with each player's slot and line, and when it was read. */
+export interface WeekDays { week: number; teams: Record<string, Record<string, RosterDay & { at?: number }>> }
 
 export interface Fixture { week: number; start: string; end: string; pairs: [string, string][]; /** When this week was read. */ at?: number }
 
@@ -457,6 +462,8 @@ export interface WeekView {
   /** Per day: my starters, theirs, my players with a game but no seat, and my seats nobody fills (a stream's room). */
   days: { date: string; mine: number; theirs: number; idle: number; open: number }[]
   playoffs: boolean
+  /** What has counted so far this week, mine and theirs, and the days it covers. Null before anyone has played. */
+  soFar: { days: string[]; mine: SoFarRow[]; theirs: SoFarRow[] } | null
 }
 
 export function sideOutlook(ctx: Context, side: Side | null, ids: { id: string; eligible: string[] }[], seats: string[], days: string[]): { side: SideOutlook; week: WeekOutlook } {
@@ -483,13 +490,60 @@ export function rosterIds(ctx: Context, players: YPlayer[]): { id: string; eligi
   return out
 }
 
-/** A side's players this week: games, expected starts, and what those starts should produce, most starts first. */
+/**
+ * A side's players for the rest of the week: games, expected starts, and what those starts should produce, most
+ * starts first. Each line is his starts as the week's projection seats them, night by night, so the lines add up to
+ * the projected week (2026-10-20: Harker's table said 1065 to the header's 1058, from his season line times starts).
+ */
 function playersOf(ctx: Context, ids: { id: string }[], week: WeekOutlook): WeekView['players'] {
   return ids.map(({ id }) => {
-    const pm = week.perMan.get(id) ?? { games: 0, starts: 0 }
+    const pm = week.perMan.get(id) ?? { games: 0, starts: 0, box: emptyBox() }
     const p = ctx.byId.get(id)
-    return { id, name: p?.name ?? id, games: pm.games, starts: pm.starts, mpg: p?.projection?.perGame.min ?? null, box: addBox(emptyBox(), ctx.perGame(id), pm.starts) }
+    return { id, name: p?.name ?? id, games: pm.games, starts: pm.starts, mpg: p?.projection?.perGame.min ?? null, box: pm.box }
   }).sort((x, y) => y.starts - x.starts)
+}
+
+/** A player's week so far: games played and started, what counted (in an active spot), what did not (on the bench). */
+export interface SoFarRow {
+  id: string
+  name: string
+  played: number
+  started: number
+  box: Box
+  bench: Box
+  /** What his projection said for the games that counted: the measure of up or down. */
+  proj: Box
+  /** By date: his line that day, his projection for it, and whether it counted. */
+  days: { date: string; active: boolean; box: Box; proj: Box }[]
+}
+
+const ACTIVE = (slot: string | null) => !!slot && !['BN', 'IL', 'IL+'].includes(slot)
+
+/**
+ * What has counted this week, player by player, from Yahoo's lineups and lines day by day: a line in an active spot
+ * counts, one on the bench does not. Today comes from the freshest read of my lineup.
+ */
+export function soFarOf(ctx: Context, days: Record<string, RosterDay> | undefined, today: RosterDay | null, through: string): SoFarRow[] {
+  const byId = new Map<string, SoFarRow>()
+  const all = { ...(days ?? {}) }
+  if (today?.date) all[today.date] = today
+  for (const [date, day] of Object.entries(all).sort(([a], [b]) => a.localeCompare(b))) {
+    if (date > through) continue
+    for (const y of day.players) {
+      const box = (y as { box?: Box | null }).box ?? null
+      if (!box) continue
+      const id = ctx.resolve(y)
+      if (!id) continue
+      const row = byId.get(id) ?? { id, name: ctx.byId.get(id)?.name ?? y.name, played: 0, started: 0, box: emptyBox(), bench: emptyBox(), proj: emptyBox(), days: [] }
+      const active = ACTIVE(y.slot)
+      const proj = ctx.outlook(id, date)?.box ?? ctx.perGame(id)
+      row.played++
+      if (active) { row.started++; row.box = addBox(row.box, box); row.proj = addBox(row.proj, proj) } else row.bench = addBox(row.bench, box)
+      row.days.push({ date, active, box, proj })
+      byId.set(id, row)
+    }
+  }
+  return [...byId.values()].sort((a, b) => b.started - a.started || b.box.pts - a.box.pts)
 }
 
 export function buildWeek(ctx: Context, snap: Snapshot, myTeamId: string): WeekView | null {
@@ -526,6 +580,14 @@ export function buildWeek(ctx: Context, snap: Snapshot, myTeamId: string): WeekV
       open: Math.max(0, startingSeats(ctx.league.roster).length - (a.week.days[i]?.starting.length ?? 0)),
     })),
     playoffs: !!m?.playoffs,
+    soFar: (() => {
+      const wd = snap.weekDays?.week === (m?.week ?? wk?.[0]) ? snap.weekDays : undefined
+      const mineRows = soFarOf(ctx, wd?.teams[myTeamId], snap.mineToday?.date === today ? snap.mineToday : null, today)
+      const theirRows = theirs ? soFarOf(ctx, wd?.teams[theirs.id], null, today) : []
+      if (!mineRows.length && !theirRows.length) return null
+      const played = new Set([...mineRows, ...theirRows].flatMap((r) => r.days.map((d) => d.date)))
+      return { days: [...played].sort(), mine: mineRows, theirs: theirRows }
+    })(),
   }
 }
 

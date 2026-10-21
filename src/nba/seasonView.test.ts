@@ -5,7 +5,7 @@ import type { YPlayer } from '../server/yahooParse.js'
 import type { NbaPlayer, Game, YahooWeek } from './types.js'
 import { buildSeasonView, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonTile } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
-import { Context, rosterIds, sideOutlook, type Fixture, type SeasonLeague, type Snapshot, type World } from './inseason.js'
+import { Context, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type World } from './inseason.js'
 import { addDays, PAIR_MARGIN, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, type PairMove } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
@@ -428,4 +428,36 @@ test('pickup alerts: the best season move, the best pair and the best stream, ea
   assert.equal(st.id, `nba-stream:nba-public:1:${v.pickups[0].add}`)
   assert.ok(st.deadline! > Date.parse('2026-10-25T12:00:00Z'), 'it lasts the week')
   assert.equal(pickupAlerts({ ...s, budget: { ...s.budget, forStreams: 0 } }, '/x').filter((x) => x.rule === 'nba-stream').length, 0)
+})
+
+test('the week so far: lines in an active spot count, bench lines do not, each with his projection; today is the freshest read', () => {
+  const today = '2026-11-18'
+  const ctx = new Context(hoops, world(today))
+  const [a, b] = players.filter((p) => p.yahoo && p.projection && p.team).slice(0, 2)
+  const line = (pts: number) => ({ ...emptyBox(), fgm: 4, fga: 9, ftm: 2, fta: 2, tpm: 1, pts, reb: 5, ast: 3, stl: 1, blk: 0, to: 2 })
+  const day = (date: string, rows: [NbaPlayer, string, number | null][]): RosterDay => ({ team: meta('4', true), date, players: rows.map(([p, slot, pts]) => ({ ...ypl(p, slot), box: pts == null ? null : line(pts) })) })
+  const days = {
+    '2026-11-16': day('2026-11-16', [[a, 'PG', 20], [b, 'BN', 15]]),
+    '2026-11-17': day('2026-11-17', [[a, 'PG', null], [b, 'Util', 12]]),
+    '2026-11-18': day('2026-11-18', [[a, 'PG', 3], [b, 'Util', null]]),
+    '2026-11-19': day('2026-11-19', [[a, 'PG', 99], [b, 'Util', 99]]),
+  }
+  const fresher = day('2026-11-18', [[a, 'PG', 25], [b, 'Util', null]])
+  const rows = soFarOf(ctx, days, fresher, today)
+  const ra = rows.find((r) => r.id === a.id)!, rb = rows.find((r) => r.id === b.id)!
+  assert.deepEqual([ra.played, ra.started, ra.box.pts], [2, 2, 45], 'two games counted; today is the fresher read; tomorrow is not yet')
+  assert.deepEqual([rb.played, rb.started, rb.box.pts, rb.bench.pts], [2, 1, 12, 15], 'his bench game did not count')
+  const proj = (p: NbaPlayer, d: string) => ctx.outlook(p.id, d)!.box.pts
+  assert.ok(Math.abs(ra.proj.pts - (proj(a, '2026-11-16') + proj(a, '2026-11-18'))) < 1e-9, 'his projection for the games that counted')
+  assert.ok(Math.abs(rb.proj.pts - proj(b, '2026-11-17')) < 1e-9, 'not for the one on the bench')
+})
+
+test('points: the players this week add up to the projected week (their starts as the projection seats them)', () => {
+  const today = '2026-11-18'
+  const { snap } = snapshotFor(harker, today)
+  const v = buildSeasonView(harker, snap, world(today))
+  const w = harker.points!
+  const fp = (b: any) => Object.entries(w).reduce((s, [k, x]) => s + (x ?? 0) * (b[k] ?? 0), 0)
+  const rest = v.week!.players.reduce((s, p) => s + fp(p.box), 0)
+  assert.ok(Math.abs(v.week!.points!.mineNow + rest - v.week!.points!.mine) < 0.5, `${v.week!.points!.mineNow} + ${rest.toFixed(1)} vs ${v.week!.points!.mine.toFixed(1)}`)
 })

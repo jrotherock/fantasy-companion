@@ -36,7 +36,9 @@ import { easternDate } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
 import { diffStatus, type StatusEvent } from '../nba/news.js'
 import { buildSeasonView, losesStart, pickupAlerts, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
-import { weekOf, type Fixture, type SeasonLeague, type Snapshot, type World } from '../nba/inseason.js'
+import { weekOf, type Fixture, type SeasonLeague, type Snapshot, type WeekDays, type World } from '../nba/inseason.js'
+import { daysFrom } from '../nba/week.js'
+import { addDays } from '../nba/adds.js'
 import type { Box } from '../nba/yahooSeason.js'
 import type { Game, NbaPlayer } from '../nba/types.js'
 
@@ -207,7 +209,7 @@ function gamesOn(now = clock()): boolean {
   return now >= Math.min(...tips) - HOUR && now <= Math.max(...tips) + 3 * HOUR
 }
 
-type Part = 'settings' | 'weeks' | 'rosters' | 'today' | 'scoreboard' | 'standings' | 'waivers' | 'transactions' | 'past' | 'fixtures'
+type Part = 'settings' | 'weeks' | 'rosters' | 'today' | 'scoreboard' | 'standings' | 'waivers' | 'transactions' | 'past' | 'fixtures' | 'weekDays'
 
 function every(part: Part, drafted: boolean, live: boolean): number {
   if (!drafted) return part === 'rosters' || part === 'settings' || part === 'weeks' ? 6 * HOUR : Infinity
@@ -220,6 +222,7 @@ function every(part: Part, drafted: boolean, live: boolean): number {
     case 'transactions': return HOUR
     case 'past': return 12 * HOUR
     case 'fixtures': return 7 * 24 * HOUR
+    case 'weekDays': return live ? 10 * MIN : HOUR
   }
 }
 
@@ -255,6 +258,26 @@ async function readLeague(l: SeasonLeague & { myTeamId: string | null }, force =
     if (s.rosters.some((r) => r.players.length) && mine) {
       await run('today', async () => { s.mineToday = parseRosterDay(await yahooApi.call(`team/${mine.key}/roster;date=${today}/players/stats;type=date;date=${today}`, { by: 'nba-season' })) })
       await run('scoreboard', async () => { s.scoreboard = parseNbaScoreboard(await yahooApi.call(`league/${key}/scoreboard`, { by: 'nba-season' })) })
+      // The week day by day, mine and my opponent's: who sat where and what each line was, so the week screen can show
+      // what has counted so far. A finished day is read once after it ends; today's is re-read while games are on (mine
+      // comes from today's read). Two calls a day at most per league.
+      await run('weekDays', async () => {
+        const m = s.scoreboard.find((x) => x.sides.some((sd) => sd.id === mine.id))
+        if (!m?.start || !m.end) return
+        const wd: WeekDays = s.weekDays?.week === m.week ? s.weekDays : { week: m.week, teams: {} }
+        for (const team of m.sides) {
+          const got = (wd.teams[team.id] ??= {})
+          for (const d of daysFrom(m.start, m.end, m.start)) {
+            if (d > today) break
+            const settled = Date.parse(`${addDays(d, 1)}T09:00:00Z`)
+            if (d < today && (got[d]?.at ?? 0) >= settled) continue
+            if (d === today && team.id === mine.id) continue
+            const day = parseRosterDay(await yahooApi.call(`team/${team.key}/roster;date=${d}/players/stats;type=date;date=${d}`, { by: 'nba-season' }))
+            if (day) got[d] = { ...day, date: d, at: Date.now() }
+          }
+        }
+        s.weekDays = wd
+      })
       await run('standings', async () => { s.standings = parseStandings(leagueBody(await yahooApi.call(`league/${key}/standings`, { by: 'nba-season' }))) })
       await run('waivers', async () => { s.waivers = parsePlayers(await yahooApi.call(`league/${key}/players;status=W;count=25`, { by: 'nba-season' })).map((p) => p.yahooId) })
       await run('transactions', async () => { s.transactions = parseTransactions(leagueBody(await yahooApi.call(`league/${key}/transactions;types=add,drop,trade;count=25`, { by: 'nba-season' }))) })

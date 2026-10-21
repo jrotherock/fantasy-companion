@@ -131,6 +131,21 @@ const snap = {
   weeks, rosters: teamsRows,
   mineToday: { team: meta(mineIdx), date: today, players: teamsRows[mineIdx].players.map((y, j) => ({ ...y, box: liveBox(rosters[mineIdx][j]) })) },
   scoreboard, past, standings, waivers, transactions: [], statusEvents,
+  // This week's lineups and lines day by day, mine and my opponent's, as the server reads them: each past day the
+  // roster as seated, with a line for every player whose team played (a bench player's line does not count).
+  weekDays: (() => {
+    const oppIdx = pairs(current[0]).map(([a, b]) => (a === mineIdx ? b : b === mineIdx ? a : -1)).find((x) => x >= 0)!
+    const teamsOut: Record<string, Record<string, unknown>> = {}
+    for (const t of [mineIdx, oppIdx]) {
+      const byDate: Record<string, unknown> = {}
+      for (let d = current[1]; d < today; d = new Date(Date.parse(d + 'T12:00:00Z') + 86400000).toISOString().slice(0, 10)) {
+        const playing = new Set(schedule.filter((g) => g.date === d).flatMap((g) => [g.home, g.away]))
+        byDate[d] = { team: meta(t), date: d, at: Date.now(), players: teamsRows[t].players.map((y, j) => ({ ...y, box: playing.has(rosters[t][j].team!) ? scale(perGameBox(rosters[t][j]), 0.6 + rand() * 0.8) : null })) }
+      }
+      teamsOut[String(t + 1)] = byDate
+    }
+    return { week: current[0], teams: teamsOut }
+  })(),
   // Who plays whom every regular-season week, as the server reads it from Yahoo's scoreboards.
   fixtures: weeks.filter(([w]) => w < real.playoffWeeks[0]).map(([w, s, e]) => ({ week: w, start: s, end: e, pairs: pairs(w).map(([a, b]) => [String(a + 1), String(b + 1)]) })),
 }

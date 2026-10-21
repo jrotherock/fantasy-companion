@@ -91,7 +91,8 @@ export interface WeekOutlook {
   /** Player-games that fall on a day with no seat for them. */
   wasted: number
   days: DayPlan[]
-  perMan: Map<string, { games: number; starts: number }>
+  /** Each man's games, starts, and what his starts produce (the parts of `box`). */
+  perMan: Map<string, { games: number; starts: number; box: Box }>
 }
 
 /**
@@ -105,7 +106,7 @@ export const DISPERSION: Record<keyof Box, number> = {
 
 export function projectWeek(w: WeekInput): WeekOutlook {
   let box = emptyBox(), variance = emptyBox(), starts = 0, wasted = 0
-  const perMan = new Map(w.men.map((m) => [m.id, { games: 0, starts: 0 }]))
+  const perMan = new Map(w.men.map((m) => [m.id, { games: 0, starts: 0, box: emptyBox() }]))
   const days: DayPlan[] = []
   w.days.forEach((date, di) => {
     const teams = w.playing(date)
@@ -124,6 +125,7 @@ export function projectWeek(w: WeekInput): WeekOutlook {
       pm.games += o!.play
       if (!chosen.has(m.id)) { wasted += o!.play; continue }
       pm.starts += o!.play
+      pm.box = addBox(pm.box, o!.box, o!.play)
       starts += o!.play
       box = addBox(box, o!.box, o!.play)
       for (const k of Object.keys(variance) as (keyof Box)[]) {
