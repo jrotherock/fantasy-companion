@@ -105,7 +105,7 @@ function saveSnap(id: string, s: Stored) {
 
 // ── Sleeper: logs, projections, live player file ──
 
-interface SleeperCache { logs: Record<number, { at: number; rows: GameLog[] }>; proj: Record<number, { at: number; rows: [string, { box: Box; min: number }][] }>; players: { at: number; byId: Record<string, { team: string | null; injury: string | null }> } | null }
+interface SleeperCache { logs: Record<number, { at: number; rows: GameLog[] }>; proj: Record<number, { at: number; rows: [string, { box: Box; min: number }][] }>; players: { at: number; v?: number; byId: Record<string, { team: string | null; injury: string | null }> } | null }
 let sleeper: SleeperCache = readJson(file('sleeper.json'), { logs: {}, proj: {}, players: null })
 const saveSleeper = () => writeFileSync(file('sleeper.json'), JSON.stringify(sleeper))
 
@@ -138,12 +138,15 @@ async function refreshSleeper(weeks: Snapshot['weeks'], today: string) {
       changed = true
     } catch (e) { console.warn('nba season: sleeper projections', String(e)) }
   }
-  if (!sleeper.players || Date.now() - sleeper.players.at > 3 * HOUR) {
+  // v2 keeps released players (an older file left them out): read again at once rather than in three hours.
+  if (!sleeper.players || sleeper.players.v !== 2 || Date.now() - sleeper.players.at > 3 * HOUR) {
     try {
       const all = await getJson('https://api.sleeper.app/v1/players/nba')
       const byId: Record<string, { team: string | null; injury: string | null }> = {}
-      for (const [id, x] of Object.entries<any>(all)) if (x?.team || x?.injury_status) byId[id] = { team: x.team ?? null, injury: x.injury_status ?? null }
-      sleeper.players = { at: Date.now(), byId }
+      // An active player with no team has been waived or released (Sleeper's status FA): he is kept, team-less, so his
+      // preseason team does not give him its games (2026-10-22: Kevin Porter, cut by Milwaukee, was a Harker stream).
+      for (const [id, x] of Object.entries<any>(all)) if (x?.team || x?.injury_status || x?.active) byId[id] = { team: x.team ?? null, injury: x.injury_status ?? null }
+      sleeper.players = { at: Date.now(), v: 2, byId }
       changed = true
     } catch (e) { console.warn('nba season: sleeper players', String(e)) }
   }
@@ -163,7 +166,7 @@ function world(leagueId: string): World {
   const players: NbaPlayer[] = seasonPlayers(leagueId).map((p) => {
     const l = live[p.id]
     if (!l) return p
-    return { ...p, team: l.team ?? p.team, injury: l.injury ? { status: l.injury, body: p.injury?.body ?? null, notes: p.injury?.notes ?? null } : null }
+    return { ...p, team: l.team, injury: l.injury ? { status: l.injury, body: p.injury?.body ?? null, notes: p.injury?.notes ?? null } : null }
   })
   const now = clock()
   return {
