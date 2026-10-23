@@ -19,7 +19,13 @@ const pct = (x: number) => `${Math.round(x * 100)}%`
 const TABS = ['Today', 'Week', 'Adds', 'News', 'Season'] as const
 type Tab = typeof TABS[number]
 
-const time = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '')
+/**
+ * A tip time in the phone's own zone, the zone named: "1:00 PM PT". PDT/PST read as PT (2026-10-23: a 1pm tip read as
+ * Eastern).
+ */
+const time = (iso: string | null) => (iso
+  ? new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).replace(/\b([A-Z])[SD]T\b/, '$1T')
+  : '')
 const day = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })
 const ago = (ms: number) => {
   const m = Math.round((Date.now() - ms) / 60000)
