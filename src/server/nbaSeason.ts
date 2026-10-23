@@ -30,7 +30,7 @@ import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { parseStandings, parseTransactions } from './yahooParse.js'
 import type { Alert } from './alerts.js'
-import { handReturns, injuryNotesNow, liveDrafts, neverIds, onPreferencesChange, seasonLeagues, seasonPlayers } from './nbaDraft.js'
+import { handReturns, injuryNotesNow, liveDrafts, neverIds, onPreferencesChange, seasonLeagues, seasonPlayers, seasonPunts, setSeasonPunts } from './nbaDraft.js'
 import { parseGameWeeks, parseLeagueRosters, parseNbaScoreboard, parsePlayers, parseRosterDay, parseSeasonSettings } from '../nba/yahooSeason.js'
 import { gameDay } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
@@ -42,6 +42,7 @@ import { daysFrom } from '../nba/week.js'
 import { addDays } from '../nba/adds.js'
 import type { Box } from '../nba/yahooSeason.js'
 import type { Game, NbaPlayer } from '../nba/types.js'
+import { CATS } from '../nba/value.js'
 
 const DATA = 'data/nba'
 const DIR = join(STATE_DIR, 'nba-season')
@@ -375,7 +376,7 @@ const staleViews = () => { for (const v of views.values()) v.stale = true }
 const fresh = (v: { at: number; stale?: boolean }) => !v.stale && Date.now() - v.at < VIEW_TTL
 
 function buildView(l: SeasonLeague & { myTeamId: string | null }): SeasonView {
-  const view = buildSeasonView(l, snapOf(l.id), world(l.id), status.events)
+  const view = buildSeasonView({ ...l, punts: seasonPunts(l.id) }, snapOf(l.id), world(l.id), status.events)
   views.set(l.id, { at: Date.now(), view })
   return view
 }
@@ -598,6 +599,17 @@ export async function handleNbaSeason(parts: string[], req: any, res: any, json:
   const l = leagues().find((x) => x.id === id)
   if (!l) { json(res, 404, { error: 'no such league' }); return true }
   if (req.method === 'GET' && !action) { json(res, 200, seasonView(id)); return true }
+  if (req.method === 'POST' && action === 'punts') {
+    // The categories you are punting in this league; [] clears them. Every screen is worked out again.
+    const b = await body(req)
+    const punts = Array.isArray(b?.punts) ? b.punts.map(String) : null
+    if (!punts || punts.some((c: string) => !(CATS as string[]).includes(c))) { json(res, 400, { error: `punts is a list of ${CATS.join(', ')}` }); return true }
+    if (l.scoring !== 'categories') { json(res, 400, { error: 'a points league has no categories to punt' }); return true }
+    setSeasonPunts(id, CATS.filter((c) => punts.includes(c)))
+    views.delete(id)
+    json(res, 200, seasonView(id))
+    return true
+  }
   if (req.method === 'POST' && action === 'refresh') {
     await readLeague(l, true)
     views.delete(id)

@@ -14,10 +14,10 @@
  * (football's rule).
  */
 import { daysFrom, startingSeats } from './week.js'
-import { categoryWeek, pointsWeek } from './matchup.js'
+import { categoryWeek, pointsWeek, type SideOutlook } from './matchup.js'
 import { rosterIds, sideOutlook, weekOf, type Context, type Snapshot, type Whatif } from './inseason.js'
 import { CATS, type Cat } from './value.js'
-import { addBox, emptyBox } from './yahooSeason.js'
+import { addBox, emptyBox, type Box } from './yahooSeason.js'
 import { designation } from './outlook.js'
 
 export interface Budget {
@@ -242,6 +242,11 @@ export function whatifFor(id: string, i: number): Whatif {
 
 /** The singles a pair is built from: the best this many swaps by season wins. */
 const PAIR_POOL = 10
+/** The box keys behind each category: a percentage is its makes and attempts. */
+const PUNT_KEYS: Record<Cat, (keyof Box)[]> = {
+  fg: ['fgm', 'fga'], ft: ['ftm', 'fta'], tpm: ['tpm'], pts: ['pts'], reb: ['reb'], ast: ['ast'], stl: ['stl'], blk: ['blk'], to: ['to'],
+}
+
 /** A pair is shown when its second move adds at least this much to the best single move. */
 export const PAIR_MARGIN = UPGRADE_WINS
 
@@ -298,6 +303,19 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
   // lost either way. The current week starts from nothing banked, the same for every roster compared.
   const { weeks: left, scheduled } = seasonLeft(snap, myTeamId, tomorrow, theirs?.id ?? null)
   const oppSides = left.map((w) => (w.opp ? sideOutlook(ctx, null, rosterIds(ctx, snap.rosters.find((r) => r.team.id === w.opp)?.players ?? []), seats, w.days).side : null))
+  // A punted category is held where my roster as it stands has it, week by week: no move wins or loses it, while the
+  // week is still counted as won or lost on all nine (2026-10-23: Hoops' AST punt, and Public's FG% and REB, were
+  // credited to adds; Missi led Public for rebounds and FG% given up).
+  // My lineups are seated as a punter seats them, too: nobody starts for what he adds in a punted category.
+  const myPunts = ctx.league.scoring === 'categories' ? ctx.league.punts ?? [] : []
+  const held = myPunts.flatMap((c) => PUNT_KEYS[c])
+  const asIs = held.length ? left.map((w) => sideOutlook(ctx, null, myIds, seats, w.days, myPunts).side) : []
+  const hold = (a: SideOutlook, i: number): SideOutlook => {
+    if (!held.length) return a
+    const rest = { ...a.rest }, restVar = { ...a.restVar }
+    for (const k of held) { rest[k] = asIs[i].rest[k]; restVar[k] = asIs[i].restVar[k] }
+    return { ...a, rest, restVar }
+  }
   const winsCache = new Map<string, number>()
   const seasonWins = (ids: { id: string; eligible: string[] }[]): number => {
     const key = ids.map((x) => x.id).sort().join(',')
@@ -307,7 +325,7 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
     left.forEach((w, i) => {
       const o = oppSides[i]
       if (!o) return
-      const a = sideOutlook(ctx, null, ids, seats, w.days).side
+      const a = hold(sideOutlook(ctx, null, ids, seats, w.days, myPunts).side, i)
       if (ctx.league.scoring === 'categories') { const x = categoryWeek(a, o); v += x.win + x.tie / 2 }
       else v += pointsWeek(a, o, ctx.league.points ?? {}, { mine: null, theirs: null }).win
     })

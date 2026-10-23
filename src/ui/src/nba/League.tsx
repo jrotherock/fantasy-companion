@@ -89,7 +89,7 @@ export function NbaLeague({ id, onBack }: { id: string; onBack: () => void }) {
           </div>
           {tab === 'Today' && <Today v={v} />}
           {tab === 'Week' && <Week v={v} />}
-          {tab === 'Adds' && <Adds v={v} />}
+          {tab === 'Adds' && <Adds v={v} onChange={() => refresh()} />}
           {tab === 'News' && <News v={v} />}
           {tab === 'Season' && <Season v={v} onChange={() => refresh()} />}
         </>
@@ -822,7 +822,7 @@ function Week({ v }: { v: SeasonView }) {
 
 // ── Adds ──
 
-function Adds({ v }: { v: SeasonView }) {
+function Adds({ v, onChange }: { v: SeasonView; onChange: () => void }) {
   const b = v.budget
   const streams = v.pickups.filter((p) => p.kind === 'stream')
   const ups = v.pickups.filter((p) => p.kind === 'upgrade')
@@ -838,6 +838,7 @@ function Adds({ v }: { v: SeasonView }) {
           <div className="nl-dim">{b.note}</div>
         </div>
       )}
+      {cats && <PuntPicker v={v} onChange={onChange} />}
       <VerdictCard v={v} />
       <details className="nl-alloptions">
         <summary>All options <span className="nl-dim">· the week's plan, every move scored, how sure each is</span></summary>
@@ -878,10 +879,39 @@ function Adds({ v }: { v: SeasonView }) {
         {!streams.length && <div className="nl-none">{v.startsOn ? `No games until ${dateWord(v.startsOn)}: streams start then.` : 'No stream moves this week by enough to spend an add.'}</div>}
         {streams.map((p, i) => <PickupRow key={p.add} p={p} cats={cats} over={b ? i >= b.forStreams : false} />)}
       </Section>
-      {v.punts.length > 0 && <p className="nl-note">Your roster is not competing in {v.punts.map((c) => LABEL[c]).join(', ')}, so season value leaves {v.punts.length === 1 ? 'it' : 'them'} out. A stream counts every category: any category won this week counts.</p>}
       <p className="nl-note">Each move is re-scored under ten what-ifs: the players in it with their minutes up or down by about 15%, games played by about 10%, and form in each category by about 8%. "Holds" is how many of the ten it still helps in; the range is what it adds from a low case to a high one.</p>
       </details>
     </>
+  )
+}
+
+/**
+ * The categories you are punting in this league, set here: a season move is judged as if it cannot win or lose them,
+ * and lineups in that judgment are seated without them. This week's odds and streams still count all nine
+ * (2026-10-23: Hoops punts AST, Public FG% and REB; the app had guessed, and guessed differently on two screens).
+ */
+function PuntPicker({ v, onChange }: { v: SeasonView; onChange: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const toggle = async (c: Cat) => {
+    const next = v.punts.includes(c) ? v.punts.filter((x) => x !== c) : [...v.punts, c]
+    setBusy(true)
+    try {
+      await fetch(`/api/nba/season/${v.league.id}/punts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ punts: next }) })
+      onChange()
+    } finally { setBusy(false) }
+  }
+  return (
+    <div className="nl-punts">
+      <span className="nl-dim">Punting</span>
+      <div className="nl-chips" role="group" aria-label="Categories you are punting">
+        {(Object.keys(LABEL) as Cat[]).map((c) => (
+          <button key={c} type="button" disabled={busy} aria-pressed={v.punts.includes(c)} className={`nl-puntchip${v.punts.includes(c) ? ' on' : ''}`} onClick={() => toggle(c)}>{LABEL[c]}</button>
+        ))}
+      </div>
+      <span className="nl-dim nl-puntnote">{v.punts.length
+        ? `Season moves ignore ${v.punts.map((c) => LABEL[c]).join(' and ')}; this week still counts all nine.`
+        : 'Tap the categories you are giving up: season moves will not count them.'}</span>
+    </div>
   )
 }
 

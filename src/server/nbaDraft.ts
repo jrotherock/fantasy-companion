@@ -909,6 +909,21 @@ export function seasonPlayers(leagueId: string): NbaPlayer[] {
   return applyAdjustments(players, resolvePreferences(prefFile(), prefLeague(leagueId), index).adjust)
 }
 
+/** The categories you are punting in a league, as you set them on its Adds screen. */
+export function seasonPunts(leagueId: string): Cat[] {
+  return resolvePreferences(prefFile(), prefLeague(leagueId), load().index).punts
+}
+
+/** Sets a league's punts ([] clears them); every season screen is worked out again. */
+export function setSeasonPunts(leagueId: string, punts: Cat[]) {
+  const file = prefFile()
+  const lists = ((file.leagues ??= {})[prefLeague(leagueId)] ??= {})
+  if (punts.length) lists.punts = punts; else delete lists.punts
+  mkdirSync(STATE_DIR, { recursive: true })
+  writeFileSync(PREFS, JSON.stringify(file, null, 1))
+  for (const f of prefListeners) f()
+}
+
 /** The never list for a league, as player ids: never offered anywhere in the season screens. */
 export function neverIds(leagueId: string): Set<string> {
   return new Set([...tagsFor(leagueId.replace(/-test$/, ''))].filter(([, t]) => t === 'never').map(([id]) => id))

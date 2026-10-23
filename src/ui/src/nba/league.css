@@ -296,3 +296,10 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-holds { font-family: var(--mono); font-size: 0.78rem; }
 .nl-alloptions > summary { cursor: pointer; font-family: var(--mono); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); padding: 0.4rem 0; }
 .nl-alloptions > summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* Your punts, on the Adds screen: a row of category chips, the punted ones struck through. */
+.nl-punts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0.4rem 0 0.7rem; font-size: 0.85rem; }
+.nl-puntchip { font-family: var(--mono); font-size: 0.75rem; padding: 0.15rem 0.45rem; border-radius: 4px; border: 1px solid var(--line); background: none; color: var(--ink); cursor: pointer; }
+.nl-puntchip.on { color: var(--muted); text-decoration: line-through; border-color: color-mix(in srgb, var(--red) 45%, var(--line)); background: color-mix(in srgb, var(--red) 10%, transparent); }
+.nl-puntchip:disabled { opacity: 0.6; cursor: wait; }
+.nl-puntnote { flex-basis: 100%; font-size: 0.78rem; }

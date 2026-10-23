@@ -25,6 +25,7 @@
  */
 import { NameIndex } from './join.js'
 import type { NbaPlayer } from './types.js'
+import { CATS, type Cat } from './value.js'
 
 export type PrefTag = 'never' | 'avoid' | 'like'
 
@@ -32,6 +33,8 @@ interface Lists { never?: string[]; avoid?: string[]; like?: string[] }
 interface LeagueLists extends Lists {
   order?: string[]
   adjust?: Record<string, Record<string, number>>
+  /** Categories you are punting in this league (a 9-cat league): a move is not judged by what it does to them. */
+  punts?: string[]
 }
 export interface PreferenceFile extends Lists {
   leagues?: Record<string, LeagueLists>
@@ -52,6 +55,8 @@ export interface Preferences {
   adjust: Map<string, Record<string, number>>
   /** Which stats in `adjust` are this league's own (the rest are every league's), by player id. */
   own: Map<string, Set<string>>
+  /** Categories you are punting in this league, as you set them. */
+  punts: Cat[]
   /** Names that matched nobody: a typo, or a player who has left the league. */
   unresolved: string[]
 }
@@ -62,8 +67,9 @@ export function resolvePreferences(file: PreferenceFile | null, leagueId: string
   const order: string[] = []
   const adjust = new Map<string, Record<string, number>>()
   const own = new Map<string, Set<string>>()
-  if (!file) return { tags, unresolved, order, adjust, own }
-  const league = file.leagues?.[leagueId] ?? {}
+  const league = file?.leagues?.[leagueId] ?? {}
+  const punts = (league.punts ?? []).filter((c): c is Cat => (CATS as string[]).includes(c))
+  if (!file) return { tags, unresolved, order, adjust, own, punts }
   // Weakest first, so a name on two lists ends up with the stronger tag.
   for (const tag of ['like', 'avoid', 'never'] as PrefTag[]) {
     for (const name of [...(file[tag] ?? []), ...(league[tag] ?? [])]) {
@@ -88,7 +94,7 @@ export function resolvePreferences(file: PreferenceFile | null, leagueId: string
     adjust.set(id, { ...(adjust.get(id) ?? {}), ...stats })
     own.set(id, new Set(Object.keys(stats)))
   }
-  return { tags, unresolved, order, adjust, own }
+  return { tags, unresolved, order, adjust, own, punts }
 }
 
 // Shooting: the percentages and the attempts that weight them.

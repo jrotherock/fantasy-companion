@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import type { YPlayer } from '../server/yahooParse.js'
 import type { NbaPlayer, Game, YahooWeek } from './types.js'
+import type { Cat } from './value.js'
 import { buildSeasonView, DO, LOOK, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonTile, verdictOf } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
 import { Context, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
@@ -580,4 +581,23 @@ test('when the verdict is a pair, the week plan leads with both moves at the ver
   assert.deepEqual(steps.slice(0, 2).map((st) => [st.add, st.drop, st.when]), pair.moves.map((m) => [m.name, m.dropName, v.verdict!.when]))
   const names = new Set(pair.moves.flatMap((m) => [m.name, m.dropName]))
   assert.ok(steps.slice(2).every((st) => !names.has(st.add) && !(st.drop && names.has(st.drop))), 'nothing else adds or drops the same players')
+})
+
+test('a punted category moves no pickup over the season, and this week is still counted on all nine', () => {
+  const { league, snap, w } = realLeague('2026-10-19-hoops', { ...hoops, id: 'nba-hoops' }, '4', 18)
+  const punted = { ...league, punts: ['ast'] as Cat[] }
+  const v = buildSeasonView(punted, snap, w)
+  const p = v.pickups.find((x) => x.kind === 'upgrade')
+  assert.ok(p, 'an upgrade to work with')
+  // The same add with three times the assists: worth no more over the season to a team punting them.
+  const more = { ...w, players: w.players.map((x) => x.id !== p.add ? x : { ...x, projection: { ...x.projection!, perGame: { ...x.projection!.perGame, ast: x.projection!.perGame.ast * 3 } } }) }
+  const again = buildSeasonView(punted, snap, more).pickups.find((x) => x.add === p.add && x.drop === p.drop)
+  assert.ok(again && Math.abs(again.seasonWins! - p.seasonWins!) < 1e-9, `${p.name}: ${p.seasonWins} then ${again?.seasonWins}`)
+  // Not punting them, the assists count.
+  const open = buildSeasonView(league, snap, more).pickups.find((x) => x.add === p.add && x.drop === p.drop)
+  const before = buildSeasonView(league, snap, w).pickups.find((x) => x.add === p.add && x.drop === p.drop)
+  assert.ok(open && before && open.seasonWins! > before.seasonWins! + 0.01, 'assists count when not punted')
+  // This week's odds are the same either way.
+  assert.equal(v.week?.odds?.win, buildSeasonView(league, snap, w).week?.odds?.win)
+  assert.deepEqual(v.punts, ['ast'])
 })

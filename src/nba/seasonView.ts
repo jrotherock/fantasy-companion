@@ -5,7 +5,6 @@
  */
 import type { Weights } from './matchup.js'
 import type { Cat } from './value.js'
-import { CATS } from './value.js'
 import { startingSeats } from './week.js'
 import { buildWeek, checkLineup, Context, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
 import { addDays, addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type PairMove, type Pickup } from './adds.js'
@@ -47,8 +46,6 @@ export interface SeasonView {
   catPlan: CategoryPlan | null
 }
 
-/** A category my team beats an average opponent in less than this often is one it has given up. */
-export const PUNT_EDGE = 0.25
 
 export function myTeamOf(snap: Snapshot, configured?: string | null): { id: string; name: string } | null {
   const t = snap.rosters.find((r) => r.team.mine)?.team
@@ -75,9 +72,9 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
 
   const pw = power(ctx, snap)
   const mine = pw.find((r) => r.teamId === me.id)
-  const punts = league.scoring === 'categories' && mine?.edges
-    ? CATS.filter((c) => (mine.edges![c] ?? 0.5) < PUNT_EDGE)
-    : []
+  // The punts you set, not ones guessed from the roster: a 32% category read as given up on the Season tab and as
+  // live on Adds (2026-10-23, Hoops AST), and only you know whether you are chasing it.
+  const punts = league.scoring === 'categories' ? league.punts ?? [] : []
   const lineup = snap.mineToday ? checkLineup(ctx, snap.mineToday, startingSeats(league.roster)) : null
   // Tomorrow's lineup as set: a starter with no game tomorrow while a bench player has one is a start lost unless
   // changed (2026-10-20: Harden, Murray and Allen started a Wednesday their teams did not play).

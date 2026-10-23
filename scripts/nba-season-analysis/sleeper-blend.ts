@@ -77,23 +77,29 @@ const pct = (x: number | null | undefined) => (x == null ? '—' : `${Math.round
 const fpw = league.scoring === 'points' ? league.points : null
 const fp = (b: any) => Object.entries(fpw ?? {}).reduce((s, [k, w]) => s + (w as number) * (b[k] ?? 0), 0)
 const out: Record<string, string[]> = {}
-const runs = [1, 0.5].map((w) => {
-  const v = buildSeasonView(league, snap, world(w))
+// PUNTS="ast" compares the league without punts and with them instead, both on the averaged lines.
+const PUNTS = (process.env.PUNTS ?? '').split(',').filter(Boolean)
+const cases = PUNTS.length
+  ? [{ key: 'a', w: 0.5, punts: [], label: 'BEFORE: every category counted' }, { key: 'b', w: 0.5, punts: PUNTS, label: `AFTER: punting ${PUNTS.join(', ')}` }]
+  : [{ key: 'a', w: 1, punts: [], label: 'BEFORE: Sleeper alone' }, { key: 'b', w: 0.5, punts: [], label: 'AFTER: half Sleeper, half own' }]
+const runs = cases.map(({ key, w, punts }) => {
+  const v = buildSeasonView({ ...league, punts } as any, snap, world(w))
   const lines: string[] = []
   const wk = v.week
   if (wk?.points) lines.push(`week: ${wk.points.mine.toFixed(0)}–${wk.points.theirs.toFixed(0)} projected, win ${pct(wk.points.win)}`)
   if (wk?.odds) lines.push(`week: win ${pct(wk.odds.win)} · ${wk.odds.races.map((r) => `${r.cat} ${pct(r.win)}`).join(' ')}`)
   const vd = v.verdict
   lines.push(`verdict: ${vd ? `${vd.level} — ${vd.headline} (${vd.when}; season ${vd.season?.toFixed(2)}${vd.confidence ? `, holds ${vd.confidence.holds}/${vd.confidence.of}` : ''})` : 'none'}`)
-  for (const p of v.pickups.slice(0, 6)) {
+  for (const p of v.pickups.slice(0, Number(process.env.TOP ?? 6))) {
     const wkx = p.weekGain == null ? '' : fpw ? `${p.weekGain >= 0 ? '+' : ''}${p.weekGain.toFixed(1)} pts` : `${p.weekGain >= 0 ? '+' : ''}${Math.round(p.weekGain * 100)}pp`
     lines.push(`  ${p.kind.padEnd(7)} ${p.name} for ${p.dropName ?? '—'}: week ${wkx}, season ${p.seasonWins?.toFixed(2) ?? '—'}`)
   }
-  out[w] = lines
+  out[key] = lines
   return { v, w }
 })
 console.log(`${row.label ?? LEAGUE} — ${TODAY}`)
-for (const w of [1, 0.5]) { console.log(`\n[${w === 1 ? 'BEFORE: Sleeper alone' : 'AFTER: half Sleeper, half own'}]`); for (const l of out[w]) console.log(l) }
+for (const c of cases) { console.log(`\n[${c.label}]`); for (const l of out[c.key]) console.log(l) }
+if (PUNTS.length) process.exit(0)
 
 // My players' lines for the rest of the week, game by game, both ways.
 const days = daysFrom(f1.start, f1.end, TODAY)

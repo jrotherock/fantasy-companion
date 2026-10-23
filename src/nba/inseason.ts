@@ -29,6 +29,8 @@ export interface SeasonLeague {
   roster: Record<string, number>
   adds: { perWeek: number | null; season: number | null }
   playoffWeeks: number[]
+  /** Categories you are punting (preferences, set on the Adds screen): moves are judged as if they cannot move them. */
+  punts?: Cat[]
 }
 
 /** What the server has read from Yahoo for one league. */
@@ -549,14 +551,15 @@ export interface WeekView {
   soFar: { days: string[]; mine: SoFarRow[]; theirs: SoFarRow[] } | null
 }
 
-export function sideOutlook(ctx: Context, side: Side | null, ids: { id: string; eligible: string[] }[], seats: string[], days: string[]): { side: SideOutlook; week: WeekOutlook } {
+/** `punts`: categories the lineup is not seated for (a punter does not start a man for his assists). */
+export function sideOutlook(ctx: Context, side: Side | null, ids: { id: string; eligible: string[] }[], seats: string[], days: string[], punts: Cat[] = []): { side: SideOutlook; week: WeekOutlook } {
   const { schedule, today, now } = ctx.world
   const week = projectWeek({
     men: ids.map((x) => ctx.man(x.id, x.eligible)),
     seats, days,
     playing: (d) => ctx.playing(d),
     outlook: (id, d) => ctx.outlook(id, d),
-    worth: (id) => ctx.worth(id) + 100,
+    worth: (id) => ctx.worth(id, punts) + 100,
   })
   return { side: { now: side?.box ?? emptyBox(), rest: week.box, restVar: week.variance }, week }
 }

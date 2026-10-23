@@ -25,7 +25,14 @@ const prefs = existsSync('data/preferences/nba.json') ? JSON.parse(readFileSync(
 const index = new NameIndex(raw.map((p) => ({ id: p.id, name: p.name, team: p.team })))
 // SCALE="Name:0.8;Name:1.1" scales a player's per-game counting stats (a minutes view: 22 of 29 minutes is 0.76).
 const scale = new Map((process.env.SCALE ?? '').split(';').filter(Boolean).map((x) => { const [n, f] = x.split(':'); return [n, Number(f)] as const }))
+// PUNT="ast,ft" plays those categories as given up: every player the same in them, so no move can win or lose them.
+const punt = (process.env.PUNT ?? '').split(',').filter(Boolean)
 const players = applyAdjustments(raw, resolvePreferences(prefs, LEAGUE, index).adjust).map((p: any) => {
+  if (punt.length && p.projection) {
+    const pg = { ...p.projection.perGame }, sh = { ...p.projection.shooting }
+    for (const c of punt) { if (c === 'fg') sh.fgPct = 0.47; else if (c === 'ft') sh.ftPct = 0.78; else pg[c] = 1 }
+    p = { ...p, projection: { ...p.projection, perGame: pg, shooting: sh } }
+  }
   const f = scale.get(p.name)
   if (!f || !p.projection) return p
   const pg = Object.fromEntries(Object.entries(p.projection.perGame).map(([k, v]) => [k, typeof v === 'number' ? v * f : v]))
