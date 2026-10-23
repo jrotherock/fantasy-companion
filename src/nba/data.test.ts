@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  easternDate, parseBrefAdvanced, parseEspnSchedule, parseFantasyPros, parseSleeperProjections, parseSleeperSeason,
+  easternDate, gameDay, parseBrefAdvanced, parseEspnSchedule, parseFantasyPros, parseSleeperProjections, parseSleeperSeason,
 } from './sources.js'
 import { DEFAULT_GP, NameIndex, consensus, durability, teamRows } from './join.js'
 import type { Season, SourceLine } from './types.js'
@@ -16,6 +16,16 @@ const line = (source: SourceLine['source'], pts: number, gp: number | null, fgPc
 test('a late tip is played on the Eastern date, not the UTC one', () => {
   // 10:30pm Eastern on 20 October is 02:30 on the 21st in UTC.
   assert.equal(easternDate(Date.UTC(2026, 9, 21, 2, 30)), '2026-10-20')
+})
+
+test("a night's games own the day until 4am Eastern, so a late game still on at midnight is today's", () => {
+  // 00:05 Eastern on Friday 23 October (04:05 UTC): Denver at OKC, a 9:30pm tip, is still on.
+  assert.equal(gameDay(Date.UTC(2026, 9, 23, 4, 5)), '2026-10-22')
+  // 3:59am Eastern is still Thursday's night; 4:00am is Friday.
+  assert.equal(gameDay(Date.UTC(2026, 9, 23, 7, 59)), '2026-10-22')
+  assert.equal(gameDay(Date.UTC(2026, 9, 23, 8, 0)), '2026-10-23')
+  // A noon Eastern game is on its own date.
+  assert.equal(gameDay(Date.UTC(2026, 11, 25, 17, 0)), '2026-12-25')
 })
 
 test('the schedule lists each game once although ESPN lists it under both teams', () => {

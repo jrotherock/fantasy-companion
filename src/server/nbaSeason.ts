@@ -32,7 +32,7 @@ import { parseStandings, parseTransactions } from './yahooParse.js'
 import type { Alert } from './alerts.js'
 import { handReturns, injuryNotesNow, liveDrafts, neverIds, onPreferencesChange, seasonLeagues, seasonPlayers } from './nbaDraft.js'
 import { parseGameWeeks, parseLeagueRosters, parseNbaScoreboard, parsePlayers, parseRosterDay, parseSeasonSettings } from '../nba/yahooSeason.js'
-import { easternDate } from '../nba/sources.js'
+import { gameDay } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
 import { diffStatus, type StatusEvent } from '../nba/news.js'
 import { buildSeasonView, losesStart, pickupAlerts, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
@@ -176,8 +176,8 @@ function world(leagueId: string): World {
     noise: noise!,
     never: neverIds(leagueId),
     now,
-    today: easternDate(now),
-    scores: scores?.date === easternDate(now) ? scores.games : [],
+    today: gameDay(now),
+    scores: scores?.date === gameDay(now) ? scores.games : [],
   }
 }
 
@@ -188,7 +188,7 @@ let scores: { date: string; at: number; games: LiveGame[] } | null = null
 /** Today's games as they stand: every minute while games are on, every ten otherwise. A local test run reads none. */
 async function refreshScores() {
   if (process.env.NBA_NOW && !process.env.RAILWAY_ENVIRONMENT) return
-  const today = easternDate(clock())
+  const today = gameDay(clock())
   if (scores && scores.date === today && Date.now() - scores.at < (gamesOn() ? MIN : 10 * MIN) - 5000) return
   try {
     const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${today.replaceAll('-', '')}`, { headers: { 'User-Agent': 'fantasy-companion' } })
@@ -227,7 +227,7 @@ function noteStatuses() {
 /** Whether games are on or about to be: the first tip an hour away until three hours after the last. */
 function gamesOn(now = clock()): boolean {
   schedule ??= JSON.parse(readFileSync(`${DATA}/schedule.json`, 'utf8')).games as Game[]
-  const today = easternDate(now)
+  const today = gameDay(now)
   const tips = schedule.filter((g) => g.date === today && g.tip).map((g) => Date.parse(g.tip!))
   if (!tips.length) return false
   return now >= Math.min(...tips) - HOUR && now <= Math.max(...tips) + 3 * HOUR
@@ -257,7 +257,7 @@ async function readLeague(l: SeasonLeague & { myTeamId: string | null }, force =
   const drafted = s.rosters.some((r) => r.players.length > 0)
   const live = gamesOn()
   const key = l.leagueKey, gameKey = key.split('.')[0]
-  const today = easternDate(Date.now())
+  const today = gameDay(Date.now())
   let changed = false
   const due = (p: Part) => {
     const st = s.parts[p]
@@ -496,7 +496,7 @@ export function nbaAlerts(now = clock()): Alert[] {
     if (!e.gameToday || !['out', 'injured', 'suspended'].includes(e.status)) continue
     if (e.leagues.filter((x) => x.starting).length < 2) continue
     out.push({
-      id: `nba-exposure:${e.playerId}:${easternDate(now)}`,
+      id: `nba-exposure:${e.playerId}:${gameDay(now)}`,
       leagueId: e.leagues[0].id, rule: 'nba-exposure',
       headline: `${e.name} is ${e.status} — he starts in both basketball leagues`,
       detail: e.leagues.map((x) => x.label).join(' and '),
@@ -521,7 +521,7 @@ async function round() {
     for (const l of leagues()) await readLeague(l)
     const weeks = leagues().map((l) => snapOf(l.id).weeks).find((w) => w.length) ?? []
     // Sleeper only matters once there is a season to read.
-    if (weeks.length) await refreshSleeper(weeks, easternDate(Date.now()))
+    if (weeks.length) await refreshSleeper(weeks, gameDay(Date.now()))
     noteStatuses()
   } catch (e) {
     console.warn('nba season round failed:', String((e as Error)?.message ?? e))

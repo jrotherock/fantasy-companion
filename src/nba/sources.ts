@@ -129,6 +129,17 @@ export function easternDate(ms: number): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(ms)
 }
 
+/** Hours past Eastern midnight that a night's slate still owns: a 10:30pm Eastern tip with overtime ends near 1:30am. */
+export const DAY_ROLLS_AT = 4
+/**
+ * The day whose games are being played: the Eastern date until 4am Eastern, so a 9:30pm tip still going at midnight
+ * is today's game, not yesterday's (2026-10-22: at 9pm Pacific, Denver at OKC on, Today showed Friday's lineup and
+ * the home tile spoke of Saturday).
+ */
+export function gameDay(ms: number): string {
+  return easternDate(ms - DAY_ROLLS_AT * 3_600_000)
+}
+
 /**
  * ESPN's `proTeamSchedules_wl` view lists every game under both teams, so games
  * are de-duplicated by id. NBA Cup knockout games are not in it until the group

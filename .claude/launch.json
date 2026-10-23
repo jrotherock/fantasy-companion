@@ -44,6 +44,15 @@
         "PATH=\"$HOME/.local/node/bin:$PATH\"; S=\"${TMPDIR:-/tmp}/ff-nba-test-pre-state\"; rm -rf \"$S\"; mkdir -p \"$S\"; node -e \"const l=require('./data/nba/leagues.json').leagues.map(x=>({...x,id:x.id+'-test',label:x.label+' (test)'}));require('fs').writeFileSync(process.argv[1]+'/nba-leagues.local.json',JSON.stringify({leagues:l}))\" \"$S\"; NBA_NOW=\"2026-10-12T18:00:00Z\" STATE_DIR=\"$S\" PORT=4605 exec npx tsx src/server/index.ts"
       ],
       "port": 4605
+    },
+    {
+      "name": "nba-test-midnight",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "PATH=\"$HOME/.local/node/bin:$PATH\"; S=\"${TMPDIR:-/tmp}/ff-nba-test-midnight-state\"; rm -rf \"$S\"; mkdir -p \"$S\"; node -e \"const l=require('./data/nba/leagues.json').leagues.map(x=>({...x,id:x.id+'-test',label:x.label+' (test)'}));require('fs').writeFileSync(process.argv[1]+'/nba-leagues.local.json',JSON.stringify({leagues:l}))\" \"$S\"; NBA_NOW=\"2026-11-19T05:05:00Z\" STATE_DIR=\"$S\" PORT=4606 exec npx tsx src/server/index.ts"
+      ],
+      "port": 4606
     }
   ]
 }
