@@ -462,8 +462,8 @@ function RosterGroup({ title, rows, preseason, points, total }: { title: string;
           </colgroup>
           <thead>
             <tr>
-              <th className="l">Slot</th>
-              <th className="l">Player</th>
+              <th className="l nl-slotc">Slot</th>
+              <th className="l nl-playerh">Player</th>
               <th className="l">{tonight ? 'Tonight' : 'Next game'}</th>
               {points && <th className="nl-catc nl-fpc" title="Fantasy points at this league's scoring">FP</th>}
               {TCOLS.map((c) => <th key={c.key} className="nl-catc">{c.label}</th>)}
@@ -479,7 +479,7 @@ function RosterGroup({ title, rows, preseason, points, total }: { title: string;
               return (
                 <tr key={r.id} className={`nl-r-${st}${ACTIVE_SLOT(r.slot) ? '' : ' nl-r-bench'}`}>
                   <td className="l nl-slotc">{r.slot ?? '—'}</td>
-                  <td className="l nl-playerc">{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>{r.status !== 'healthy' && <> <InjuryTag r={r} /></>}<div className="nl-line-m"><RowLine r={r} /></div></td>
+                  <td className="l nl-playerc"><span className="nl-slot-m">{r.slot ?? '—'}</span>{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>{r.status !== 'healthy' && <> <InjuryTag r={r} /></>}</td>
                   <td className="l nl-gamec">{r.game
                     ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · <GameState r={r} /></>
                     : r.next ? <span className="nl-dim">{dateWord(r.next.date)} {r.next.home ? 'v' : '@'} {r.next.vs} · proj</span> : '—'}</td>
@@ -499,7 +499,7 @@ function RosterGroup({ title, rows, preseason, points, total }: { title: string;
             })}
             {total && tot && totPace && (
               <tr className="nl-total">
-                <td className="l" colSpan={3}>Tonight so far · {counted.length} starter{counted.length === 1 ? '' : 's'}<div className="nl-line-m"><b>{lineOf(tot, true)}</b> · FG {rate(tot.fgm, tot.fga)} · FT {rate(tot.ftm, tot.fta)}</div></td>
+                <td className="nl-slotc" /><td className="l nl-playerc">Tonight so far · {counted.length} starter{counted.length === 1 ? '' : 's'}</td><td className="nl-gamec" />
                 {points && <td className="nl-catc nl-fpc" style={shade(fpHeat(fpOf(tot, points), fpOf(totPace, points)))}><b>{fpOf(tot, points).toFixed(1)}</b></td>}
                 {TCOLS.map((c) => <td key={c.key} className="nl-catc" style={c.cat ? shade(heat(c.cat, tot, totPace)) : undefined}>{c.cell(tot, true)}</td>)}
                 <td />
@@ -524,19 +524,6 @@ function GameState({ r }: { r: TodayRow }) {
   if (st === 'final') return <i className="nl-final">{g.status ?? 'Final'}{g.won != null ? ` (${g.won ? 'W' : 'L'})` : ''}{score ? ` ${score}` : ''}</i>
   if (st === 'live') return <><b className="nl-live">{g.status ?? 'live'}</b>{score && <span className={g.score!.us > g.score!.them ? 'nl-up' : g.score!.us < g.score!.them ? 'nl-down' : ''}> · {score}</span>}</>
   return <span className="nl-dim">{time(g.tip)} · proj</span>
-}
-
-/** On a phone, where the category columns do not fit: the line under his name. */
-function RowLine({ r }: { r: TodayRow }) {
-  const st = stateOf(r)
-  if ((st === 'live' || st === 'final') && r.live) return <><b>{lineOf(r.live, true)}</b> · {r.live.fgm}/{r.live.fga} FG · {r.live.ftm}/{r.live.fta} FT</>
-  return r.tonight ? <span className="nl-projv">proj {lineOf(r.tonight)}</span> : null
-}
-
-/** A game in one short line: 18p 5r 6a 2·3 1.2s 0.4b. A real line (whole) has no tenths. */
-function lineOf(b: { pts: number; reb: number; ast: number; tpm: number; stl: number; blk: number }, whole = false): string {
-  const n = (x: number) => (whole || x >= 3 ? Math.round(x).toString() : x.toFixed(1))
-  return `${n(b.pts)}p ${n(b.reb)}r ${n(b.ast)}a ${n(b.tpm)}·3 ${n(b.stl)}s ${n(b.blk)}b`
 }
 
 // ── Week ──

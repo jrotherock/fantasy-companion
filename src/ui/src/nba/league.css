@@ -151,13 +151,28 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-today button.nl-stat { background: none; cursor: pointer; font: inherit; font-family: var(--mono); font-size: 10px; }
 .nl-today .nl-noterow td { font-size: 0.8rem; color: var(--muted); border-bottom: 1px solid rgba(42, 52, 65, 0.6); padding-top: 0; }
 .nl-today .nl-line-m { display: none; }
-/* Eleven stat columns need about 1180px of window; narrower, the line goes under the name. */
+/*
+ * Eleven stat columns need about 1180px of window. Narrower, every stat keeps its own column after the game, and the
+ * table scrolls sideways under a pinned player column, with his slot above his name (2026-10-22: the line under the
+ * name, one string of numbers, was too hard to read on a phone).
+ */
+.nl-today .nl-slot-m { display: none; }
 @media (max-width: 1180px) {
-  .nl-table.nl-today { table-layout: auto; }
-  .nl-today .nl-gamec { white-space: normal; width: 6rem; }
-  .nl-today .nl-pos, .nl-today .nl-catc:not(.nl-fpc), .nl-today .nl-c-cat { display: none; }
-  .nl-today .nl-line-m { display: block; font-family: var(--mono); font-size: 0.72rem; margin-top: 0.15rem; }
-  .nl-today .nl-slotc { width: 2.6rem; }
+  .nl-table.nl-today { table-layout: auto; width: max-content; min-width: 100%; }
+  .nl-today .nl-slotc, .nl-today .nl-c-slot, .nl-today .nl-pos { display: none; }
+  .nl-today .nl-c-player { width: 7.5rem; }
+  .nl-today .nl-c-game { width: 6rem; }
+  .nl-today .nl-c-ma { width: auto; }
+  .nl-today .nl-c-wk { width: auto; }
+  .nl-today .nl-slot-m { display: block; font-family: var(--mono); font-size: 0.68rem; color: var(--muted); line-height: 1.1; }
+  .nl-today td, .nl-today th { padding-left: 0.35rem; padding-right: 0.35rem; }
+  .nl-today .nl-playerc, .nl-today th.nl-playerh {
+    position: sticky; left: 0; z-index: 1; width: 7.5rem; min-width: 7.5rem; max-width: 7.5rem; white-space: normal; line-height: 1.2;
+    background: var(--surface); box-shadow: 1px 0 0 var(--line);
+  }
+  .nl-today tr.nl-r-live td.nl-playerc { background: color-mix(in srgb, var(--green) 7%, var(--surface)); }
+  .nl-today .nl-gamec { white-space: normal; min-width: 5.5rem; max-width: 6.5rem; font-size: 0.78rem; line-height: 1.2; }
+  .nl-today .nl-catc { font-size: 0.74rem; }
 }
 .nl-day.open { border-color: var(--green); }
 .nl-day.behind .nl-dayv { color: var(--amber); }
