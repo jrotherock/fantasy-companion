@@ -164,7 +164,11 @@ export class Context {
   /** A Yahoo status for a player overrides what the player file was built with. */
   setStatus(id: string, yahooStatus: string | null) {
     const p = this.byId.get(id)
-    this.status.set(id, designation(yahooStatus, p?.injury?.status))
+    const d = designation(yahooStatus, p?.injury?.status)
+    if (this.status.get(id) === d) return
+    this.status.set(id, d)
+    // A designation moves his outlook and his teammates' minutes: what was worked out before is out of date.
+    this.outlooks.clear(); this.bumps.clear()
   }
 
   designation(id: string): Designation { return this.status.get(id) ?? 'healthy' }
@@ -200,6 +204,14 @@ export class Context {
     return rate
   }
 
+  private readonly slates = new Map<string, Set<string>>()
+  /** Teams with a game still to tip on a date (playingOn), read from the schedule once a date. */
+  playing(date: string): Set<string> {
+    let s = this.slates.get(date)
+    if (!s) { s = playingOn(this.world.schedule, date, this.world.today, this.world.now); this.slates.set(date, s) }
+    return s
+  }
+
   outlook(id: string, date: string): GameOutlook | null {
     const o = this.baseOutlook(id, date)
     const w = this.whatif?.get(id)
@@ -212,7 +224,20 @@ export class Context {
    */
   whatif: Map<string, Whatif> | null = null
 
+  private readonly outlooks = new Map<string, GameOutlook | null>()
+  /**
+   * A player's outlook on a date, worked out once: a view projects the same week hundreds of times over, one move at
+   * a time, and recomputing every night's line was most of the 5 seconds the home screen took (2026-10-22).
+   */
   private baseOutlook(id: string, date: string): GameOutlook | null {
+    const key = `${id}|${date}`
+    if (this.outlooks.has(key)) return this.outlooks.get(key)!
+    const o = this.freshOutlook(id, date)
+    this.outlooks.set(key, o)
+    return o
+  }
+
+  private freshOutlook(id: string, date: string): GameOutlook | null {
     const p = this.byId.get(id)
     if (!p) return null
     const sleeper = this.world.dayProj.get(`${id}|${date}`)
@@ -517,7 +542,7 @@ export function sideOutlook(ctx: Context, side: Side | null, ids: { id: string; 
   const week = projectWeek({
     men: ids.map((x) => ctx.man(x.id, x.eligible)),
     seats, days,
-    playing: (d) => playingOn(schedule, d, today, now),
+    playing: (d) => ctx.playing(d),
     outlook: (id, d) => ctx.outlook(id, d),
     worth: (id) => ctx.worth(id) + 100,
   })

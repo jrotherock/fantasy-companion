@@ -129,7 +129,14 @@ export function designation(...codes: (string | null | undefined)[]): Designatio
 
 /** Days between two ISO dates. */
 export function daysBetween(a: string, b: string): number {
-  return Math.round((Date.parse(b + 'T12:00:00Z') - Date.parse(a + 'T12:00:00Z')) / 86400000)
+  return dayNumber(b) - dayNumber(a)
+}
+const dayNumbers = new Map<string, number>()
+/** A date's day count since 1970, parsed once: daysBetween runs millions of times in a view. */
+function dayNumber(d: string): number {
+  let n = dayNumbers.get(d)
+  if (n == null) { n = Math.round(Date.parse(d + 'T12:00:00Z') / 86400000); dayNumbers.set(d, n) }
+  return n
 }
 
 /** Healthy players still sit: rest nights, a tweak nobody reported. */

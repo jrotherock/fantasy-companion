@@ -100,7 +100,7 @@ function saveSnap(id: string, s: Stored) {
   s.at = Date.now()
   snaps.set(id, s)
   writeFileSync(file(`${id}.json`), JSON.stringify(s))
-  views.delete(id)
+  staleView(id)
 }
 
 // ── Sleeper: logs, projections, live player file ──
@@ -147,7 +147,7 @@ async function refreshSleeper(weeks: Snapshot['weeks'], today: string) {
       changed = true
     } catch (e) { console.warn('nba season: sleeper players', String(e)) }
   }
-  if (changed) { saveSleeper(); views.clear() }
+  if (changed) { saveSleeper(); staleViews() }
 }
 
 // ── The world every league shares ──
@@ -196,7 +196,7 @@ async function refreshScores() {
     const games = parseEspnScoreboard(await res.json())
     const changed = JSON.stringify(games) !== JSON.stringify(scores?.date === today ? scores.games : null)
     scores = { date: today, at: Date.now(), games }
-    if (changed) views.clear()
+    if (changed) staleViews()
   } catch (e) {
     console.warn('nba scores:', String((e as Error)?.message ?? e))
     if (scores) scores.at = Date.now()
@@ -218,7 +218,7 @@ function noteStatuses() {
   if (ev.length || Object.keys(cur).length !== Object.keys(status.last).length) {
     status = { last: cur, events: [...status.events, ...ev].filter((e) => Date.now() - e.at < 4 * 24 * HOUR) }
     writeFileSync(file('status.json'), JSON.stringify(status))
-    if (ev.length) views.clear()
+    if (ev.length) staleViews()
   }
 }
 
@@ -355,20 +355,56 @@ function leagueBody(json: any): Record<string, any> {
 
 // ── Views ──
 
-const views = new Map<string, { at: number; view: SeasonView }>()
-// Your lists or your view of a player changed: every league's screen is worked out again on its next read.
+/**
+ * Each league's screen as last worked out. Working one out takes a second or more and holds up every other request,
+ * so a screen is served as it stands and worked out again behind it: when what it rests on changes (Yahoo, Sleeper,
+ * scores, statuses), when it is two minutes old, and every minute for every league, so opening the app finds it ready
+ * (2026-10-22: the home screen and a league page took 4-5 seconds whenever nobody had looked in two minutes).
+ */
+const views = new Map<string, { at: number; view: SeasonView; stale?: boolean }>()
+// Your lists or your view of a player changed: every league's screen is worked out again on its next read, not
+// served as it was, since you are looking for the change.
 onPreferencesChange(() => views.clear())
 /** A view goes stale on its own: games tip, and a lineup move stops being possible. */
 const VIEW_TTL = 2 * MIN
+const staleView = (id: string) => { const v = views.get(id); if (v) v.stale = true }
+const staleViews = () => { for (const v of views.values()) v.stale = true }
+const fresh = (v: { at: number; stale?: boolean }) => !v.stale && Date.now() - v.at < VIEW_TTL
+
+function buildView(l: SeasonLeague & { myTeamId: string | null }): SeasonView {
+  const view = buildSeasonView(l, snapOf(l.id), world(l.id), status.events)
+  views.set(l.id, { at: Date.now(), view })
+  return view
+}
+
+const queued = new Set<string>()
+/** Works a league's screen out again on a later turn of the event loop, one league a turn, so requests get in between. */
+function rebuildSoon(id: string) {
+  if (queued.has(id)) return
+  queued.add(id)
+  setImmediate(() => {
+    queued.delete(id)
+    const l = leagues().find((x) => x.id === id)
+    const v = views.get(id)
+    if (!l || (v && fresh(v))) return
+    try { buildView(l) } catch (e) { console.warn('nba season view:', id, String((e as Error)?.message ?? e)) }
+  })
+}
 
 export function seasonView(id: string): SeasonView | null {
   const l = leagues().find((x) => x.id === id)
   if (!l) return null
   const cached = views.get(id)
-  if (cached && Date.now() - cached.at < VIEW_TTL) return cached.view
-  const view = buildSeasonView(l, snapOf(id), world(id), status.events)
-  views.set(id, { at: Date.now(), view })
-  return view
+  if (cached) {
+    if (!fresh(cached)) rebuildSoon(id)
+    return cached.view
+  }
+  return buildView(l)
+}
+
+/** Every real league's screen kept ready: those out of date are worked out again, one at a time. */
+function warmViews() {
+  for (const l of leagues()) if (!isTest(l.id) || showTest()) { const v = views.get(l.id); if (!v || !fresh(v)) rebuildSoon(l.id) }
 }
 
 /** Test leagues show on the home screen only in a local test run (NBA_NOW set), never in production. */
@@ -542,6 +578,8 @@ export function startNbaSeason() {
     timer = setTimeout(tick, gamesOn() ? 5 * MIN : 15 * MIN)
   }
   timer = setTimeout(tick, 20_000)
+  setTimeout(warmViews, 30_000)
+  setInterval(warmViews, MIN).unref?.()
 }
 
 // ── Routes ──
@@ -570,6 +608,7 @@ export async function handleNbaSeason(parts: string[], req: any, res: any, json:
     saveSnap(id, { ...emptySnap(), ...b, parts: {} })
     if (b.sleeperLogs) { sleeper.logs = { 1: { at: Date.now(), rows: b.sleeperLogs } }; views.clear() }
     if (b.statusEvents) status.events = b.statusEvents
+    views.delete(id)
     json(res, 200, seasonView(id))
     return true
   }
