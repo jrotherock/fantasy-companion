@@ -845,6 +845,7 @@ function Adds({ v, onChange }: { v: SeasonView; onChange: () => void }) {
         </div>
       )}
       {cats && <PuntPicker v={v} onChange={onChange} />}
+      <IlBack v={v} />
       <VerdictCard v={v} />
       <details className="nl-alloptions">
         <summary>All options <span className="nl-dim">· the week's plan, every move scored, how sure each is</span></summary>
@@ -888,6 +889,35 @@ function Adds({ v, onChange }: { v: SeasonView; onChange: () => void }) {
       <p className="nl-note">Each move is re-scored under ten what-ifs: the players in it with their minutes up or down by about 15%, games played by about 10%, and form in each category by about 8%. "Holds" is how many of the ten it still helps in; the range is what it adds from a low case to a high one.</p>
       </details>
     </>
+  )
+}
+
+/**
+ * Players on IL coming back, before any add: one no longer out has to come off IL first (Yahoo blocks adds while he
+ * sits there), for the player named; the moves below already assume it. One still out but due back this week is
+ * named, to keep a spot for (2026-10-23: Nesmith, questionable on IL, while Adds offered Bailey for Simons).
+ */
+function IlBack({ v }: { v: SeasonView }) {
+  if (!v.ilBack.length) return null
+  return (
+    <div className="nl-ilback">
+      {v.ilBack.map((r) => (
+        <div key={r.id} className={`nl-ilrow${r.ready ? ' ready' : ''}`}>
+          {r.ready
+            ? <>
+                <div className="nl-vk">First · off IL</div>
+                <div className="nl-vh">{r.drop === r.id ? `Let ${r.name} go` : r.drop ? `Take ${r.name} off IL, drop ${r.dropName}` : `Take ${r.name} off IL`}</div>
+                <div className="nl-dim">
+                  Listed {r.status}: he cannot play from IL, and Yahoo blocks adds until he is off it.{' '}
+                  {r.drop === r.id
+                    ? 'Back, he adds nothing over your roster, so dropping him is the move.'
+                    : <>Rest of season <span className={effect(r.seasonWins ?? 0, 0.03)}>{wins(r.seasonWins ?? 0)}</span>{r.drop ? ` over keeping ${r.dropName}` : ''}. The moves below assume it is done.</>}
+                </div>
+              </>
+            : <div className="nl-dim"><b className="nl-amber">{r.name}</b> ({r.status}) is due back {dateWord(r.returns!)}: keep a spot in mind for him.</div>}
+        </div>
+      ))}
+    </div>
   )
 }
 

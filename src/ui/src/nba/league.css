@@ -303,3 +303,9 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-puntchip.on { color: var(--muted); text-decoration: line-through; border-color: color-mix(in srgb, var(--red) 45%, var(--line)); background: color-mix(in srgb, var(--red) 10%, transparent); }
 .nl-puntchip:disabled { opacity: 0.6; cursor: wait; }
 .nl-puntnote { flex-basis: 100%; font-size: 0.78rem; }
+
+/* A player coming back from IL, before the verdict: amber, since it comes first. */
+.nl-ilback { display: grid; gap: 0.5rem; margin-bottom: 0.7rem; }
+.nl-ilrow { border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem 0.8rem; font-size: 0.88rem; }
+.nl-ilrow.ready { border-color: color-mix(in srgb, var(--amber) 55%, var(--line)); background: color-mix(in srgb, var(--amber) 6%, transparent); }
+.nl-ilrow.ready .nl-vk { color: var(--amber); }

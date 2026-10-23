@@ -310,13 +310,14 @@ function checkPairs(pairs: PairMove[], league: SeasonLeague & { myTeamId: string
 }
 
 /** A league as Yahoo had it on 2026-10-19, from an analysis snapshot: rosters, the schedule, the season about to start. */
+// A snapshot keeps who sits on IL, not his tag: he is taken as out, as Yahoo requires to put him there.
 function realLeague(dir: string, base: SeasonLeague & { myTeamId: string }, me: string, playoffStart: number, today = '2026-10-19') {
   const d = JSON.parse(readFileSync(`scripts/nba-season-analysis/${dir}/sched.json`, 'utf8'))
   const byY = new Map(players.filter((p) => p.yahoo).map((p) => [p.yahoo!.yahooId, p]))
   const fixtures: Fixture[] = d.weeks.split('|').map((s: string) => { const [w, a, b, pairs] = s.split(':'); return { week: +w, start: a, end: b, pairs: pairs.split(',').map((x: string) => x.split('-')) } })
   const rosters = d.rosters.split('\n').map((line: string) => {
     const [tid, , list] = line.split('~')
-    return { team: meta(tid, tid === me), players: list.split(',').map((y: string) => ({ y: y.replace('i', ''), il: y.endsWith('i') })).filter((x: any) => byY.has(x.y)).map((x: any) => ypl(byY.get(x.y)!, x.il ? 'IL' : 'BN')) }
+    return { team: meta(tid, tid === me), players: list.split(',').map((y: string) => ({ y: y.replace('i', ''), il: y.endsWith('i') })).filter((x: any) => byY.has(x.y)).map((x: any) => ypl(byY.get(x.y)!, x.il ? 'IL' : 'BN', x.il ? 'O' : null)) }
   })
   const side = (t: TeamMeta) => ({ ...t, box: emptyBox(), points: 0, projected: null, games: null })
   const f1 = fixtures[0]
@@ -600,4 +601,30 @@ test('a punted category moves no pickup over the season, and this week is still 
   // This week's odds are the same either way.
   assert.equal(v.week?.odds?.win, buildSeasonView(league, snap, w).week?.odds?.win)
   assert.deepEqual(v.punts, ['ast'])
+})
+
+test('a player on IL who is no longer out comes off it first, for the one the season misses least, and the adds assume it', () => {
+  const { league, snap, w, myIds } = realLeague('2026-10-19-hoops', { ...hoops, id: 'nba-hoops' }, '4', 18)
+  const rostered = new Set(snap.rosters.flatMap((r) => r.players.map((y) => y.yahooId)))
+  // A good free agent, put on my IL listed questionable: he cannot play from there.
+  const free = players.filter((p) => p.yahoo && p.projection && p.team && !p.injury && !rostered.has(p.yahoo.yahooId)).sort((a, b) => b.projection!.perGame.pts * (b.projection!.gp ?? 0) - a.projection!.perGame.pts * (a.projection!.gp ?? 0))[0]
+  const withIl = (status: string) => ({ ...snap, rosters: snap.rosters.map((r) => r.team.id !== '4' ? r : { ...r, players: [...r.players, ypl(free, 'IL', status)] }) })
+  const v = buildSeasonView(league, withIl('GTD'), w)
+  const back = v.ilBack.find((x) => x.id === free.id)
+  assert.ok(back?.ready, `${free.name} comes off IL first`)
+  assert.ok(back.drop && back.drop !== free.id, `${free.name} is worth a roster spot`)
+  // Worth what the season says, by hand, over the roster as it is; and no other drop is worth more.
+  const him = { id: free.id, eligible: [...free.positions, 'Util'] }
+  const gtd = withIl('GTD')
+  const now = winsByHand(league, gtd, w, myIds)
+  const swap = (d: string) => winsByHand(league, gtd, w, [...myIds.filter((x) => x.id !== d), him]) - now
+  assert.ok(Math.abs(back.seasonWins! - swap(back.drop)) < 1e-9)
+  for (const d of myIds) assert.ok(swap(d.id) <= back.seasonWins! + 1e-9, `dropping ${d.id} is no better`)
+  // The adds come after: none drops the player already gone for him.
+  for (const p of v.pickups) assert.notEqual(p.drop, back.drop, `${p.name} drops ${p.dropName}, already gone`)
+  // Still out, due back this week: named, and the adds are what they were without him.
+  const due = { ...w, returns: new Map([[free.id, '2026-10-25']]) }
+  const out = buildSeasonView(league, withIl('O'), due)
+  assert.deepEqual(out.ilBack.map((x) => [x.name, x.ready, x.returns]), [[free.name, false, '2026-10-25']])
+  assert.deepEqual(out.pickups.map((p) => [p.add, p.drop]), buildSeasonView(league, snap, due).pickups.map((p) => [p.add, p.drop]))
 })

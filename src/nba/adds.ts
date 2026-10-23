@@ -18,7 +18,7 @@ import { categoryWeek, pointsWeek, type SideOutlook } from './matchup.js'
 import { rosterIds, sideOutlook, weekOf, type Context, type Snapshot, type Whatif } from './inseason.js'
 import { CATS, type Cat } from './value.js'
 import { addBox, emptyBox, type Box } from './yahooSeason.js'
-import { designation } from './outlook.js'
+import { designation, type Designation } from './outlook.js'
 
 export interface Budget {
   /** Adds used and allowed this week; null where the league has no weekly cap. */
@@ -196,6 +196,23 @@ export function pickups(ctx: Context, snap: Snapshot, myTeamId: string, opts: { 
 }
 
 /** Two moves made together: what they add over the season as a pair, and each alone. */
+/**
+ * A player on my IL coming back. Ready: no longer out, so he has to come off IL before any add, for `drop` (the one the
+ * season misses least with him in; himself when letting him go is better; null with a spot open), worth `seasonWins`
+ * against leaving the roster as it is. Not ready: still out, with a return date this week.
+ */
+export interface IlReturn {
+  id: string
+  name: string
+  status: Designation
+  ready: boolean
+  returns: string | null
+  drop: string | null
+  dropName: string | null
+  seasonWins: number | null
+}
+const OUT: Designation[] = ['out', 'injured', 'inactive', 'suspended']
+
 export interface PairMove {
   moves: { add: string; name: string; drop: string; dropName: string; waiver: boolean; seasonWins: number }[]
   /** Matchups expected won over the rest of the regular season, gained by both moves. */
@@ -250,10 +267,10 @@ const PUNT_KEYS: Record<Cat, (keyof Box)[]> = {
 /** A pair is shown when its second move adds at least this much to the best single move. */
 export const PAIR_MARGIN = UPGRADE_WINS
 
-export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, opts: { punts?: Cat[]; limit?: number } = {}): { pickups: Pickup[]; pairs: PairMove[] } {
+export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, opts: { punts?: Cat[]; limit?: number } = {}): { pickups: Pickup[]; pairs: PairMove[]; ilBack: IlReturn[] } {
   const { today } = ctx.world
   const mine = snap.rosters.find((r) => r.team.id === myTeamId)
-  if (!mine) return { pickups: [], pairs: [] }
+  if (!mine) return { pickups: [], pairs: [], ilBack: [] }
   const rostered = new Set<string>()
   for (const r of snap.rosters) for (const y of r.players) { const id = ctx.resolve(y); if (id) rostered.add(id) }
   const waivers = new Set(snap.waivers)
@@ -269,7 +286,7 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
   const line = worth(byWorth[Math.min(10, byWorth.length - 1)]?.id ?? '') || 0
   const season = (id: string) => (worth(id) - line) * ctx.gamesLeft(id)
 
-  const myIds = rosterIds(ctx, mine.players)
+  let myIds = rosterIds(ctx, mine.players)
   const seats = startingSeats(ctx.league.roster)
   const wk = weekOf(snap.weeks, today)
   const m = snap.scoreboard.find((x) => x.sides.some((s) => s.id === myTeamId))
@@ -297,7 +314,7 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
     const o = pointsWeek(a, opp, ctx.league.points ?? {}, { mine: mySide?.points ?? null, theirs: theirs?.points ?? null })
     return { gain: o.mine - o.theirs, win: o.win }
   }
-  const base = score(myIds)
+  let base = score(myIds)
   // The rest of the regular season, week by week, against the team Yahoo has me playing each week (this week's
   // opponent stands in until the league's schedule is read). Every category counts toward a week: a punted one is
   // lost either way. The current week starts from nothing banked, the same for every roster compared.
@@ -309,7 +326,7 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
   // My lineups are seated as a punter seats them, too: nobody starts for what he adds in a punted category.
   const myPunts = ctx.league.scoring === 'categories' ? ctx.league.punts ?? [] : []
   const held = myPunts.flatMap((c) => PUNT_KEYS[c])
-  const asIs = held.length ? left.map((w) => sideOutlook(ctx, null, myIds, seats, w.days, myPunts).side) : []
+  let asIs = held.length ? left.map((w) => sideOutlook(ctx, null, myIds, seats, w.days, myPunts).side) : []
   const hold = (a: SideOutlook, i: number): SideOutlook => {
     if (!held.length) return a
     const rest = { ...a.rest }, restVar = { ...a.restVar }
@@ -333,10 +350,51 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
     return v
   }
   const judged = left.some((w) => w.opp)
+  const activeCap = seats.length + (ctx.league.roster.BN ?? 0)
+
+  // Off IL first. A player on IL who is no longer out cannot play from there, and Yahoo blocks adds while he sits on
+  // it (2026-10-23: Nesmith, questionable, while Adds offered Bailey for Simons as if Simons' spot were free). He comes
+  // back for the player the season misses least with him in, or goes himself if that is better, and every move after
+  // is judged on the roster that leaves. One still out with a return date this week is named, to plan a spot for.
+  const ilBack: IlReturn[] = []
+  const weekEnd = end ?? today
+  for (const y of mine.players.filter((x) => x.slot === 'IL' || x.slot === 'IL+')) {
+    const id = ctx.resolve(y)
+    if (!id) continue
+    const name = ctx.byId.get(id)?.name ?? y.name
+    const status = ctx.designation(id)
+    if (OUT.includes(status)) {
+      const back = ctx.returnOf(id).date
+      if (back && back <= weekEnd) ilBack.push({ id, name, status, ready: false, returns: back, drop: null, dropName: null, seasonWins: null })
+      continue
+    }
+    const him = { id, eligible: y.eligible }
+    const now = judged ? seasonWins(myIds) : 0
+    const valueOf = (ids: { id: string; eligible: string[] }[]) => (judged ? seasonWins(ids) - now : ids.reduce((s, x) => s + season(x.id), 0) - myIds.reduce((s, x) => s + season(x.id), 0))
+    let best: { drop: { id: string; eligible: string[] } | null; gain: number }
+    if (myIds.length < activeCap) best = { drop: null, gain: valueOf([...myIds, him]) }
+    else {
+      // Letting him go keeps the roster as it is: worth nothing more, nothing less.
+      best = { drop: him, gain: 0 }
+      for (const d of myIds) {
+        const after = [...myIds.filter((x) => x.id !== d.id), him]
+        if (!keepsSeatDepth(myIds, after, seats)) continue
+        const gain = valueOf(after)
+        if (gain > best.gain) best = { drop: d, gain }
+      }
+    }
+    if (best.drop?.id !== id) myIds = best.drop ? [...myIds.filter((x) => x.id !== best.drop!.id), him] : [...myIds, him]
+    ilBack.push({ id, name, status, ready: true, returns: null, drop: best.drop?.id ?? null, dropName: best.drop ? ctx.byId.get(best.drop.id)?.name ?? null : null, seasonWins: best.gain })
+  }
+  if (ilBack.some((x) => x.ready)) {
+    base = score(myIds)
+    if (held.length) asIs = left.map((w) => sideOutlook(ctx, null, myIds, seats, w.days, myPunts).side)
+    winsCache.clear()
+  }
+
   const baseWins = judged ? seasonWins(myIds) : 0
   // Open active seats: a pickup into one drops nobody (2026-10-15: the public team had one after moving Porziņģis to
   // IL, and every suggestion was still a swap).
-  const activeCap = seats.length + (ctx.league.roster.BN ?? 0)
   const openSpots = Math.max(0, activeCap - myIds.length)
   // My open seats each day as the roster stands: the days a pickup's games count without benching anyone.
   const openOn = new Map<string, number>()
@@ -528,7 +586,7 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
     const after = [...myIds.filter((x) => !pr.moves.some((m) => m.drop === x.id)), ...pr.moves.map((m) => ({ id: m.add, eligible: ctx.byId.get(m.add)?.positions ?? [] }))]
     pr.confidence = check(pr.moves.flatMap((m) => [m.add, m.drop]), myIds, after, 'season')
   }
-  return { pickups: shown, pairs: top }
+  return { pickups: shown, pairs: top, ilBack }
 }
 
 function scoreWithAddFrom(ctx: Context, mySide: Parameters<typeof sideOutlook>[1], rest: { id: string; eligible: string[] }[],

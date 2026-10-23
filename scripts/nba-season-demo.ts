@@ -9,7 +9,7 @@
  * starters are given designations so the news and lineup screens have
  * something to say. The server only takes this for leagues ending in -test.
  * Run it with NBA_NOW set on the server to the same day (see .claude/launch.json).
- * A fourth argument, an ISO instant, gives my players whose games tipped by then
+ * IL_BACK=1 puts my questionable player on IL, coming back. A fourth argument, an ISO instant, gives my players whose games tipped by then
  * a box line, as Yahoo's would read mid-game (the nba-test-live server).
  */
 import { readFileSync } from 'node:fs'
@@ -64,6 +64,8 @@ statuses[rosters[mineIdx][2].id] = 'O'
 statuses[rosters[mineIdx][5].id] = 'GTD'
 
 const teamsRows = rosters.map((ps, i) => ({ team: meta(i), players: seated(ps).map((y, j) => ({ ...y, status: i === mineIdx ? statuses[ps[j].id] ?? null : null })) }))
+// IL_BACK=1: my questionable player sits on IL, as one coming back does (the Adds screen's "off IL first").
+if (process.env.IL_BACK) for (const y of teamsRows[mineIdx].players) if (y.status === 'GTD') y.slot = 'IL'
 
 const scale = (b: Box, k: number): Box => Object.fromEntries(Object.entries(b).map(([s, v]) => [s, Math.round(v * k)])) as unknown as Box
 const weekBox = (ps: NbaPlayer[], days: number, noise = 0.15) => {

@@ -88,6 +88,7 @@ const runs = cases.map(({ key, w, punts }) => {
   const wk = v.week
   if (wk?.points) lines.push(`week: ${wk.points.mine.toFixed(0)}–${wk.points.theirs.toFixed(0)} projected, win ${pct(wk.points.win)}`)
   if (wk?.odds) lines.push(`week: win ${pct(wk.odds.win)} · ${wk.odds.races.map((r) => `${r.cat} ${pct(r.win)}`).join(' ')}`)
+  for (const r of v.ilBack) lines.push(r.ready ? `off IL first: ${r.name} (${r.status}) for ${r.dropName ?? 'an open spot'}, season ${r.seasonWins?.toFixed(2)}` : `due back ${r.returns}: ${r.name} (${r.status})`)
   const vd = v.verdict
   lines.push(`verdict: ${vd ? `${vd.level} — ${vd.headline} (${vd.when}; season ${vd.season?.toFixed(2)}${vd.confidence ? `, holds ${vd.confidence.holds}/${vd.confidence.of}` : ''})` : 'none'}`)
   for (const p of v.pickups.slice(0, Number(process.env.TOP ?? 6))) {
