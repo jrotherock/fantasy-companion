@@ -399,10 +399,14 @@ test("an absent player's minutes go to his healthy teammates, his position first
   assert.equal(ctx.minutesFrom(ky.id, back), 0, 'nothing once AJ is back')
   // A healthy Washington moves nobody.
   assert.equal(new Context(hoops, world(today)).minutesFrom(ky.id, out), 0)
-  // Sleeper's line for a date already counts who is out.
+  // Where Sleeper has a line for the date, it counts half, his own line (with the minutes) the other half.
   const line = { box: { ...emptyBox(), pts: 9 }, min: 25 }
+  const own = ctx.outlook(ky.id, out)!.box.pts
   const withLine = new Context(hoops, { ...w, dayProj: new Map([[`${ky.id}|${out}`, line]]) })
-  assert.equal(withLine.outlook(ky.id, out)!.box.pts, 9)
+  assert.ok(Math.abs(withLine.outlook(ky.id, out)!.box.pts - (0.5 * 9 + 0.5 * own)) < 1e-9)
+  assert.equal(withLine.outlook(ky.id, back)!.box.pts, ky.projection!.perGame.pts, 'a date Sleeper has no line for is his own')
+  // Sleeper alone, the way it was.
+  assert.equal(new Context(hoops, { ...w, sleeperWeight: 1, dayProj: new Map([[`${ky.id}|${out}`, line]]) }).outlook(ky.id, out)!.box.pts, 9)
 })
 
 test('pickup alerts: the best season move, the best pair and the best stream, each once, named by its players', () => {

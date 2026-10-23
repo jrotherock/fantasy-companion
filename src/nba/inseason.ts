@@ -68,6 +68,8 @@ export interface World {
   logs: GameLog[]
   /** Sleeper's per-game projections for dates this week, keyed `id|date`. */
   dayProj: Map<string, { box: Box; min: number }>
+  /** How much of a game's line is Sleeper's where it has one, the rest the companion's own (SLEEPER_WEIGHT). */
+  sleeperWeight?: number
   injuries: InjuryNote[]
   /** Return dates set by hand, by player id. */
   returns: Map<string, string>
@@ -240,13 +242,16 @@ export class Context {
   private freshOutlook(id: string, date: string): GameOutlook | null {
     const p = this.byId.get(id)
     if (!p) return null
-    const sleeper = this.world.dayProj.get(`${id}|${date}`)
-    if (sleeper) return { box: sleeper.box, play: this.play(id, date) }
-    // Past Sleeper's dates, his teammates' absences give him their minutes (Sleeper's own lines already count them).
+    // His own line, with minutes from teammates who will miss the date.
     const box = perGameBox(p)
     const min = p.projection?.perGame.min ?? 0
     const more = this.minutesFrom(id, date)
     if (more > 0 && min > 0) { const f = (min + more) / min; for (const k of Object.keys(box) as (keyof Box)[]) box[k] *= f }
+    const sleeper = this.world.dayProj.get(`${id}|${date}`)
+    if (sleeper) {
+      const w = this.world.sleeperWeight ?? SLEEPER_WEIGHT
+      for (const k of Object.keys(box) as (keyof Box)[]) box[k] = w * sleeper.box[k] + (1 - w) * box[k]
+    }
     return { box, play: this.play(id, date) }
   }
 
@@ -342,6 +347,13 @@ const fpOf = (b: Box, w: Weights) =>
   (w.pts ?? 0) * b.pts + (w.reb ?? 0) * b.reb + (w.ast ?? 0) * b.ast + (w.stl ?? 0) * b.stl + (w.blk ?? 0) * b.blk + (w.to ?? 0) * b.to + (w.tpm ?? 0) * b.tpm
 
 /** The fantasy week containing a date. */
+/**
+ * Sleeper's projection of a game this week counts half, the companion's own line the other half. On week 1's 302
+ * player-games neither was closer (8.1 and 8.0 fantasy points off a game) and the average beat both (7.8); Sleeper
+ * alone let one guess decide a stream (2026-10-22: Kyshawn George at 20 minutes on a back-to-back).
+ */
+export const SLEEPER_WEIGHT = 0.5
+
 export function weekOf(weeks: YahooWeek[], date: string): YahooWeek | null {
   return weeks.find(([, s, e]) => s <= date && date <= e) ?? null
 }
