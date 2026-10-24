@@ -341,7 +341,9 @@ export function verdictOf(v: SeasonView): Verdict | null {
   const cats = v.league.scoring === 'categories'
   const holds = (c: Verdict['confidence']) => c?.holds ?? 0
   const step = v.addPlan?.steps.find((st) => st.season != null) ?? null
-  const ups = v.pickups.filter((p) => p.kind !== 'stream' && p.drop)
+  // A season move into an open spot counts as much as a swap (2026-10-24: Harker, a spot open after an IL move, read
+  // "nothing worth an add" with Kuminga +3.0 wins on the list).
+  const ups = v.pickups.filter((p) => p.kind !== 'stream')
   const up = (step ? ups.find((p) => p.name === step.add && p.dropName === step.drop) : null) ?? ups[0] ?? null
   // The plan's value for the move: on the Monday, the season gain less this week's loss.
   const upValue = up ? (step && step.add === up.name ? step.season ?? up.seasonWins ?? 0 : up.seasonWins ?? 0) : 0
@@ -379,7 +381,7 @@ export function verdictOf(v: SeasonView): Verdict | null {
   }
   const season = (level: Verdict['level']): Verdict => ({
     level, kind: 'season', when: upWhen, season: upValue, week: upWhen && /after this week/.test(upWhen) ? null : { before: up!.winBefore, after: up!.winAfter }, confidence: up!.confidence,
-    headline: `Add ${up!.name}, drop ${up!.dropName}`, moves: [one(up!)], reasons: reasonsOf(up!),
+    headline: up!.drop ? `Add ${up!.name}, drop ${up!.dropName}` : `Add ${up!.name} into your open spot`, moves: [one(up!)], reasons: reasonsOf(up!),
   })
   const stream = (level: Verdict['level']): Verdict => ({
     level, kind: 'stream', when: st!.waiver ? 'claim now' : 'now', season: st!.seasonWins, week: { before: st!.winBefore, after: st!.winAfter }, confidence: st!.confidence,

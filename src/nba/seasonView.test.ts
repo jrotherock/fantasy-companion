@@ -733,3 +733,17 @@ for (const [label, dir, base, me, playoffStart] of [['Public', '2026-10-19-publi
     for (const d of drops) assert.ok(!star(d), `${w.players.find((x) => x.id === d)?.name} is a star, offered as a drop`)
   })
 }
+
+test('Harker with a spot open: the season verdict takes the best add into it', () => {
+  const { league, snap: s0, w } = realLeague('2026-10-19-harker', harkerLeague, '3', 20)
+  // An empty roster spot: my weakest player gone, nobody in his place.
+  const mine = s0.rosters.find((r) => r.team.id === '3')!
+  const weakest = mine.players.filter((y) => y.slot !== 'IL').map((y) => ({ y, p: players.find((x) => x.yahoo?.yahooId === y.yahooId)! })).sort((a, b) => a.p.projection!.perGame.pts - b.p.projection!.perGame.pts)[0]
+  const snap = { ...s0, rosters: s0.rosters.map((r) => r.team.id !== '3' ? r : { ...r, players: r.players.filter((y) => y.yahooId !== weakest.y.yahooId) }) }
+  const v = buildSeasonView(league, snap, w)
+  const open = v.pickups.filter((p) => p.kind === 'upgrade' && !p.drop)
+  assert.ok(open.length > 0, 'adds into the open spot are offered')
+  assert.notEqual(v.verdict!.level, 'none', `the verdict: ${v.verdict!.headline}`)
+  const best = [...v.pickups.filter((p) => p.kind !== 'stream')].sort((a, b) => (b.seasonWins ?? 0) - (a.seasonWins ?? 0))[0]
+  if (!best.drop) assert.match(v.verdict!.headline, /into your open spot/)
+})

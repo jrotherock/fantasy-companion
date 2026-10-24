@@ -71,7 +71,9 @@ const snap: Snapshot = {
 }
 const dayProj = PROJ ? parseSleeperDayProjections(JSON.parse(readFileSync(PROJ, 'utf8'))) : new Map()
 const logs = STATS ? parseSleeperLogs(JSON.parse(readFileSync(STATS, 'utf8'))) : []
-const world = (w: number): World => ({ players, logs, dayProj, sleeperWeight: w, injuries: [], returns: new Map(), schedule, noise: { sdWeekly }, never: new Set(), now: NOW, today: TODAY })
+// RETURNS="Name:YYYY-MM-DD;…": return dates, as set on the screen (preferences `returns`).
+const returns = new Map((process.env.RETURNS ?? '').split(';').filter(Boolean).map((x) => { const [n, d] = x.split(':'); return [players.find((p: any) => p.name === n)!.id, d] as [string, string] }))
+const world = (w: number): World => ({ players, logs, dayProj, sleeperWeight: w, injuries: [], returns, schedule, noise: { sdWeekly }, never: new Set(), now: NOW, today: TODAY })
 
 const pct = (x: number | null | undefined) => (x == null ? '—' : `${Math.round(x * 100)}%`)
 const fpw = league.scoring === 'points' ? league.points : null
@@ -102,6 +104,28 @@ const runs = cases.map(({ key, w, punts }) => {
 })
 console.log(`${row.label ?? LEAGUE} — ${TODAY}`)
 for (const c of cases) { console.log(`\n[${c.label}]`); for (const l of out[c.key]) console.log(l) }
+// COMPARE="Name,Name": each added into an open spot from tomorrow (the roster as the snapshot has it), this week's
+// chance and each race, with the averaged lines.
+if (process.env.COMPARE) {
+  const { scoreWeek } = await import('../../src/nba/adds.js')
+  const { sideOutlook, rosterIds } = await import('../../src/nba/inseason.js')
+  const { startingSeats: seatsOf } = await import('../../src/nba/week.js')
+  const ctx = new Context({ ...league, punts: PUNTS } as any, world(0.5))
+  for (const r of snap.rosters) for (const y of r.players) { const id = ctx.resolve(y); if (id) ctx.setStatus(id, y.status) }
+  const seats = seatsOf(league.roster)
+  const m = snap.scoreboard.find((x) => x.sides.some((sd) => sd.id === ME))!
+  const mine = m.sides.find((sd) => sd.id === ME)!, theirs = m.sides.find((sd) => sd.id !== ME)!
+  const allDays = daysFrom(f1.start, f1.end, TODAY), tomorrow = addDays(TODAY, 1)
+  const opp = sideOutlook(ctx, theirs as any, rosterIds(ctx, rosters.find((r: any) => r.team.id === theirs.id)!.players), seats, allDays).side
+  const myIds = rosterIds(ctx, rosters.find((r: any) => r.team.id === ME)!.players)
+  const show = (label: string, men: any[]) => { const r = scoreWeek(ctx, mine as any, opp, theirs as any, seats, allDays, men); console.log(`${label.padEnd(22)} week ${Math.round(r.win * 100)}%  ${(r.races ?? []).map((x) => `${x.cat} ${Math.round(x.win * 100)}`).join(' ')}`) }
+  const base = myIds.map((x) => ({ ...x, from: allDays[0], until: null }))
+  show('as is', base)
+  for (const n of process.env.COMPARE.split(',')) {
+    const p = players.find((x: any) => x.name === n)!
+    show(`+ ${n}`, [...base, { id: p.id, eligible: p.positions, from: tomorrow, until: null }])
+  }
+}
 if (PUNTS.length) process.exit(0)
 
 // My players' lines for the rest of the week, game by game, both ways.
