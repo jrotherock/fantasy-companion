@@ -845,6 +845,7 @@ function Adds({ v, onChange }: { v: SeasonView; onChange: () => void }) {
         </div>
       )}
       {cats && <PuntPicker v={v} onChange={onChange} />}
+      <KeepPicker v={v} onChange={onChange} />
       <IlBack v={v} />
       <WeekCard v={v} />
       <VerdictCard v={v} />
@@ -918,6 +919,36 @@ function IlBack({ v }: { v: SeasonView }) {
             : <div className="nl-dim"><b className="nl-amber">{r.name}</b> ({r.status}) is due back {dateWord(r.returns!)}: keep a spot in mind for him.</div>}
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * Players you will not drop in this league, set here: no move, this week's or the season's, offers them as the drop
+ * (2026-10-23: the week's plan dropped Caleb Wilson in Hoops and Herro in Public; "I won't drop them").
+ */
+function KeepPicker({ v, onChange }: { v: SeasonView; onChange: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const roster = (v.lineup?.rows ?? []).filter((r) => r.slot !== 'IL' && r.slot !== 'IL+').map((r) => ({ id: r.id, name: r.name }))
+  const men = roster.length ? roster : (v.week?.players ?? []).map((p) => ({ id: p.id, name: p.name }))
+  if (!men.length) return null
+  const toggle = async (id: string) => {
+    setBusy(true)
+    try {
+      await fetch(`/api/nba/season/${v.league.id}/keep`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: id, keep: !v.keep.includes(id) }) })
+      onChange()
+    } finally { setBusy(false) }
+  }
+  const last = (n: string) => n.split(' ').slice(1).join(' ') || n
+  return (
+    <div className="nl-punts">
+      <span className="nl-dim">Never drop</span>
+      <div className="nl-chips" role="group" aria-label="Players you will not drop">
+        {men.map((m) => (
+          <button key={m.id} type="button" disabled={busy} aria-pressed={v.keep.includes(m.id)} title={m.name} className={`nl-keepchip${v.keep.includes(m.id) ? ' on' : ''}`} onClick={() => toggle(m.id)}>{last(m.name)}</button>
+        ))}
+      </div>
+      <span className="nl-dim nl-puntnote">{v.keep.length ? 'No move will drop the players marked.' : 'Tap the players you will not drop: no move will offer them.'}</span>
     </div>
   )
 }

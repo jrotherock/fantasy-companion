@@ -7,7 +7,7 @@ import type { Cat } from './value.js'
 import { buildSeasonView, DO, LOOK, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonTile, verdictOf } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
 import { Context, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
-import { addDays, PAIR_MARGIN, shortlistForWeek, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, WEEK_SEASON_COST, WHATIFS, whatifFor, scoreWeek, type PairMove } from './adds.js'
+import { addDays, PAIR_MARGIN, shortlistForWeek, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, starLine, WEEK_SEASON_COST, WHATIFS, whatifFor, scoreWeek, type PairMove } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
 import { diffStatus } from './news.js'
@@ -706,3 +706,30 @@ test('an out player with an IL seat open makes room by going to IL, and the week
   for (const m of p.moves) if (m.drop === star.p.id) assert.ok(m.toIl, `${star.p.name} is moved to IL, not dropped`)
   assert.ok(p.moves.some((m) => m.toIl && m.drop === star.p.id), `${star.p.name}'s spot is used: ${p.moves.map((m) => `${m.name} for ${m.dropName}${m.toIl ? ' (IL)' : ''}`).join(', ')}`)
 })
+
+for (const [label, dir, base, me, playoffStart] of [['Public', '2026-10-19-public', publicLeague, '2', 20], ['Harker', '2026-10-19-harker', harkerLeague, '3', 20]] as const) {
+  test(`${label}: a player you keep is never the drop, this week's or the season's`, () => {
+    const { league, snap, w } = realLeague(dir, base, me, playoffStart)
+    const v0 = buildSeasonView(league, snap, w)
+    // The players the screen would drop, all kept.
+    const dropped = new Set([...v0.pickups.flatMap((p) => [p.drop, ...p.alternatives.map((a) => a.drop)]), ...v0.pairs.flatMap((p) => p.moves.map((m) => m.drop)), ...(v0.weekPlan?.moves ?? []).map((m) => m.drop)].filter((x): x is string => !!x))
+    // Only players on my roster now: a stream added and rolled within the plan is no one's to keep.
+    const mine = new Set(rosterIds(new Context(league, w), snap.rosters.find((r) => r.team.id === me)!.players).map((x) => x.id))
+    for (const d of [...dropped]) if (!mine.has(d)) dropped.delete(d)
+    assert.ok(dropped.size > 0, 'some drops to keep')
+    const v = buildSeasonView({ ...league, keep: [...dropped] }, snap, w)
+    const now = [...v.pickups.flatMap((p) => [p.drop, ...p.alternatives.map((a) => a.drop)]), ...v.pairs.flatMap((p) => p.moves.map((m) => m.drop)), ...(v.weekPlan?.moves ?? []).filter((m) => !m.toIl).map((m) => m.drop)]
+    for (const d of now) if (d) assert.ok(!dropped.has(d), `${d} is kept but offered as a drop`)
+    assert.deepEqual(v.keep, [...dropped])
+  })
+
+  test(`${label}: a star (drafted in the first 65% of the league's draft) is never offered as a drop`, () => {
+    const { league, snap, w } = realLeague(dir, base, me, playoffStart)
+    const v = buildSeasonView(league, snap, w)
+    const star = (id: string | null) => { const adp = w.players.find((x) => x.id === id)?.yahoo?.adp; return adp != null && adp <= starLine(league) }
+    const mine = rosterIds(new Context(league, w), snap.rosters.find((r) => r.team.id === me)!.players)
+    assert.ok(mine.some((x) => star(x.id)), 'the roster has stars to protect')
+    const drops = [...v.pickups.flatMap((p) => [p.drop, ...p.alternatives.map((a) => a.drop)]), ...v.pairs.flatMap((p) => p.moves.map((m) => m.drop)), ...(v.weekPlan?.moves ?? []).filter((m) => !m.toIl).map((m) => m.drop)]
+    for (const d of drops) assert.ok(!star(d), `${w.players.find((x) => x.id === d)?.name} is a star, offered as a drop`)
+  })
+}

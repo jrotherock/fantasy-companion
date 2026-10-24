@@ -314,3 +314,8 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-weekcard { margin-bottom: 0.4rem; }
 .nl-weeksteps { margin: 0.1rem 0 0.1rem 1.1rem; padding: 0; font-size: 0.9rem; display: grid; gap: 0.2rem; }
 .nl-both { color: var(--green); font-weight: 600; }
+
+/* Players you will not drop: chips, the kept ones outlined in green. */
+.nl-keepchip { font-size: 0.75rem; padding: 0.15rem 0.45rem; border-radius: 4px; border: 1px solid var(--line); background: none; color: var(--muted); cursor: pointer; }
+.nl-keepchip.on { color: var(--ink); border-color: color-mix(in srgb, var(--green) 60%, var(--line)); background: color-mix(in srgb, var(--green) 12%, transparent); }
+.nl-keepchip:disabled { opacity: 0.6; cursor: wait; }

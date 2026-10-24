@@ -26,6 +26,8 @@ export interface SeasonView {
   week: WeekView | null
   budget: Budget | null
   pickups: Pickup[]
+  /** Player ids you will not drop: no move offers them. */
+  keep: string[]
   /** Players on my IL coming back: one no longer out comes off IL before any add, and the pickups assume he has. */
   ilBack: IlReturn[]
   /** Two moves together that beat any one move by a second move's worth. */
@@ -68,7 +70,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   const base: SeasonView = {
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
-    lineup: null, tomorrow: null, week: null, budget: null, pickups: [], ilBack: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
+    lineup: null, tomorrow: null, week: null, budget: null, pickups: [], keep: [], ilBack: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
     standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, weekVerdict: null,
   }
   if (!drafted || !me) return base
@@ -102,7 +104,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   const st = snap.standings.find((s) => s.teamId === me.id || s.mine)
 
   const view: SeasonView = {
-    ...base, lineup, tomorrow, week, budget, pickups: picks, ilBack, pairs, news, punts, power: pw,
+    ...base, lineup, tomorrow, week, budget, pickups: picks, keep: league.keep ?? [], ilBack, pairs, news, punts, power: pw,
     allPlay: allPlay(snap.past, me.id, league.scoring),
     playoffs: playoffPlan(ctx, snap, me.id),
     trades: tradeIdeas(ctx, snap, me.id),

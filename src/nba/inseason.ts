@@ -31,6 +31,8 @@ export interface SeasonLeague {
   playoffWeeks: number[]
   /** Categories you are punting (preferences, set on the Adds screen): moves are judged as if they cannot move them. */
   punts?: Cat[]
+  /** Player ids you will not drop (preferences, set on the Adds screen): never offered as a drop. */
+  keep?: string[]
 }
 
 /** What the server has read from Yahoo for one league. */

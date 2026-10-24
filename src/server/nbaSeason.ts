@@ -30,7 +30,7 @@ import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { parseStandings, parseTransactions } from './yahooParse.js'
 import type { Alert } from './alerts.js'
-import { handReturns, injuryNotesNow, liveDrafts, neverIds, onPreferencesChange, seasonLeagues, seasonPlayers, seasonPunts, setSeasonPunts } from './nbaDraft.js'
+import { handReturns, injuryNotesNow, liveDrafts, neverIds, onPreferencesChange, seasonLeagues, seasonPlayers, seasonKeep, seasonPunts, setSeasonKeep, setSeasonPunts } from './nbaDraft.js'
 import { parseGameWeeks, parseLeagueRosters, parseNbaScoreboard, parsePlayers, parseRosterDay, parseSeasonSettings } from '../nba/yahooSeason.js'
 import { gameDay } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
@@ -376,7 +376,7 @@ const staleViews = () => { for (const v of views.values()) v.stale = true }
 const fresh = (v: { at: number; stale?: boolean }) => !v.stale && Date.now() - v.at < VIEW_TTL
 
 function buildView(l: SeasonLeague & { myTeamId: string | null }): SeasonView {
-  const view = buildSeasonView({ ...l, punts: seasonPunts(l.id) }, snapOf(l.id), world(l.id), status.events)
+  const view = buildSeasonView({ ...l, punts: seasonPunts(l.id), keep: seasonKeep(l.id) }, snapOf(l.id), world(l.id), status.events)
   views.set(l.id, { at: Date.now(), view })
   return view
 }
@@ -599,6 +599,15 @@ export async function handleNbaSeason(parts: string[], req: any, res: any, json:
   const l = leagues().find((x) => x.id === id)
   if (!l) { json(res, 404, { error: 'no such league' }); return true }
   if (req.method === 'GET' && !action) { json(res, 200, seasonView(id)); return true }
+  if (req.method === 'POST' && action === 'keep') {
+    // A player you will not drop in this league ({playerId, keep}); every screen is worked out again.
+    const b = await body(req)
+    if (!b?.playerId) { json(res, 400, { error: 'playerId' }); return true }
+    if (!setSeasonKeep(id, String(b.playerId), b.keep !== false)) { json(res, 400, { error: 'unknown player' }); return true }
+    views.delete(id)
+    json(res, 200, seasonView(id))
+    return true
+  }
   if (req.method === 'POST' && action === 'punts') {
     // The categories you are punting in this league; [] clears them. Every screen is worked out again.
     const b = await body(req)

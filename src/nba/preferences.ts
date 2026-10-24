@@ -35,6 +35,8 @@ interface LeagueLists extends Lists {
   adjust?: Record<string, Record<string, number>>
   /** Categories you are punting in this league (a 9-cat league): a move is not judged by what it does to them. */
   punts?: string[]
+  /** Players you will not drop in this league, by name: no move offers them as the drop. */
+  keep?: string[]
 }
 export interface PreferenceFile extends Lists {
   leagues?: Record<string, LeagueLists>
@@ -57,6 +59,8 @@ export interface Preferences {
   own: Map<string, Set<string>>
   /** Categories you are punting in this league, as you set them. */
   punts: Cat[]
+  /** Player ids you will not drop in this league. */
+  keep: string[]
   /** Names that matched nobody: a typo, or a player who has left the league. */
   unresolved: string[]
 }
@@ -69,7 +73,9 @@ export function resolvePreferences(file: PreferenceFile | null, leagueId: string
   const own = new Map<string, Set<string>>()
   const league = file?.leagues?.[leagueId] ?? {}
   const punts = (league.punts ?? []).filter((c): c is Cat => (CATS as string[]).includes(c))
-  if (!file) return { tags, unresolved, order, adjust, own, punts }
+  const keep: string[] = []
+  for (const name of league.keep ?? []) { const id = index.resolve(name, null); if (id) keep.push(id); else unresolved.push(name) }
+  if (!file) return { tags, unresolved, order, adjust, own, punts, keep }
   // Weakest first, so a name on two lists ends up with the stronger tag.
   for (const tag of ['like', 'avoid', 'never'] as PrefTag[]) {
     for (const name of [...(file[tag] ?? []), ...(league[tag] ?? [])]) {
@@ -94,7 +100,7 @@ export function resolvePreferences(file: PreferenceFile | null, leagueId: string
     adjust.set(id, { ...(adjust.get(id) ?? {}), ...stats })
     own.set(id, new Set(Object.keys(stats)))
   }
-  return { tags, unresolved, order, adjust, own, punts }
+  return { tags, unresolved, order, adjust, own, punts, keep }
 }
 
 // Shooting: the percentages and the attempts that weight them.

@@ -914,6 +914,27 @@ export function seasonPunts(leagueId: string): Cat[] {
   return resolvePreferences(prefFile(), prefLeague(leagueId), load().index).punts
 }
 
+/** The players you will not drop in a league, as player ids. */
+export function seasonKeep(leagueId: string): string[] {
+  return resolvePreferences(prefFile(), prefLeague(leagueId), load().index).keep
+}
+
+/** Marks a player as one you will not drop in a league, or clears it; every season screen is worked out again. */
+export function setSeasonKeep(leagueId: string, playerId: string, keep: boolean): boolean {
+  const p = load().players.find((x) => x.id === playerId)
+  if (!p) return false
+  const file = prefFile()
+  const lists = ((file.leagues ??= {})[prefLeague(leagueId)] ??= {})
+  const index = load().index
+  const rest = (lists.keep ?? []).filter((n) => index.resolve(n, null) !== playerId)
+  const next = keep ? [...rest, p.name] : rest
+  if (next.length) lists.keep = next; else delete lists.keep
+  mkdirSync(STATE_DIR, { recursive: true })
+  writeFileSync(PREFS, JSON.stringify(file, null, 1))
+  for (const f of prefListeners) f()
+  return true
+}
+
 /** Sets a league's punts ([] clears them); every season screen is worked out again. */
 export function setSeasonPunts(leagueId: string, punts: Cat[]) {
   const file = prefFile()

@@ -311,6 +311,18 @@ export function scoreWeek(ctx: Context, mySide: Parameters<typeof sideOutlook>[1
   return { win: pointsWeek(side, opp, ctx.league.points ?? {}, { mine: mySide?.points ?? null, theirs: theirs?.points ?? null }).win, races: undefined }
 }
 
+/**
+ * The share of a league's draft whose players are stars, never offered as a drop: by Yahoo's ADP, against the picks
+ * a league this size and this deep makes (Hoops and Public, 10 teams of 13: ADP 84; Harker, 12 of 11: ADP 86).
+ */
+export const STAR_SHARE = 0.65
+export const starLine = (league: { teams: number; roster: Record<string, number> }) =>
+  league.teams * Object.entries(league.roster).filter(([k]) => k !== 'IL' && k !== 'IL+').reduce((s, [, n]) => s + n, 0) * STAR_SHARE
+export const isStar = (ctx: Context, id: string) => {
+  const adp = ctx.byId.get(id)?.yahoo?.adp
+  return adp != null && adp <= starLine(ctx.league)
+}
+
 /** The most one move for this week may cost the season, in matchups won: a stream's cap, a little looser. */
 export const WEEK_SEASON_COST = 0.25
 
@@ -427,6 +439,7 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
       // Letting him go keeps the roster as it is: worth nothing more, nothing less.
       best = { drop: him, gain: 0 }
       for (const d of myIds) {
+        if (ctx.league.keep?.includes(d.id) || isStar(ctx, d.id)) continue
         const after = [...myIds.filter((x) => x.id !== d.id), him]
         if (!keepsSeatDepth(myIds, after, seats)) continue
         const gain = valueOf(after)
@@ -457,7 +470,11 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
   // Nesmith, picked up that night for his fit, was the first drop offered for a stream). By per-game value when
   // there is no season left to judge.
   const missed = (id: string) => (judged ? baseWins - seasonWins(myIds.filter((x) => x.id !== id)) : season(id))
-  const drops = myIds
+  // Never one you have said you will keep (2026-10-23: "I won't drop Caleb, and definitely not Herro"), and never a
+  // star: one Yahoo's drafts took in the first 65% of a league this size (Herro, ADP 69, and Caleb Wilson, 80, were
+  // offered for a week's stream).
+  const keep = new Set([...(ctx.league.keep ?? []), ...myIds.filter((x) => isStar(ctx, x.id)).map((x) => x.id)])
+  const drops = myIds.filter((x) => !keep.has(x.id))
     .map((x) => ({ ...x, season: season(x.id), missed: missed(x.id) }))
     .sort((a, b) => a.missed - b.missed)
     .slice(0, DROPS)
