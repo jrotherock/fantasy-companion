@@ -7,7 +7,7 @@ import type { Weights } from './matchup.js'
 import type { Cat } from './value.js'
 import { startingSeats } from './week.js'
 import { buildWeek, checkLineup, Context, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
-import { addDays, addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type IlReturn, type PairMove, type Pickup } from './adds.js'
+import { addDays, addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type IlReturn, type PairMove, type Pickup, type WeekPlan } from './adds.js'
 import { leagueNews, type NewsItem, type StatusEvent } from './news.js'
 import { allPlay, playoffPlan, power, tradeIdeas, type AllPlay, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
 import type { Alert } from '../server/alerts.js'
@@ -45,6 +45,10 @@ export interface SeasonView {
   addPlan: AddPlan | null
   /** The one thing the Adds screen says first: do this, worth a look, or nothing worth an add. */
   verdict: Verdict | null
+  /** This week's best adds, by the chance of winning it by its last game, and what they do to the season. */
+  weekPlan: WeekPlan | null
+  /** The verdict for this week, beside the season's; `aligned` when the same move serves both. */
+  weekVerdict: WeekVerdict | null
   catPlan: CategoryPlan | null
 }
 
@@ -65,7 +69,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
     lineup: null, tomorrow: null, week: null, budget: null, pickups: [], ilBack: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
-    standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null, verdict: null,
+    standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, weekVerdict: null,
   }
   if (!drafted || !me) return base
 
@@ -92,7 +96,8 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     }
   }
   const budget = budgetOf(snap, me.id, league, world.today)
-  const { pickups: picks, pairs, ilBack } = pickupsAndPairs(ctx, snap, me.id, { punts })
+  const addsLeft = budget?.week ? Math.max(0, budget.week.max - budget.week.used) : null
+  const { pickups: picks, pairs, ilBack, weekPlan } = pickupsAndPairs(ctx, snap, me.id, { punts, addsLeft })
   const news = leagueNews(ctx, snap, me.id, events, week?.opponent?.id ?? null).slice(0, 40)
   const st = snap.standings.find((s) => s.teamId === me.id || s.mine)
 
@@ -103,11 +108,12 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     trades: tradeIdeas(ctx, snap, me.id),
     standing: st ? { rank: st.rank, w: st.wins, l: st.losses, t: st.ties } : null,
     addPlan: addPlan(picks, budget, world.today, week?.end ?? null),
-    verdict: null,
+    verdict: null, weekPlan, weekVerdict: null,
     catPlan: league.scoring === 'categories' && mine?.edges ? categoryPlan(ctx, snap, mine.edges, punts) : null,
     startsOn: (() => { const first = [...snap.weeks].map((w) => w[1]).sort()[0]; return first && first > world.today ? first : null })(),
   }
   view.verdict = verdictOf(view)
+  view.weekVerdict = weekVerdictOf(view)
   // The week's plan says what the verdict says: a pair is both of the plan's first steps, at the verdict's time.
   if (view.verdict?.kind === 'pair' && view.addPlan && view.pairs[0]) view.addPlan = planWithPair(view.addPlan, view.verdict, view.pairs[0])
   // Names for every id the screen mentions, so the page needs no player file.
@@ -286,6 +292,48 @@ const winsWord = (w: number) => `${w >= 0 ? '+' : '−'}${Math.abs(w).toFixed(2)
  * with the best on offer named so the "nothing" is checkable (2026-10-21: the screen listed every move at once,
  * small and large, sure and unsure; the home tile named a different move from the plan).
  */
+export interface WeekVerdict {
+  level: 'do' | 'look' | 'none'
+  headline: string
+  winBefore: number
+  winAfter: number
+  moves: WeekPlan['moves']
+  /** What the roster left after the week is worth over the season, against the roster as it is. */
+  season: number | null
+  /** The races the plan moves most (category leagues). */
+  races: { cat: Cat; before: number; after: number }[]
+  /** The season verdict's move is one of this week's: one move for both. */
+  aligned: boolean
+  /** "A long shot", "in play" or "nearly won": how much the week is worth chasing. */
+  chance: 'long shot' | 'uphill' | 'in play' | 'ahead' | 'nearly won'
+}
+
+/** This week's bar: "do this" for adds worth 3 points of this week's chance, "worth a look" for one point. */
+export const WEEK_DO = 0.03, WEEK_LOOK = 0.01
+
+/**
+ * The verdict for this week, beside the season's: the adds that give the week its best chance by the last game, every
+ * category counted (a punted one won this week still counts), with what they do to the season, and whether the
+ * season's move is one of them (2026-10-23: "I will always try to win each week"; the only verdict was the season's).
+ */
+export function weekVerdictOf(v: SeasonView): WeekVerdict | null {
+  const p = v.weekPlan
+  if (v.phase !== 'season' || !p) return null
+  const w = p.winBefore
+  const chance: WeekVerdict['chance'] = w < 0.15 ? 'long shot' : w < 0.35 ? 'uphill' : w <= 0.65 ? 'in play' : w < 0.9 ? 'ahead' : 'nearly won'
+  const gain = p.winAfter - p.winBefore
+  const level: WeekVerdict['level'] = !p.moves.length ? 'none' : gain >= WEEK_DO ? 'do' : gain >= WEEK_LOOK ? 'look' : 'none'
+  const seasonAdds = new Set((v.verdict?.level === 'none' ? [] : v.verdict?.moves ?? []).map((m) => m.add))
+  const races = (p.races ?? []).filter((r) => Math.abs(r.after - r.before) >= 0.02).sort((a, b) => Math.abs(b.after - b.before) - Math.abs(a.after - a.before)).slice(0, 4)
+  return {
+    level, chance, winBefore: p.winBefore, winAfter: p.winAfter, moves: level === 'none' ? [] : p.moves, season: level === 'none' ? null : p.seasonWins, races,
+    aligned: level !== 'none' && p.moves.some((m) => seasonAdds.has(m.add)),
+    headline: level === 'none'
+      ? (p.moves.length ? 'No add moves this week by a point' : 'No add helps this week')
+      : p.moves.map((m, i) => `${i ? 'then add' : 'Add'} ${m.name}${m.drop ? m.toIl ? ` (${m.dropName} to IL)` : ` for ${m.dropName}` : ''}`).join(', '),
+  }
+}
+
 export function verdictOf(v: SeasonView): Verdict | null {
   if (v.phase !== 'season') return null
   const cats = v.league.scoring === 'categories'

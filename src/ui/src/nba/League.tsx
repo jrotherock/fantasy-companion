@@ -846,6 +846,7 @@ function Adds({ v, onChange }: { v: SeasonView; onChange: () => void }) {
       )}
       {cats && <PuntPicker v={v} onChange={onChange} />}
       <IlBack v={v} />
+      <WeekCard v={v} />
       <VerdictCard v={v} />
       <details className="nl-alloptions">
         <summary>All options <span className="nl-dim">· the week's plan, every move scored, how sure each is</span></summary>
@@ -959,9 +960,10 @@ function VerdictCard({ v }: { v: SeasonView }) {
   const d = v.verdict
   if (!d) return null
   const word = d.level === 'do' ? 'Do this' : d.level === 'look' ? 'Worth a look' : 'Nothing worth an add'
+  const both = v.weekVerdict?.aligned
   return (
     <div className={`nl-verdictcard ${d.level}`}>
-      <div className="nl-vk">{word}{d.when && d.level !== 'none' ? <span className="nl-dim"> · {d.when}</span> : null}</div>
+      <div className="nl-vk">For the season · {word}{d.when && d.level !== 'none' ? <span className="nl-dim"> · {d.when}</span> : null}{both && <span className="nl-both"> · also this week's</span>}</div>
       {d.level !== 'none' && <div className="nl-vh">{d.headline}</div>}
       <div className="nl-vr">
         {d.season != null && <span>Rest of season <SeasonWins w={d.season} /></span>}
@@ -969,6 +971,48 @@ function VerdictCard({ v }: { v: SeasonView }) {
         {d.confidence && <Holds c={d.confidence} week={d.kind === 'stream'} />}
       </div>
       {d.reasons.length > 0 && <ul className="nl-vwhy">{d.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+    </div>
+  )
+}
+
+/**
+ * This week's verdict, above the season's: the adds that give the week its best chance by its last game, each with
+ * when it counts and what it does to the season, the races it moves, and how winnable the week is (2026-10-23: "I
+ * will always try to win each week"; the only verdict was the season's).
+ */
+const CHANCE_WORD: Record<NonNullable<SeasonView['weekVerdict']>['chance'], string> = {
+  'long shot': 'a long shot', uphill: 'uphill', 'in play': 'in play', ahead: 'leaning yours', 'nearly won': 'nearly won',
+}
+function WeekCard({ v }: { v: SeasonView }) {
+  const d = v.weekVerdict
+  if (!d) return null
+  const word = d.level === 'do' ? 'Do this' : d.level === 'look' ? 'Worth a look' : 'Nothing worth an add'
+  const cats = v.league.scoring === 'categories'
+  return (
+    <div className={`nl-verdictcard nl-weekcard ${d.level}`}>
+      <div className="nl-vk">To win this week · {word}<span className="nl-dim"> · the week is {CHANCE_WORD[d.chance]} ({pct(d.winBefore)})</span>{d.aligned && <span className="nl-both"> · also the season's move</span>}</div>
+      {d.level !== 'none' ? (
+        <>
+          <ol className="nl-weeksteps">
+            {d.moves.map((m) => (
+              <li key={m.add}>
+                {m.toIl ? <><b>Move {m.dropName} to IL</b> (out; kept), <b>add {m.name}</b></> : <><b>Add {m.name}</b>{m.drop ? <>, drop {m.dropName}</> : ' into your open spot'}</>}
+                <span className="nl-dim"> · counts from {dateWord(m.from)}{m.waiver ? ' (waivers)' : ''}</span>
+                {m.seasonWins != null && <span className="nl-dim"> · season <span className={effect(m.seasonWins, 0.03)}>{wins(m.seasonWins)}</span> so far</span>}
+              </li>
+            ))}
+          </ol>
+          <div className="nl-vr">
+            <WeekWin before={d.winBefore} after={d.winAfter} prefix="This week " />
+            {d.season != null && <span>Rest of season <SeasonWins w={d.season} /></span>}
+          </div>
+          {cats && d.races.length > 0 && (
+            <div className="nl-chips">{d.races.map((r) => <span key={r.cat} className={`nl-catchip ${r.after > r.before ? 'up' : 'down'}`}>{LABEL[r.cat]} {pct(r.before)}→{pct(r.after)}</span>)}</div>
+          )}
+        </>
+      ) : (
+        <div className="nl-dim">{d.headline}: no pickup within your adds, open spots and the players you could spare raises this week's chance by a point.</div>
+      )}
     </div>
   )
 }

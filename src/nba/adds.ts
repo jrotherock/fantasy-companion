@@ -213,6 +213,21 @@ export interface IlReturn {
 }
 const OUT: Designation[] = ['out', 'injured', 'inactive', 'suspended']
 
+/**
+ * The adds that give this week its best chance by its last game. `from` is the first day a move counts; a `drop` that
+ * was added earlier in the plan goes after his last game. `seasonWins`: what the roster left at the end of the week is
+ * worth over the season against the roster as it is (null with no season left to judge).
+ */
+export interface WeekPlan {
+  winBefore: number
+  winAfter: number
+  /** `toIl`: the player making room goes to IL, kept, rather than being dropped. */
+  moves: { add: string; name: string; team: string | null; drop: string | null; dropName: string | null; from: string; toIl: boolean; waiver: boolean; winAfter: number; seasonWins: number | null }[]
+  seasonWins: number | null
+  /** Category leagues: each race's chance before and after the plan. */
+  races: { cat: Cat; before: number; after: number }[] | null
+}
+
 export interface PairMove {
   moves: { add: string; name: string; drop: string; dropName: string; waiver: boolean; seasonWins: number }[]
   /** Matchups expected won over the rest of the regular season, gained by both moves. */
@@ -264,13 +279,48 @@ const PUNT_KEYS: Record<Cat, (keyof Box)[]> = {
   fg: ['fgm', 'fga'], ft: ['ftm', 'fta'], tpm: ['tpm'], pts: ['pts'], reb: ['reb'], ast: ['ast'], stl: ['stl'], blk: ['blk'], to: ['to'],
 }
 
+/** A player on my roster for part of a week: from a day, until a day (not included), or to the end. */
+export type WeekMan = { id: string; eligible: string[]; from: string; until: string | null }
+
+/**
+ * The chance of winning the week with these players, each counted only on his days: every stretch of days with the
+ * same roster seated on its own, the week so far from Yahoo. The week verdict's measure.
+ */
+export function scoreWeek(ctx: Context, mySide: Parameters<typeof sideOutlook>[1], opp: SideOutlook, theirs: Parameters<typeof sideOutlook>[1], seats: string[], allDays: string[], men: WeekMan[]): { win: number; races: { cat: Cat; win: number }[] | undefined } {
+  let now: Box | null = null, rest = emptyBox(), restVar = emptyBox()
+  let seg: string[] = [], key = ''
+  const flush = () => {
+    if (!seg.length) return
+    const on = men.filter((m) => m.from <= seg[0] && (!m.until || seg[0] < m.until)).map((m) => ({ id: m.id, eligible: m.eligible }))
+    const side = sideOutlook(ctx, now ? null : mySide, on, seats, seg).side
+    if (!now) now = side.now
+    rest = addBox(rest, side.rest); restVar = addBox(restVar, side.restVar)
+    seg = []
+  }
+  for (const d of allDays) {
+    const k = men.filter((m) => m.from <= d && (!m.until || d < m.until)).map((m) => m.id).sort().join(',')
+    if (k !== key) { flush(); key = k }
+    seg.push(d)
+  }
+  flush()
+  const side = { now: now ?? emptyBox(), rest, restVar }
+  if (ctx.league.scoring === 'categories') {
+    const o = categoryWeek(side, opp)
+    return { win: o.win, races: o.races.map((r) => ({ cat: r.cat, win: r.win + r.tie / 2 })) }
+  }
+  return { win: pointsWeek(side, opp, ctx.league.points ?? {}, { mine: mySide?.points ?? null, theirs: theirs?.points ?? null }).win, races: undefined }
+}
+
+/** The most one move for this week may cost the season, in matchups won: a stream's cap, a little looser. */
+export const WEEK_SEASON_COST = 0.25
+
 /** A pair is shown when its second move adds at least this much to the best single move. */
 export const PAIR_MARGIN = UPGRADE_WINS
 
-export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, opts: { punts?: Cat[]; limit?: number } = {}): { pickups: Pickup[]; pairs: PairMove[]; ilBack: IlReturn[] } {
+export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, opts: { punts?: Cat[]; limit?: number; addsLeft?: number | null } = {}): { pickups: Pickup[]; pairs: PairMove[]; ilBack: IlReturn[]; weekPlan: WeekPlan | null } {
   const { today } = ctx.world
   const mine = snap.rosters.find((r) => r.team.id === myTeamId)
-  if (!mine) return { pickups: [], pairs: [], ilBack: [] }
+  if (!mine) return { pickups: [], pairs: [], ilBack: [], weekPlan: null }
   const rostered = new Set<string>()
   for (const r of snap.rosters) for (const y of r.players) { const id = ctx.resolve(y); if (id) rostered.add(id) }
   const waivers = new Set(snap.waivers)
@@ -586,7 +636,94 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
     const after = [...myIds.filter((x) => !pr.moves.some((m) => m.drop === x.id)), ...pr.moves.map((m) => ({ id: m.add, eligible: ctx.byId.get(m.add)?.positions ?? [] }))]
     pr.confidence = check(pr.moves.flatMap((m) => [m.add, m.drop]), myIds, after, 'season')
   }
-  return { pickups: shown, pairs: top, ilBack }
+  const weekPlan = bestWeek(opts.addsLeft ?? null)
+  return { pickups: shown, pairs: top, ilBack, weekPlan }
+
+  /**
+   * The adds that give this week its best chance by the last game, whatever they do to the season (shown beside it):
+   * the best move, then the best next one on the roster that leaves, up to the adds left this week (three at most).
+   * Drops come from the five the season misses least, or an open spot, or a player added earlier in the plan once his
+   * last game this week is played (a stream rolled into one who plays later). Every category counts, punted or not:
+   * a category won this week counts (2026-10-23: "I will always try to win each week"; the verdict was season-only).
+   */
+  function bestWeek(addsLeft: number | null): WeekPlan | null {
+    if (!opp || !allDays.length) return null
+    const first = days[0] ?? null
+    if (!first) return null
+    type Man = WeekMan
+    // An out player with an IL seat free can go there to make room, kept for the season, instead of being dropped
+    // (2026-10-23: the first version dropped an out Trae Young for a week's stream with an IL seat empty). It is one
+    // of the ways to make room for an add, taken only when it helps: on IL he cannot come back for a game this week.
+    const ilAble = myIds.filter((x) => OUT.includes(ctx.designation(x.id)))
+    const onIl = new Set<string>()
+    const start: Man[] = myIds.map((x) => ({ ...x, from: allDays[0], until: null }))
+    const scoreOf = (men: Man[]) => scoreWeek(ctx, mySide, opp!, theirs, seats, allDays, men)
+    const lastGame = (id: string) => {
+      const t = ctx.byId.get(id)?.team
+      return [...allDays].reverse().find((d) => !!t && schedulePlays(ctx, d, t)) ?? null
+    }
+    const before = scoreOf(start)
+    let men = start, cur = before
+    const moves: WeekPlan['moves'] = []
+    const max = Math.min(3, addsLeft ?? 3)
+    let open = openSpots
+    let pool = cands
+    for (let step = 0; step < max; step++) {
+      type Option = { men: Man[]; s: ReturnType<typeof scoreOf>; add: string; drop: string | null; from: string; il: boolean }
+      const options: Option[] = []
+      const tried: { id: string; win: number }[] = []
+      for (const c of pool) {
+        if (men.some((m) => m.id === c.id)) continue
+        const cd = daysFor(c.id)
+        if (!cd.length) continue
+        const outs: { drop: string | null; from: string; il?: boolean }[] = []
+        if (open > 0) outs.push({ drop: null, from: cd[0] })
+        if (onIl.size < ilOpen) for (const x of ilAble) if (!onIl.has(x.id) && men.some((m) => m.id === x.id && !m.until)) outs.push({ drop: x.id, from: cd[0], il: true })
+        for (const d of drops) if (men.some((m) => m.id === d.id && !m.until) && !ilAble.some((x) => x.id === d.id)) outs.push({ drop: d.id, from: cd[0] })
+        // A player added earlier in the plan, dropped the day after his last game this week.
+        for (const mv of moves) {
+          const last = lastGame(mv.add)
+          const day = last ? addDays(last, 1) : cd[0]
+          if (day <= allDays[allDays.length - 1] && men.some((m) => m.id === mv.add && !m.until)) outs.push({ drop: mv.add, from: day > cd[0] ? day : cd[0] })
+        }
+        for (const o of outs) {
+          const next = [...men.map((m) => (m.id === o.drop ? { ...m, until: o.from } : m)), { id: c.id, eligible: c.positions, from: o.from, until: null }]
+          const sc = scoreOf(next)
+          tried.push({ id: c.id, win: sc.win })
+          options.push({ men: next, s: sc, add: c.id, drop: o.drop, from: o.from, il: !!o.il })
+        }
+      }
+      // The best for the week whose season cost stays inside the cap: a week is not worth Harden (2026-10-23: the first
+      // version dropped him for Keon Ellis, -0.55 wins, for a few points of one week).
+      const kept = (ms: Man[], il: Set<string> = onIl) => ms.filter((m) => !m.until || il.has(m.id)).map((m) => ({ id: m.id, eligible: m.eligible }))
+      const nowWins = judged ? seasonWins(kept(men)) : 0
+      let best: Option | null = null
+      for (const o of options.sort((a, b) => b.s.win - a.s.win)) {
+        if (o.s.win - cur.win < 0.005) break
+        if (judged && seasonWins(kept(o.men, o.il ? new Set([...onIl, o.drop!]) : onIl)) - nowWins < -WEEK_SEASON_COST) continue
+        best = o; break
+      }
+      if (!best) break
+      if (best.il) onIl.add(best.drop!)
+      const after = kept(best.men)
+      moves.push({
+        add: best.add, name: ctx.byId.get(best.add)?.name ?? best.add, team: ctx.byId.get(best.add)?.team ?? null,
+        drop: best.drop, dropName: best.drop ? ctx.byId.get(best.drop)?.name ?? null : null, from: best.from, toIl: best.il,
+        waiver: waiverIds.has(best.add), winAfter: best.s.win,
+        seasonWins: judged ? seasonWins(after) - baseWins : null,
+      })
+      if (best.drop == null) open--
+      men = best.men; cur = best.s
+      // The next step looks again at the best candidates of this one.
+      pool = [...new Map(tried.sort((a, b) => b.win - a.win).map((t) => [t.id, t])).keys()].slice(0, 15).map((id) => cands.find((x) => x.id === id)!).filter(Boolean)
+    }
+    const kept = men.filter((m) => !m.until || onIl.has(m.id)).map((m) => ({ id: m.id, eligible: m.eligible }))
+    return {
+      winBefore: before.win, winAfter: cur.win, moves,
+      seasonWins: moves.length && judged ? seasonWins(kept) - baseWins : null,
+      races: before.races && cur.races ? before.races.map((r) => ({ cat: r.cat, before: r.win, after: cur.races!.find((x) => x.cat === r.cat)?.win ?? r.win })) : null,
+    }
+  }
 }
 
 function scoreWithAddFrom(ctx: Context, mySide: Parameters<typeof sideOutlook>[1], rest: { id: string; eligible: string[] }[],
