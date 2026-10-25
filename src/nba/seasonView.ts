@@ -7,7 +7,7 @@ import type { Weights } from './matchup.js'
 import type { Cat } from './value.js'
 import { startingSeats } from './week.js'
 import { buildWeek, checkLineup, Context, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
-import { addDays, addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type IlReturn, type PairMove, type Pickup, type WeekPlan } from './adds.js'
+import { addDays, addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type IlReturn, type IlSwap, type PairMove, type Pickup, type WeekPlan } from './adds.js'
 import { leagueNews, type NewsItem, type StatusEvent } from './news.js'
 import { allPlay, playoffPlan, power, tradeIdeas, type AllPlay, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
 import type { Alert } from '../server/alerts.js'
@@ -49,6 +49,8 @@ export interface SeasonView {
   verdict: Verdict | null
   /** This week's best adds, by the chance of winning it by its last game, and what they do to the season. */
   weekPlan: WeekPlan | null
+  /** IL full and a player out: the IL player to drop for him, and the add into his spot. */
+  ilSwap: IlSwap | null
   /** The verdict for this week, beside the season's; `aligned` when the same move serves both. */
   weekVerdict: WeekVerdict | null
   catPlan: CategoryPlan | null
@@ -71,7 +73,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
     lineup: null, tomorrow: null, week: null, budget: null, pickups: [], keep: [], ilBack: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
-    standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, weekVerdict: null,
+    standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null,
   }
   if (!drafted || !me) return base
 
@@ -99,7 +101,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   }
   const budget = budgetOf(snap, me.id, league, world.today)
   const addsLeft = budget?.week ? Math.max(0, budget.week.max - budget.week.used) : null
-  const { pickups: picks, pairs, ilBack, weekPlan } = pickupsAndPairs(ctx, snap, me.id, { punts, addsLeft })
+  const { pickups: picks, pairs, ilBack, weekPlan, ilSwap } = pickupsAndPairs(ctx, snap, me.id, { punts, addsLeft })
   const news = leagueNews(ctx, snap, me.id, events, week?.opponent?.id ?? null).slice(0, 40)
   const st = snap.standings.find((s) => s.teamId === me.id || s.mine)
 
@@ -110,7 +112,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     trades: tradeIdeas(ctx, snap, me.id),
     standing: st ? { rank: st.rank, w: st.wins, l: st.losses, t: st.ties } : null,
     addPlan: addPlan(picks, budget, world.today, week?.end ?? null),
-    verdict: null, weekPlan, weekVerdict: null,
+    verdict: null, weekPlan, ilSwap, weekVerdict: null,
     catPlan: league.scoring === 'categories' && mine?.edges ? categoryPlan(ctx, snap, mine.edges, punts) : null,
     startsOn: (() => { const first = [...snap.weeks].map((w) => w[1]).sort()[0]; return first && first > world.today ? first : null })(),
   }
@@ -332,7 +334,7 @@ export function weekVerdictOf(v: SeasonView): WeekVerdict | null {
     aligned: level !== 'none' && p.moves.some((m) => seasonAdds.has(m.add)),
     headline: level === 'none'
       ? (p.moves.length ? 'No add moves this week by a point' : 'No add helps this week')
-      : p.moves.map((m, i) => `${i ? 'then add' : 'Add'} ${m.name}${m.drop ? m.toIl ? ` (${m.dropName} to IL)` : ` for ${m.dropName}` : ''}`).join(', '),
+      : p.moves.map((m, i) => `${i ? 'then add' : 'Add'} ${m.name}${m.drop ? m.toIl ? ` (${m.dropName} to IL${m.ilDrop ? `, ${m.ilDropName} dropped from it` : ''})` : ` for ${m.dropName}` : ''}`).join(', '),
   }
 }
 
@@ -365,6 +367,22 @@ export function verdictOf(v: SeasonView): Verdict | null {
   }
   const one = (p: SeasonView['pickups'][number]) => ({ add: p.add, name: p.name, drop: p.drop, dropName: p.dropName, waiver: p.waiver })
 
+  // IL full and a player out for a while: the swap first when it is worth an add and more than any other move. Yahoo
+  // will not take him onto IL until a seat there is freed.
+  const sw = v.ilSwap
+  if (sw && sw.seasonWins >= DO.season && sw.seasonWins >= upValue) {
+    const back = (d: string | null) => (d ? `back about ${new Date(`${d}T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}` : 'no return date')
+    const other = sw.options.find((o) => o.drop !== sw.drop)
+    return {
+      level: 'do', kind: 'season', when: sw.waiver ? 'claim now' : 'now', season: sw.seasonWins, week: null, confidence: null,
+      headline: `Drop ${sw.dropName} from IL, move ${sw.toIlName} to IL, add ${sw.name}`,
+      moves: [{ add: sw.add, name: sw.name, drop: sw.drop, dropName: sw.dropName, waiver: sw.waiver }],
+      reasons: [
+        `IL is full: ${sw.toIlName} is out (${back(sw.toIlBack)}), ${sw.dropName} is ${back(sw.dropBack)}`,
+        ...(other ? [`Keeping ${sw.dropName} instead (dropping ${other.dropName}, adding ${other.name}): ${winsWord(other.seasonWins)}`] : []),
+      ],
+    }
+  }
   // A pair first when it is worth a good deal more than the best single move and holds up. Like a single move in the
   // week's plan, one that costs this week waits for the Monday after it, worth that loss more.
   const pairCost = pair ? Math.max(0, pair.winBefore - pair.winAfter) : 0

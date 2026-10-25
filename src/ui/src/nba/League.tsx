@@ -1027,7 +1027,7 @@ function WeekCard({ v }: { v: SeasonView }) {
           <ol className="nl-weeksteps">
             {d.moves.map((m) => (
               <li key={m.add}>
-                {m.toIl ? <><b>Move {m.dropName} to IL</b> (out; kept), <b>add {m.name}</b></> : <><b>Add {m.name}</b>{m.drop ? <>, drop {m.dropName}</> : ' into your open spot'}</>}
+                {m.toIl ? <>{m.ilDrop && <><b>Drop {m.ilDropName}</b> from IL, </>}<b>move {m.dropName} to IL</b> (out; kept), <b>add {m.name}</b></> : <><b>Add {m.name}</b>{m.drop ? <>, drop {m.dropName}</> : ' into your open spot'}</>}
                 <span className="nl-dim"> · counts from {dateWord(m.from)}{m.waiver ? ' (waivers)' : ''}</span>
                 {m.seasonWins != null && <span className="nl-dim"> · season <span className={effect(m.seasonWins, 0.03)}>{wins(m.seasonWins)}</span> so far</span>}
               </li>

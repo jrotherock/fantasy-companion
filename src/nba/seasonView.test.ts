@@ -747,3 +747,49 @@ test('Harker with a spot open: the season verdict takes the best add into it', (
   const best = [...v.pickups.filter((p) => p.kind !== 'stream')].sort((a, b) => (b.seasonWins ?? 0) - (a.seasonWins ?? 0))[0]
   if (!best.drop) assert.match(v.verdict!.headline, /into your open spot/)
 })
+
+test('Harker with IL full and a star out: drop the IL player due back last, move the star there, add the best', () => {
+  const { league, snap: s0, w: w0 } = realLeague('2026-10-19-harker', harkerLeague, '3', 20)
+  const mine = s0.rosters.find((r) => r.team.id === '3')!
+  const il = mine.players.filter((y) => y.slot === 'IL').map((y) => players.find((x) => x.yahoo?.yahooId === y.yahooId)!)
+  assert.equal(il.length, 2, 'IL full')
+  const star = mine.players.filter((y) => y.slot !== 'IL').map((y) => players.find((x) => x.yahoo?.yahooId === y.yahooId)!).sort((a, b) => b.projection!.perGame.pts - a.projection!.perGame.pts)[0]
+  // One on IL back in two weeks, one in three months; the star out for five weeks.
+  const w = { ...w0, returns: new Map([[il[0].id, '2026-11-02'], [il[1].id, '2027-01-20'], [star.id, '2026-11-23']]) }
+  const snap = { ...s0, rosters: s0.rosters.map((r) => r.team.id !== '3' ? r : { ...r, players: r.players.map((y) => y.yahooId === star.yahoo!.yahooId ? { ...y, status: 'O' } : y) }) }
+  const v = buildSeasonView(league, snap, w)
+  const sw = v.ilSwap!
+  assert.ok(sw, 'an IL swap')
+  assert.equal(sw.toIl, star.id)
+  // Each option, by hand: the roster with the star on IL, the IL player gone, the add in; every IL player back on his date.
+  const ctx = new Context(league, w)
+  const myIds = rosterIds(ctx, snap.rosters.find((r) => r.team.id === '3')!.players)
+  const ilIds = il.map((p) => ({ id: p.id, eligible: [...p.positions, 'Util'] }))
+  const now = winsByHand(league, snap, w, [...myIds, ...ilIds])
+  for (const o of sw.options) {
+    const add = w.players.find((x) => x.id === o.add)!
+    const after = winsByHand(league, snap, w, [...myIds.filter((x) => x.id !== star.id), { id: add.id, eligible: add.positions }, ...ilIds.filter((x) => x.id !== o.drop), { id: star.id, eligible: star.positions }])
+    assert.ok(Math.abs(o.seasonWins - (after - now)) < 1e-6, `${o.dropName}: ${o.seasonWins} vs ${after - now} by hand`)
+  }
+  assert.ok(sw.options.every((o) => o.seasonWins <= sw.seasonWins + 1e-12), 'the best option leads')
+  if (sw.seasonWins >= 0.25) assert.match(v.verdict!.headline, new RegExp(`^Drop ${sw.dropName} from IL, move ${star.name} to IL`))
+})
+
+test('a status change reaches his teammates\' outlooks, and only theirs', () => {
+  const { league, w } = realLeague('2026-10-19-hoops', { ...hoops, id: 'nba-hoops' }, '4', 18)
+  const ctx = new Context(league, w)
+  // Tomorrow: an out player is expected to miss it (ten days on, the app has him likely back).
+  const day = addDays(w.today, 1)
+  // A rotation player and a teammate of his, and someone on another team.
+  const star = w.players.filter((p) => p.team && p.projection && p.projection.perGame.min >= 30).sort((a, b) => b.projection!.perGame.min - a.projection!.perGame.min)[0]
+  const mate = w.players.find((p) => p.team === star.team && p.id !== star.id && (p.projection?.perGame.min ?? 0) >= 15)!
+  const other = w.players.find((p) => p.team && p.team !== star.team && (p.projection?.perGame.min ?? 0) >= 15)!
+  ctx.setStatus(star.id, null)
+  const before = { mate: ctx.outlook(mate.id, day)!.box.pts, other: ctx.outlook(other.id, day)!.box.pts, star: ctx.outlook(star.id, day)!.play }
+  ctx.setStatus(star.id, 'O')
+  assert.ok(ctx.outlook(mate.id, day)!.box.pts > before.mate, `${mate.name} picks up ${star.name}'s minutes`)
+  assert.ok(ctx.outlook(star.id, day)!.play < before.star, `${star.name} is less likely to play`)
+  assert.equal(ctx.outlook(other.id, day)!.box.pts, before.other, `${other.name}, on another team, is untouched`)
+  ctx.setStatus(star.id, null)
+  assert.equal(ctx.outlook(mate.id, day)!.box.pts, before.mate, 'back to healthy, back to as he was')
+})

@@ -173,8 +173,12 @@ export class Context {
     const d = designation(yahooStatus, p?.injury?.status)
     if (this.status.get(id) === d) return
     this.status.set(id, d)
-    // A designation moves his outlook and his teammates' minutes: what was worked out before is out of date.
-    this.outlooks.clear(); this.bumps.clear()
+    // A designation moves his outlook and his teammates' minutes, and nobody else's: only his team's are worked out
+    // again (2026-10-24: clearing every outlook on each change made a what-if test 100 times slower, 2.7s to 281s).
+    const team = p?.team
+    if (!team) { this.outlooks.delete(id); return }
+    for (const k of [...this.bumps.keys()]) if (k.startsWith(`${team}|`)) this.bumps.delete(k)
+    for (const k of [...this.outlooks.keys()]) if (this.byId.get(k.slice(0, k.indexOf('|')))?.team === team) this.outlooks.delete(k)
   }
 
   designation(id: string): Designation { return this.status.get(id) ?? 'healthy' }

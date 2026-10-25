@@ -214,6 +214,17 @@ export interface IlReturn {
 const OUT: Designation[] = ['out', 'injured', 'inactive', 'suspended']
 
 /**
+ * IL full and one of my players out: drop `drop` from IL (back `dropBack`), move `toIl` there, add `add` into his spot;
+ * worth `seasonWins` against the roster as it is, IL included. `options`: every IL player that could go, best first.
+ */
+export interface IlSwap {
+  drop: string; dropName: string; dropBack: string | null
+  toIl: string; toIlName: string; toIlBack: string | null
+  add: string; name: string; seasonWins: number; waiver: boolean
+  options: Omit<IlSwap, 'options'>[]
+}
+
+/**
  * The adds that give this week its best chance by its last game. `from` is the first day a move counts; a `drop` that
  * was added earlier in the plan goes after his last game. `seasonWins`: what the roster left at the end of the week is
  * worth over the season against the roster as it is (null with no season left to judge).
@@ -222,7 +233,7 @@ export interface WeekPlan {
   winBefore: number
   winAfter: number
   /** `toIl`: the player making room goes to IL, kept, rather than being dropped. */
-  moves: { add: string; name: string; team: string | null; drop: string | null; dropName: string | null; from: string; toIl: boolean; waiver: boolean; winAfter: number; seasonWins: number | null }[]
+  moves: { add: string; name: string; team: string | null; drop: string | null; dropName: string | null; from: string; toIl: boolean; ilDrop: string | null; ilDropName: string | null; waiver: boolean; winAfter: number; seasonWins: number | null }[]
   seasonWins: number | null
   /** Category leagues: each race's chance before and after the plan. */
   races: { cat: Cat; before: number; after: number }[] | null
@@ -329,10 +340,10 @@ export const WEEK_SEASON_COST = 0.25
 /** A pair is shown when its second move adds at least this much to the best single move. */
 export const PAIR_MARGIN = UPGRADE_WINS
 
-export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, opts: { punts?: Cat[]; limit?: number; addsLeft?: number | null } = {}): { pickups: Pickup[]; pairs: PairMove[]; ilBack: IlReturn[]; weekPlan: WeekPlan | null } {
+export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, opts: { punts?: Cat[]; limit?: number; addsLeft?: number | null } = {}): { pickups: Pickup[]; pairs: PairMove[]; ilBack: IlReturn[]; weekPlan: WeekPlan | null; ilSwap: IlSwap | null } {
   const { today } = ctx.world
   const mine = snap.rosters.find((r) => r.team.id === myTeamId)
-  if (!mine) return { pickups: [], pairs: [], ilBack: [], weekPlan: null }
+  if (!mine) return { pickups: [], pairs: [], ilBack: [], weekPlan: null, ilSwap: null }
   const rostered = new Set<string>()
   for (const r of snap.rosters) for (const y of r.players) { const id = ctx.resolve(y); if (id) rostered.add(id) }
   const waivers = new Set(snap.waivers)
@@ -478,6 +489,9 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
     .map((x) => ({ ...x, season: season(x.id), missed: missed(x.id) }))
     .sort((a, b) => a.missed - b.missed)
     .slice(0, DROPS)
+  // Who sits on my IL now, coming back on his return date: counted in the season's measure wherever an IL seat changes
+  // hands, so dropping one is weighed against when he is due back.
+  const ilMen = mine.players.filter((y) => y.slot === 'IL' || y.slot === 'IL+').map((y) => ({ id: ctx.resolve(y), eligible: y.eligible })).filter((x): x is { id: string; eligible: string[] } => !!x.id)
   const ilSlots = ctx.league.roster.IL ?? 0
   const ilOpen = Math.max(0, ilSlots - mine.players.filter((y) => y.slot === 'IL' || y.slot === 'IL+').length)
   // Out for a while: worth a roster spot only by way of IL.
@@ -517,6 +531,34 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
       : []
     return { seasonCats, weekCats }
   }
+
+  // IL full and a player of mine out: drop the one on IL the season misses least, given when each is back, move the out
+  // player there, and add the best for the season into his spot (2026-10-24: Harker, Paolo out 4-6 weeks with Butler,
+  // back January at best, and Nurkić, back in two weeks, on IL; the app suggested nothing).
+  const ilSwap = ((): IlSwap | null => {
+    if (!judged || ilOpen > 0 || !ilMen.length) return null
+    const outNow = myIds.filter((x) => OUT.includes(ctx.designation(x.id)))
+    if (!outNow.length) return null
+    const asNow = seasonWins([...myIds, ...ilMen])
+    const pool = forSeason.slice(0, 25)
+    const options: IlSwap['options'] = []
+    for (const x of outNow) for (const j of ilMen) {
+      if (keep.has(j.id) || isStar(ctx, j.id)) continue
+      const il = [...ilMen.filter((m) => m.id !== j.id), x]
+      const active = myIds.filter((m) => m.id !== x.id)
+      let top: { id: string; v: number } | null = null
+      for (const c of pool) {
+        const v = seasonWins([...active, { id: c.id, eligible: c.positions }, ...il]) - asNow
+        if (!top || v > top.v) top = { id: c.id, v }
+      }
+      if (!top) continue
+      const name = (id: string) => ctx.byId.get(id)?.name ?? id
+      options.push({ drop: j.id, dropName: name(j.id), dropBack: ctx.returnOf(j.id).date, toIl: x.id, toIlName: name(x.id), toIlBack: ctx.returnOf(x.id).date, add: top.id, name: name(top.id), seasonWins: top.v, waiver: waiverIds.has(top.id) })
+    }
+    if (!options.length) return null
+    options.sort((a, b) => b.seasonWins - a.seasonWins)
+    return { ...options[0], options }
+  })()
 
   const out: Pickup[] = []
   const tried: { add: { id: string; eligible: string[] }; drop: { id: string; eligible: string[] }; wins: number }[] = []
@@ -654,7 +696,7 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
     pr.confidence = check(pr.moves.flatMap((m) => [m.add, m.drop]), myIds, after, 'season')
   }
   const weekPlan = bestWeek(opts.addsLeft ?? null)
-  return { pickups: shown, pairs: top, ilBack, weekPlan }
+  return { pickups: shown, pairs: top, ilBack, weekPlan, ilSwap }
 
   /**
    * The adds that give this week its best chance by the last game, whatever they do to the season (shown beside it):
@@ -672,7 +714,10 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
     // (2026-10-23: the first version dropped an out Trae Young for a week's stream with an IL seat empty). It is one
     // of the ways to make room for an add, taken only when it helps: on IL he cannot come back for a game this week.
     const ilAble = myIds.filter((x) => OUT.includes(ctx.designation(x.id)))
-    const onIl = new Set<string>()
+    // IL as the plan goes: who is on it, and the seats left. With it full, one there can be dropped to make room for an
+    // out player (2026-10-24: Paolo out 4-6 weeks with Butler and Nurkić on Harker's IL; the app suggested nothing).
+    let ilNow = [...ilMen]
+    let ilFree = ilOpen
     const start: Man[] = myIds.map((x) => ({ ...x, from: allDays[0], until: null }))
     const scoreOf = (men: Man[]) => scoreWeek(ctx, mySide, opp!, theirs, seats, allDays, men)
     const lastGame = (id: string) => {
@@ -680,22 +725,28 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
       return [...allDays].reverse().find((d) => !!t && schedulePlays(ctx, d, t)) ?? null
     }
     const before = scoreOf(start)
+    // What the season is worth as things stand, the IL included, for every move's season effect.
+    const planBase = judged ? seasonWins([...myIds, ...ilMen]) : 0
     let men = start, cur = before
     const moves: WeekPlan['moves'] = []
     const max = Math.min(3, addsLeft ?? 3)
     let open = openSpots
     let pool = cands
     for (let step = 0; step < max; step++) {
-      type Option = { men: Man[]; s: ReturnType<typeof scoreOf>; add: string; drop: string | null; from: string; il: boolean }
+      type Option = { men: Man[]; s: ReturnType<typeof scoreOf>; add: string; drop: string | null; from: string; il: boolean; ilDrop: string | null }
       const options: Option[] = []
       const tried: { id: string; win: number }[] = []
       for (const c of pool) {
         if (men.some((m) => m.id === c.id)) continue
         const cd = daysFor(c.id)
         if (!cd.length) continue
-        const outs: { drop: string | null; from: string; il?: boolean }[] = []
+        const outs: { drop: string | null; from: string; il?: boolean; ilDrop?: string }[] = []
         if (open > 0) outs.push({ drop: null, from: cd[0] })
-        if (onIl.size < ilOpen) for (const x of ilAble) if (!onIl.has(x.id) && men.some((m) => m.id === x.id && !m.until)) outs.push({ drop: x.id, from: cd[0], il: true })
+        for (const x of ilAble) {
+          if (!men.some((m) => m.id === x.id && !m.until)) continue
+          if (ilFree > 0) outs.push({ drop: x.id, from: cd[0], il: true })
+          else for (const j of ilNow) if (!keep.has(j.id) && !isStar(ctx, j.id) && !ilAble.some((a) => a.id === j.id)) outs.push({ drop: x.id, from: cd[0], il: true, ilDrop: j.id })
+        }
         for (const d of drops) if (men.some((m) => m.id === d.id && !m.until) && !ilAble.some((x) => x.id === d.id)) outs.push({ drop: d.id, from: cd[0] })
         // A player added earlier in the plan, dropped the day after his last game this week.
         for (const mv of moves) {
@@ -707,37 +758,40 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
           const next = [...men.map((m) => (m.id === o.drop ? { ...m, until: o.from } : m)), { id: c.id, eligible: c.positions, from: o.from, until: null }]
           const sc = scoreOf(next)
           tried.push({ id: c.id, win: sc.win })
-          options.push({ men: next, s: sc, add: c.id, drop: o.drop, from: o.from, il: !!o.il })
+          options.push({ men: next, s: sc, add: c.id, drop: o.drop, from: o.from, il: !!o.il, ilDrop: o.ilDrop ?? null })
         }
       }
       // The best for the week whose season cost stays inside the cap: a week is not worth Harden (2026-10-23: the first
       // version dropped him for Keon Ellis, -0.55 wins, for a few points of one week).
-      const kept = (ms: Man[], il: Set<string> = onIl) => ms.filter((m) => !m.until || il.has(m.id)).map((m) => ({ id: m.id, eligible: m.eligible }))
-      const nowWins = judged ? seasonWins(kept(men)) : 0
+      // The season as a roster stands: the active players, and the IL, each back on his return date.
+      const kept = (ms: Man[]) => ms.filter((m) => !m.until).map((m) => ({ id: m.id, eligible: m.eligible }))
+      const ilAfter = (o: Option) => (!o.il ? ilNow : [...ilNow.filter((j) => j.id !== o.ilDrop), { id: o.drop!, eligible: ctx.byId.get(o.drop!)?.positions ?? [] }])
+      const nowWins = judged ? seasonWins([...kept(men), ...ilNow]) : 0
       let best: Option | null = null
       for (const o of options.sort((a, b) => b.s.win - a.s.win)) {
         if (o.s.win - cur.win < 0.005) break
-        if (judged && seasonWins(kept(o.men, o.il ? new Set([...onIl, o.drop!]) : onIl)) - nowWins < -WEEK_SEASON_COST) continue
+        if (judged && seasonWins([...kept(o.men), ...ilAfter(o)]) - nowWins < -WEEK_SEASON_COST) continue
         best = o; break
       }
       if (!best) break
-      if (best.il) onIl.add(best.drop!)
-      const after = kept(best.men)
+      if (best.il) { if (!best.ilDrop) ilFree--; ilNow = ilAfter(best) }
+      const after = [...kept(best.men), ...ilNow]
       moves.push({
         add: best.add, name: ctx.byId.get(best.add)?.name ?? best.add, team: ctx.byId.get(best.add)?.team ?? null,
         drop: best.drop, dropName: best.drop ? ctx.byId.get(best.drop)?.name ?? null : null, from: best.from, toIl: best.il,
+        ilDrop: best.ilDrop, ilDropName: best.ilDrop ? ctx.byId.get(best.ilDrop)?.name ?? null : null,
         waiver: waiverIds.has(best.add), winAfter: best.s.win,
-        seasonWins: judged ? seasonWins(after) - baseWins : null,
+        seasonWins: judged ? seasonWins(after) - planBase : null,
       })
       if (best.drop == null) open--
       men = best.men; cur = best.s
       // The next step looks again at the best candidates of this one.
       pool = [...new Map(tried.sort((a, b) => b.win - a.win).map((t) => [t.id, t])).keys()].slice(0, 15).map((id) => cands.find((x) => x.id === id)!).filter(Boolean)
     }
-    const kept = men.filter((m) => !m.until || onIl.has(m.id)).map((m) => ({ id: m.id, eligible: m.eligible }))
+    const kept = [...men.filter((m) => !m.until).map((m) => ({ id: m.id, eligible: m.eligible })), ...ilNow]
     return {
       winBefore: before.win, winAfter: cur.win, moves,
-      seasonWins: moves.length && judged ? seasonWins(kept) - baseWins : null,
+      seasonWins: moves.length && judged ? seasonWins(kept) - planBase : null,
       races: before.races && cur.races ? before.races.map((r) => ({ cat: r.cat, before: r.win, after: cur.races!.find((x) => x.cat === r.cat)?.win ?? r.win })) : null,
     }
   }

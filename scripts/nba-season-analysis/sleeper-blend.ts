@@ -93,6 +93,7 @@ const runs = cases.map(({ key, w, punts }) => {
   for (const r of v.ilBack) lines.push(r.ready ? `off IL first: ${r.name} (${r.status}) for ${r.dropName ?? 'an open spot'}, season ${r.seasonWins?.toFixed(2)}` : `due back ${r.returns}: ${r.name} (${r.status})`)
   const wv = v.weekVerdict
   if (wv) lines.push(`WEEK (${wv.chance}): ${wv.level} — ${wv.headline} · ${Math.round(wv.winBefore * 100)}% → ${Math.round(wv.winAfter * 100)}%${wv.season != null ? ` · season ${wv.season.toFixed(2)}` : ''}${wv.aligned ? ' · ALIGNED with season' : ''}${wv.races.length ? ' · ' + wv.races.map((r) => `${r.cat} ${Math.round(r.before * 100)}→${Math.round(r.after * 100)}`).join(' ') : ''}${wv.moves.length ? ' · ' + wv.moves.map((m) => `${m.name} from ${m.from.slice(5)}${m.seasonWins != null ? ` (${m.seasonWins.toFixed(2)})` : ''}`).join(', ') : ''}`)
+  if (v.ilSwap) for (const o of v.ilSwap.options) lines.push(`IL swap: drop ${o.dropName} (back ${o.dropBack ?? '?'}), ${o.toIlName} to IL, add ${o.name}: season ${o.seasonWins.toFixed(2)}`)
   const vd = v.verdict
   lines.push(`verdict: ${vd ? `${vd.level} — ${vd.headline} (${vd.when}; season ${vd.season?.toFixed(2)}${vd.confidence ? `, holds ${vd.confidence.holds}/${vd.confidence.of}` : ''})` : 'none'}`)
   for (const p of v.pickups.slice(0, Number(process.env.TOP ?? 6))) {
