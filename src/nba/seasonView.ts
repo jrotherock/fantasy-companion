@@ -51,6 +51,10 @@ export interface SeasonView {
   weekPlan: WeekPlan | null
   /** IL full and a player out: the IL player to drop for him, and the add into his spot. */
   ilSwap: IlSwap | null
+  /** My starters today listed questionable or doubtful, before their tip, and who on my bench would start instead. */
+  lineupWatch: { id: string; name: string; status: string; tip: string; backups: { id: string; name: string; tip: string | null }[] }[]
+  /** My waiver claims that cleared in the last two days. */
+  claims: { id: string; at: number; add: string; addName: string; drop: string | null; dropName: string | null }[]
   /** The verdict for this week, beside the season's; `aligned` when the same move serves both. */
   weekVerdict: WeekVerdict | null
   catPlan: CategoryPlan | null
@@ -73,7 +77,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
     lineup: null, tomorrow: null, week: null, budget: null, pickups: [], keep: [], ilBack: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
-    standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null,
+    standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null, lineupWatch: [], claims: [],
   }
   if (!drafted || !me) return base
 
@@ -113,6 +117,8 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     standing: st ? { rank: st.rank, w: st.wins, l: st.losses, t: st.ties } : null,
     addPlan: addPlan(picks, budget, world.today, week?.end ?? null),
     verdict: null, weekPlan, ilSwap, weekVerdict: null,
+    lineupWatch: lineupWatchOf(ctx, lineup, punts),
+    claims: claimsOf(ctx, snap, me.id),
     catPlan: league.scoring === 'categories' && mine?.edges ? categoryPlan(ctx, snap, mine.edges, punts) : null,
     startsOn: (() => { const first = [...snap.weeks].map((w) => w[1]).sort()[0]; return first && first > world.today ? first : null })(),
   }
@@ -156,6 +162,31 @@ export interface SeasonTile {
 const HOUR = 3600000
 
 /** Whether a lineup move saves a start that would otherwise be lost, rather than swapping in a better one. */
+const ACTIVE = (slot: string | null) => !!slot && !['BN', 'IL', 'IL+'].includes(slot)
+
+/** My starters today in doubt before their tip, each with the best two on my bench whose games have not started. */
+export function lineupWatchOf(ctx: Context, lineup: LineupCheck | null, punts: Cat[]): SeasonView['lineupWatch'] {
+  if (!lineup) return []
+  const bench = lineup.rows.filter((r) => r.slot === 'BN' && r.game && !r.game.started && !['out', 'injured', 'suspended', 'inactive', 'doubtful'].includes(r.status))
+    .sort((a, b) => ctx.worth(b.id, punts) - ctx.worth(a.id, punts))
+  return lineup.rows.filter((r) => ACTIVE(r.slot) && r.game && !r.game.started && r.game.tip && ['questionable', 'doubtful'].includes(r.status))
+    .map((r) => ({ id: r.id, name: r.name, status: r.status, tip: r.game!.tip!, backups: bench.slice(0, 2).map((b) => ({ id: b.id, name: b.name, tip: b.game?.tip ?? null })) }))
+}
+
+/** My waiver claims that cleared in the last two days: a player come to me from waivers. */
+export function claimsOf(ctx: Context, snap: Snapshot, me: string): SeasonView['claims'] {
+  const out: SeasonView['claims'] = []
+  for (const t of snap.transactions ?? []) {
+    if (ctx.world.now - t.at > 2 * 86_400_000) continue
+    const add = t.players.find((p) => p.kind === 'add' && p.toTeamId === me && p.fromType === 'waivers')
+    if (!add) continue
+    const drop = t.players.find((p) => p.kind === 'drop' && p.fromTeamId === me)
+    const aid = ctx.resolve(add.player), did = drop ? ctx.resolve(drop.player) : null
+    out.push({ id: t.id, at: t.at, add: aid ?? add.player.yahooId, addName: add.player.name, drop: did, dropName: drop?.player.name ?? null })
+  }
+  return out
+}
+
 export const losesStart = (m: { bench: string | null; why: string }) =>
   !m.bench || /no game (today|tomorrow)|is (out|injured|suspended|inactive|doubtful)$/.test(m.why)
 
@@ -430,4 +461,148 @@ export function planWithPair(plan: AddPlan, v: Verdict, pair: PairMove): AddPlan
     }
   })
   return { ...plan, steps: [...steps, ...rest] }
+}
+
+/** A tip time as the user reads it: Pacific, named. */
+const tipWord = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' }) + ' PT' : 'later')
+const dayShort = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })
+const pctWord2 = (x: number) => `${Math.round(x * 100)}%`
+const HOUR_MS = 3_600_000
+
+/**
+ * The basketball notifications beyond a lost start and a pickup (2026-10-26: "does the app send me lineup reminders
+ * such as Ant Edwards questionable before tip-off, or Cam's status changing in time to handle a pickup?"). Each says
+ * what to do. Ids are stable for one fact, so each is sent once; consequences are what missing it costs.
+ */
+export function seasonAlerts(v: SeasonView, now: number): Alert[] {
+  const out: Alert[] = []
+  if (v.phase !== 'season') return out
+  const L = v.league, link = `/nba/league/${L.id}`
+  const name = (id: string | null) => (id ? v.players[id]?.name ?? id : '')
+  const win = v.week?.odds?.win ?? v.week?.points?.win ?? 0.5
+  const close = win > 0.2 && win < 0.8
+  const rows = v.lineup?.rows ?? []
+
+  // 1. A starter in doubt, about 90 minutes before his tip: who comes in if he sits.
+  for (const w of v.lineupWatch) {
+    const tip = Date.parse(w.tip)
+    if (tip - now > 90 * 60_000 || tip <= now) continue
+    const b = w.backups[0]
+    out.push({
+      id: `nba-watch:${L.id}:${v.today}:${w.id}`, leagueId: L.id, rule: 'nba-watch',
+      headline: `${L.label}: ${w.name} is ${w.status}, tips ${tipWord(w.tip)}`,
+      detail: b ? `If he sits, start ${b.name} (${tipWord(b.tip)})${w.backups[1] ? ` or ${w.backups[1].name}` : ''}. Teams usually settle it about 30 minutes before tip.` : 'Nobody on your bench plays later today; check his status before tip.',
+      consequence: close ? 65 : 50, deadline: tip, link, playerId: w.id,
+    })
+  }
+  // 1b. ...and when he is cleared before his tip: nothing to change.
+  for (const n of v.news) {
+    if (n.whose !== 'mine' || n.kind !== 'better' || n.at == null || now - n.at > 6 * HOUR_MS) continue
+    const r = rows.find((x) => x.id === n.playerId && ACTIVE(x.slot) && x.game && !x.game.started)
+    if (!r) continue
+    out.push({
+      id: `nba-cleared:${L.id}:${v.today}:${r.id}`, leagueId: L.id, rule: 'nba-cleared',
+      headline: `${L.label}: ${r.name} is available — no change`, detail: `${n.headline}; he stays in your lineup.`,
+      consequence: 35, deadline: r.game?.tip ? Date.parse(r.game.tip) : null, link, playerId: r.id,
+    })
+  }
+  // 3. A clearly better start on the bench, in a week that is close.
+  if (win > 0.35 && win < 0.65) {
+    for (const m of v.lineup?.moves ?? []) {
+      if (losesStart(m) || !m.by) continue
+      const by = Date.parse(m.by)
+      if (by - now > 2 * HOUR_MS || by <= now) continue
+      out.push({
+        id: `nba-better:${L.id}:${v.today}:${m.start}`, leagueId: L.id, rule: 'nba-better',
+        headline: `${L.label}: start ${name(m.start)} over ${name(m.bench)}`,
+        detail: `${m.why}; the week is ${pctWord2(win)}. Locks at ${tipWord(m.by)}.`,
+        consequence: 45, deadline: by, link, playerId: m.start,
+      })
+    }
+  }
+  // 5. A player on IL who can no longer be there: Yahoo blocks adds until he moves. The choice made for you.
+  for (const r of v.ilBack.filter((x) => x.ready)) {
+    const what = r.drop === r.id ? `Let ${r.name} go (back, he adds nothing over your roster)`
+      : r.drop ? `Activate ${r.name} and drop ${r.dropName} (${(r.seasonWins ?? 0) >= 0 ? '+' : ''}${(r.seasonWins ?? 0).toFixed(2)} wins)` : `Activate ${r.name} into your open spot`
+    out.push({
+      id: `nba-il:${L.id}:${v.today}:${r.id}`, leagueId: L.id, rule: 'nba-il',
+      headline: `${L.label}: ${r.name} can't stay on IL (${r.status})`,
+      detail: `${what}. Yahoo blocks adds until he is off IL.`,
+      consequence: 60, deadline: null, link, playerId: r.id,
+    })
+  }
+  // 6. Newly out with an IL seat open: move him there, and the add it makes room for.
+  for (const m of v.lineup?.ilMoves ?? []) {
+    if (m.action !== 'to-il') continue
+    const plan = v.weekPlan?.moves.find((x) => x.toIl && x.drop === m.id)
+    out.push({
+      id: `nba-toil:${L.id}:${m.id}`, leagueId: L.id, rule: 'nba-toil',
+      headline: `${L.label}: move ${m.name} to IL`,
+      detail: plan ? `It frees his spot: add ${plan.name}.` : `It frees his spot for an add: ${v.verdict?.level !== 'none' && v.verdict ? v.verdict.headline : 'see Adds'}.`,
+      consequence: 55, deadline: null, link, playerId: m.id,
+    })
+  }
+  // 7. Newly out with IL full: which IL player to drop for him, and the add.
+  if (v.ilSwap) {
+    const sw = v.ilSwap
+    out.push({
+      id: `nba-ilswap:${L.id}:${sw.toIl}:${sw.drop}`, leagueId: L.id, rule: 'nba-ilswap',
+      headline: `${L.label}: drop ${sw.dropName} from IL, move ${sw.toIlName} there, add ${sw.name}`,
+      detail: `IL is full. ${sw.seasonWins >= 0 ? '+' : ''}${sw.seasonWins.toFixed(2)} wins over the season.`,
+      consequence: 60, deadline: null, link, playerId: sw.toIl,
+    })
+  }
+  // 8. Back from IL this week: a spot to plan for.
+  for (const r of v.ilBack.filter((x) => !x.ready && x.returns)) {
+    out.push({
+      id: `nba-ilreturn:${L.id}:${r.id}:${r.returns}`, leagueId: L.id, rule: 'nba-ilreturn',
+      headline: `${L.label}: ${r.name} due back ${dayShort(r.returns!)}`,
+      detail: 'He will need an active spot: plan the drop, or the add that fills it until then.',
+      consequence: 40, deadline: Date.parse(`${r.returns}T23:00:00Z`), link, playerId: r.id,
+    })
+  }
+  // 9. A waiver claim cleared.
+  for (const c of v.claims) {
+    out.push({
+      id: `nba-claim:${L.id}:${c.id}`, leagueId: L.id, rule: 'nba-claim',
+      headline: `${L.label}: claim cleared — ${c.addName} is yours`, detail: c.dropName ? `${c.dropName} dropped.` : 'Into your open spot.',
+      consequence: 40, deadline: null, link, playerId: c.add,
+    })
+  }
+  // 10. The week ahead, once, when it begins (Sunday night after the roll): the chance, the open spots, the adds.
+  const wv = v.weekVerdict, w = v.week
+  if (w && wv && v.today <= w.start) {
+    const opens = w.days.filter((d) => d.open > 0).map((d) => `${dayShort(d.date)} ${d.open}`).join(', ')
+    out.push({
+      id: `nba-weekplan:${L.id}:${w.week}`, leagueId: L.id, rule: 'nba-weekplan',
+      headline: `${L.label}: week ${w.week} vs ${w.opponent?.name ?? 'your opponent'} — ${pctWord2(wv.winBefore)} to win`,
+      detail: `Open spots: ${opens || 'none'}. ${wv.level === 'none' ? 'No add moves the week by a point.' : `${wv.headline}: ${pctWord2(wv.winBefore)} → ${pctWord2(wv.winAfter)}.`}`,
+      consequence: 55, deadline: Date.parse(`${w.end}T23:00:00Z`), link, playerId: wv.moves[0]?.add,
+    })
+  }
+  // 11/13. Mid-week, the week's best adds when they move a week still in play.
+  if (w && wv && v.today > w.start && wv.level === 'do' && wv.winBefore > 0.2 && wv.winBefore < 0.8) {
+    const daysLeft = w.days.filter((d) => d.date > v.today).length
+    const adds = v.budget?.week ? v.budget.week.max - v.budget.week.used : null
+    // 12. ...pressed when the week is nearly over and adds are left.
+    const late = daysLeft <= 2 && (adds == null || adds > 0) && wv.winBefore > 0.25 && wv.winBefore < 0.75
+    out.push({
+      id: late ? `nba-lastadds:${L.id}:${v.today}` : `nba-weekmove:${L.id}:${w.week}:${wv.moves.map((m) => m.add).join('+')}`,
+      leagueId: L.id, rule: late ? 'nba-lastadds' : 'nba-weekmove',
+      headline: `${L.label}: ${wv.headline}`,
+      detail: `This week ${pctWord2(wv.winBefore)} → ${pctWord2(wv.winAfter)}${wv.races.length ? ` (${wv.races.slice(0, 2).map((r) => `${r.cat.toUpperCase()} ${pctWord2(r.before)}→${pctWord2(r.after)}`).join(', ')})` : ''}${late && adds != null ? `; ${adds} add${adds === 1 ? '' : 's'} left, ${daysLeft} day${daysLeft === 1 ? '' : 's'} to go` : ''}.`,
+      consequence: late ? 60 : 50, deadline: Date.parse(`${w.end}T23:00:00Z`), link, playerId: wv.moves[0]?.add,
+    })
+  }
+  // 15. A new role, from the minutes: mine up or down, a free agent up.
+  for (const n of v.news) {
+    if (!((n.kind === 'minutes-up' && (n.whose === 'mine' || n.whose === 'free')) || (n.kind === 'minutes-down' && n.whose === 'mine'))) continue
+    out.push({
+      id: `nba-role:${L.id}:${n.key}`, leagueId: L.id, rule: 'nba-role',
+      headline: `${L.label}: ${n.headline}`,
+      detail: `${n.detail}. ${n.whose === 'free' ? 'A bigger role, and a free agent: worth a look on Adds.' : n.kind === 'minutes-up' ? 'A bigger role: keep him.' : 'A smaller role: watch him, and Adds if it holds.'}`,
+      consequence: 35, deadline: null, link, playerId: n.playerId,
+    })
+  }
+  return out
 }

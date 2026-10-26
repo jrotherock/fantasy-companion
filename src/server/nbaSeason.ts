@@ -35,7 +35,7 @@ import { parseGameWeeks, parseLeagueRosters, parseNbaScoreboard, parsePlayers, p
 import { gameDay } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
 import { diffStatus, type StatusEvent } from '../nba/news.js'
-import { buildSeasonView, losesStart, pickupAlerts, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
+import { buildSeasonView, losesStart, pickupAlerts, seasonAlerts, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
 import { parseEspnScoreboard, type LiveGame } from '../nba/scores.js'
 import { rollWeek, weekOf, type Fixture, type SeasonLeague, type Snapshot, type WeekDays, type World } from '../nba/inseason.js'
 import { daysFrom } from '../nba/week.js'
@@ -519,20 +519,8 @@ export function nbaAlerts(now = clock()): Alert[] {
     }
     // New pickups worth knowing about without opening the screen: the best season move, pair and stream.
     out.push(...pickupAlerts(v, `/nba/league/${l.id}`))
-    // A healthy player stuck on IL: he cannot play, and Yahoo blocks adds until he is moved.
-    for (const m of v.lineup?.ilMoves ?? []) {
-      if (m.action !== 'off-il') continue
-      out.push({
-        id: `nba-il:${l.id}:${v.today}:${m.id}`,
-        leagueId: l.id, rule: 'nba-il',
-        headline: `${l.label}: take ${m.name} off IL`,
-        detail: m.why,
-        consequence: 55,
-        deadline: null,
-        link: `/nba/league/${l.id}`,
-        playerId: m.id,
-      })
-    }
+    // Questionable starters, IL changes with the move made for you, claims, the week ahead and its best adds, roles.
+    out.push(...seasonAlerts(v, now))
   }
   // A player who starts in both leagues ruled out tonight.
   for (const e of exposure()) {

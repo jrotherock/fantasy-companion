@@ -112,6 +112,33 @@ export function leagueNews(ctx: Context, snap: Snapshot, myTeamId: string, event
     }
   }
 
+  // A new role, early: three to five games against the minutes he was projected for, before the season's own average
+  // means anything (2026-10-25: Kris Dunn, projected for 22, played 27, 34 and 33 with ten steals; the five-game check
+  // above could not see it until his sixth game).
+  const projected = new Map(ctx.world.players.map((p) => [p.id, p.projection?.perGame.min ?? null]))
+  for (const p of ctx.byId.values()) {
+    if (never.has(p.id) || p.seasonMin == null || p.formGames < 3 || p.formGames >= 6) continue
+    const was = projected.get(p.id)
+    if (was == null) continue
+    const d = p.seasonMin - was
+    const w = whose(p.id)
+    if (d >= 6 && p.seasonMin >= 24 && (w === 'free' || w === 'mine')) {
+      items.push({
+        key: `role-up:${p.id}`, at: null, playerId: p.id, name: p.name, team: p.team, whose: w, kind: 'minutes-up',
+        headline: `${p.name}: ${p.seasonMin.toFixed(0)} minutes a game so far`,
+        detail: `projected for ${was.toFixed(0)}; ${p.formGames} games`,
+        weight: WHOSE_WEIGHT[w] * 10 + Math.min(9, d / 2),
+      })
+    } else if (d <= -8 && w === 'mine') {
+      items.push({
+        key: `role-down:${p.id}`, at: null, playerId: p.id, name: p.name, team: p.team, whose: w, kind: 'minutes-down',
+        headline: `${p.name}: ${p.seasonMin.toFixed(0)} minutes a game so far`,
+        detail: `projected for ${was.toFixed(0)}; ${p.formGames} games`,
+        weight: WHOSE_WEIGHT[w] * 10 + Math.min(9, -d / 2),
+      })
+    }
+  }
+
   // Openings: a rotation player out, and the free agents on his team at his positions.
   for (const p of ctx.byId.values()) {
     const d = ctx.designation(p.id)
