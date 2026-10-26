@@ -638,6 +638,46 @@ export function soFarOf(ctx: Context, days: Record<string, RosterDay> | undefine
   return [...byId.values()].sort((a, b) => b.started - a.started || b.box.pts - a.box.pts)
 }
 
+/**
+ * Once the last game of a matchup week is over, the screens plan the next one: its day, its matchup from the league's
+ * schedule (nothing banked yet), my lineup for its first day as set in Yahoo, the adds of a new week. Rolls only at a
+ * matchup week's end, so a two-week matchup (the NBA Cup's, All-Star's) rolls when it ends, not each Sunday (2026-10-25:
+ * "after all games finish on Sunday, roll into the next one so I can plan the week"). Null when there is nothing to
+ * roll: the week is not over, or the next week's pairings are not read.
+ */
+export function rollWeek(snap: Snapshot, world: World): { snap: Snapshot; world: World } | null {
+  const end = snap.scoreboard[0]?.end ?? weekOf(snap.weeks, world.today)?.[2]
+  if (!end || world.today !== end) return null
+  const games = world.schedule.filter((g) => g.date === end)
+  const over = (g: Game) => {
+    const live = world.scores?.find((x) => x.home === g.home && x.away === g.away)
+    if (live) return live.state === 'post'
+    // Without the scoreboard: three hours after the tip.
+    return !!g.tip && world.now >= Date.parse(g.tip) + 3 * 3_600_000
+  }
+  if (!games.every(over)) return null
+  const dayAfter = new Date(Date.parse(`${end}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
+  const next = snap.weeks.find(([, s]) => s === dayAfter)
+  const fx = next && snap.fixtures?.find((f) => f.week === next[0])
+  if (!next || !fx) return null
+  const meta = (id: string) => snap.rosters.find((r) => r.team.id === id)?.team
+  const scoreboard = fx.pairs.filter(([a, b]) => meta(a) && meta(b)).map(([a, b]) => ({
+    week: next[0], start: next[1], end: next[2], status: 'preevent', winnerTeamId: null, leaders: {},
+    playoffs: snap.settings?.playoffStartWeek != null && next[0] >= snap.settings.playoffStartWeek, consolation: false,
+    sides: [a, b].map((id) => ({ ...meta(id)!, box: null, points: 0, projected: null, games: null })),
+  }))
+  const today = next[1]
+  return {
+    snap: {
+      ...snap, scoreboard, weekDays: undefined,
+      // A new week's adds: none used yet.
+      rosters: snap.rosters.map((r) => ({ ...r, team: { ...r.team, addsThisWeek: 0 } })),
+      mineToday: snap.mineTomorrow?.date === today ? snap.mineTomorrow : null, mineTomorrow: null,
+    },
+    world: { ...world, today, scores: [] },
+  }
+}
+
 export function buildWeek(ctx: Context, snap: Snapshot, myTeamId: string): WeekView | null {
   const { today } = ctx.world
   const wk = weekOf(snap.weeks, today)

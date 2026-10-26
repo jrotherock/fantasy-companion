@@ -6,7 +6,7 @@ import type { NbaPlayer, Game, YahooWeek } from './types.js'
 import type { Cat } from './value.js'
 import { buildSeasonView, DO, LOOK, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonTile, verdictOf } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
-import { Context, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
+import { Context, rollWeek, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
 import { addDays, PAIR_MARGIN, shortlistForWeek, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, SPECIALISTS, specialists, starLine, WEEK_SEASON_COST, WHATIFS, whatifFor, scoreWeek, type PairMove } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
@@ -807,4 +807,36 @@ test("specialists: each in-play race's best free agents by what they add this we
   const ft = specialists(ctx, [...plain, shooter, sniper], ['ft'], two).map((p) => p.id)
   assert.ok(ft.indexOf('shooter') < ft.indexOf('sniper'), '.850 on six free throws does more than .950 on one')
   assert.equal(specialists(ctx, plain, ['stl'], two).length, SPECIALISTS)
+})
+
+test('after the last game of a matchup week the screens plan the next one; a two-week matchup rolls only at its end', () => {
+  const { league, snap: s0, w: w0 } = realLeague('2026-10-19-hoops', { ...hoops, id: 'nba-hoops' }, '4', 18, '2026-10-25')
+  const lastNight = w0.schedule.filter((g) => g.date === '2026-10-25')
+  const done = { ...w0, scores: lastNight.map((g) => ({ home: g.home, away: g.away, homeScore: 100, awayScore: 90, state: 'post' as const, period: 4, clock: '0.0', detail: 'Final' })) }
+  const snap = { ...s0, rosters: s0.rosters.map((r) => ({ ...r, team: { ...r.team, addsThisWeek: 3 } })) }
+  const r = rollWeek(snap, done)!
+  assert.ok(r, 'week 1 over: rolled')
+  assert.equal(r.world.today, '2026-10-26')
+  const wk2 = snap.fixtures!.find((f) => f.week === 2)!
+  assert.deepEqual(r.snap.scoreboard.map((m) => m.sides.map((sd) => sd.id)), wk2.pairs)
+  assert.ok(r.snap.scoreboard.every((m) => m.week === 2 && m.start === '2026-10-26' && m.sides.every((sd) => sd.points === 0)))
+  assert.ok(r.snap.rosters.every((x) => x.team.addsThisWeek === 0), "a new week's adds")
+  // The screen plans week 2: its days, its opponent.
+  const v = buildSeasonView(league, r.snap, r.world)
+  assert.equal(v.week!.week, 2)
+  assert.equal(v.week!.start, '2026-10-26')
+  const opp = wk2.pairs.find((p) => p.includes('4'))!.find((id) => id !== '4')
+  assert.equal(v.week!.opponent!.id, opp)
+  // A game still going: not yet.
+  assert.equal(rollWeek(snap, { ...done, scores: done.scores.map((g, i) => (i ? g : { ...g, state: 'in' as const })) }), null)
+  // Not the week's last day: not yet.
+  assert.equal(rollWeek(snap, { ...done, today: '2026-10-24' }), null)
+  // A two-week matchup (week 7, the NBA Cup's): its first Sunday does not roll; its last does.
+  const cup = snap.weeks.find(([n]) => n === 7)!
+  assert.equal(Date.parse(cup[2]) - Date.parse(cup[1]), 13 * 86_400_000, 'week 7 is two weeks')
+  const inCup = { ...snap, scoreboard: snap.scoreboard.map((m) => ({ ...m, week: 7, start: cup[1], end: cup[2] })) }
+  const sunday = new Date(Date.parse(`${cup[1]}T12:00:00Z`) + 6 * 86_400_000).toISOString().slice(0, 10)
+  const allOver = (d: string) => ({ ...done, today: d, scores: w0.schedule.filter((g) => g.date === d).map((g) => ({ ...done.scores[0], home: g.home, away: g.away })) })
+  assert.equal(rollWeek(inCup, allOver(sunday)), null, "the cup week's first Sunday")
+  assert.equal(rollWeek(inCup, allOver(cup[2]))?.world.today, new Date(Date.parse(`${cup[2]}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10))
 })

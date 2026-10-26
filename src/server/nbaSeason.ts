@@ -37,7 +37,7 @@ import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designa
 import { diffStatus, type StatusEvent } from '../nba/news.js'
 import { buildSeasonView, losesStart, pickupAlerts, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
 import { parseEspnScoreboard, type LiveGame } from '../nba/scores.js'
-import { weekOf, type Fixture, type SeasonLeague, type Snapshot, type WeekDays, type World } from '../nba/inseason.js'
+import { rollWeek, weekOf, type Fixture, type SeasonLeague, type Snapshot, type WeekDays, type World } from '../nba/inseason.js'
 import { daysFrom } from '../nba/week.js'
 import { addDays } from '../nba/adds.js'
 import type { Box } from '../nba/yahooSeason.js'
@@ -376,7 +376,10 @@ const staleViews = () => { for (const v of views.values()) v.stale = true }
 const fresh = (v: { at: number; stale?: boolean }) => !v.stale && Date.now() - v.at < VIEW_TTL
 
 function buildView(l: SeasonLeague & { myTeamId: string | null }): SeasonView {
-  const view = buildSeasonView({ ...l, punts: seasonPunts(l.id), keep: seasonKeep(l.id) }, snapOf(l.id), world(l.id), status.events)
+  // After a matchup week's last game, the screens plan the next week.
+  const snap = snapOf(l.id), w = world(l.id)
+  const rolled = rollWeek(snap, w)
+  const view = buildSeasonView({ ...l, punts: seasonPunts(l.id), keep: seasonKeep(l.id) }, rolled?.snap ?? snap, rolled?.world ?? w, status.events)
   views.set(l.id, { at: Date.now(), view })
   return view
 }
