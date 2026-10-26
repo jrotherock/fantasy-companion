@@ -39,6 +39,8 @@ const noise = JSON.parse(readFileSync('data/nba/category-noise.json', 'utf8'))
 const sdWeekly = Object.fromEntries(Object.entries(noise.raw).map(([k, v]: [string, any]) => [k, v.sdWeekly])) as any
 const row = JSON.parse(readFileSync('data/nba/leagues.json', 'utf8')).leagues.find((l: any) => l.id === LEAGUE)
 const d = JSON.parse(readFileSync(`${S}/sched.json`, 'utf8'))
+// WEEK=n plays that week (1 by default); before it starts, SCORES may be just my team id (nothing banked yet).
+const WEEK = Number(process.env.WEEK ?? 1)
 const ME = SCORES.split('//')[0].split('|')[0]
 const league = { ...row, teams: Number(process.env.TEAMS ?? row.teams), adds: row.adds ?? { perWeek: null, season: null }, myTeamId: ME }
 const byY = new Map(players.filter((p: any) => p.yahoo).map((p: any) => [p.yahoo.yahooId, p]))
@@ -54,14 +56,14 @@ const rosters = d.rosters.split('\n').map((line: string) => {
   const [tid, name, list] = line.split('~')
   return { team: meta(tid, tid === ME ? 'Me' : `Team ${tid}`), players: list.split(',').map((y: string) => ({ y: y.replace('i', ''), il: y.endsWith('i') })).filter((x: any) => byY.has(x.y)).map((x: any) => ypl(byY.get(x.y), x.il ? 'IL' : 'BN')) }
 })
-const sides = SCORES.split('//').map((s) => {
+const f1 = fixtures[WEEK - 1]
+const sides = SCORES.includes('|') ? SCORES.split('//').map((s) => {
   const [tid, pts, stats] = s.split('|')
   const box = boxOf(stats.split(' ').map((kv) => { const [stat_id, value] = kv.split('='); return { stat: { stat_id, value } } }))
   return { ...rosters.find((r: any) => r.team.id === tid)!.team, box, points: Number(pts), projected: null, games: null }
-})
-const f1 = fixtures[0]
+}) : []
 const scoreboard: NbaMatchup[] = f1.pairs.map(([a, b]: string[]) => ({
-  week: 1, start: f1.start, end: f1.end, status: 'midevent', playoffs: false, consolation: false, winnerTeamId: null, leaders: {},
+  week: WEEK, start: f1.start, end: f1.end, status: 'midevent', playoffs: false, consolation: false, winnerTeamId: null, leaders: {},
   sides: [a, b].map((t) => sides.find((x) => x.id === t) ?? { ...rosters.find((r: any) => r.team.id === t)!.team, box: emptyBox(), points: 0, projected: null, games: null }),
 }))
 const snap: Snapshot = {

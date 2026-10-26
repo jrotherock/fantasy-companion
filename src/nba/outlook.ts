@@ -69,6 +69,12 @@ export function perGameBox(p: NbaPlayer): Box {
  * the blend explainable.
  */
 export const FORM_GAMES = 12
+/**
+ * Minutes settle much sooner: three games of a new role are as good as the preseason guess (2026-10-25: Kris Dunn,
+ * projected for 22 minutes, played 27, 34 and 33 with ten steals, and the app still had him at 22). A game he left
+ * early (under half his projected minutes: an injury, fouls) is left out of his minutes.
+ */
+export const MIN_FORM_GAMES = 3
 
 /**
  * The player with his projection moved toward what he has done. Returns him
@@ -84,14 +90,24 @@ export function withForm(p: NbaPlayer, logs: GameLog[]): NbaPlayer & { formGames
   if (!games || !p.projection) return { ...p, formGames: games, recentMin, seasonMin }
   const w = games / (games + FORM_GAMES)
   const tot = mine.reduce((acc, l) => { for (const k of Object.keys(acc) as (keyof Box)[]) acc[k] += l.box[k]; return acc }, emptyBox())
-  const per = (k: keyof Box) => tot[k] / games
   const g = p.projection.perGame, s = p.projection.shooting
-  const mix = (a: number, b: number) => a * (1 - w) + b * w
-  const perGame: PerGame = {
-    min: mix(g.min, seasonMin!), pts: mix(g.pts, per('pts')), reb: mix(g.reb, per('reb')), ast: mix(g.ast, per('ast')),
-    stl: mix(g.stl, per('stl')), blk: mix(g.blk, per('blk')), tpm: mix(g.tpm, per('tpm')), to: mix(g.to, per('to')),
+  // Minutes: his real ones, games cut short left out, trusted after a few games.
+  const full = mine.filter((l) => !(g.min > 0 && l.min < g.min / 2))
+  const realMin = full.length ? full.reduce((t, l) => t + l.min, 0) / full.length : null
+  const wm = full.length / (full.length + MIN_FORM_GAMES)
+  const min = realMin == null ? g.min : g.min * (1 - wm) + realMin * wm
+  // Per minute: what he does with them, trusted slowly; then times his minutes.
+  const played = mine.reduce((t, l) => t + l.min, 0)
+  const rate = (prior: number, k: keyof Box) => {
+    const pr = g.min > 0 ? prior / g.min : 0
+    const real = played > 0 ? tot[k] / played : pr
+    return (pr * (1 - w) + real * w) * min
   }
-  const fga = mix(s.fga ?? 0, per('fga')), fta = mix(s.fta ?? 0, per('fta'))
+  const perGame: PerGame = {
+    min, pts: rate(g.pts, 'pts'), reb: rate(g.reb, 'reb'), ast: rate(g.ast, 'ast'),
+    stl: rate(g.stl, 'stl'), blk: rate(g.blk, 'blk'), tpm: rate(g.tpm, 'tpm'), to: rate(g.to, 'to'),
+  }
+  const fga = rate(s.fga ?? 0, 'fga'), fta = rate(s.fta ?? 0, 'fta')
   // Percentages are blended in makes, weighted by attempts, so a cold week on few shots barely moves them.
   const pct = (prior: number | null, priorAtt: number | null, made: number, att: number) => {
     const pa = (priorAtt ?? 0) * FORM_GAMES, pm = (prior ?? 0) * pa

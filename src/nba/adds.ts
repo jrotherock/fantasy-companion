@@ -17,6 +17,7 @@ import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek, type SideOutlook } from './matchup.js'
 import { rosterIds, sideOutlook, weekOf, type Context, type Snapshot, type Whatif } from './inseason.js'
 import { CATS, type Cat } from './value.js'
+import type { NbaPlayer } from './types.js'
 import { addBox, emptyBox, type Box } from './yahooSeason.js'
 import { designation, type Designation } from './outlook.js'
 
@@ -334,6 +335,28 @@ export const isStar = (ctx: Context, id: string) => {
   return adp != null && adp <= starLine(ctx.league)
 }
 
+/**
+ * The best free agents in each category, by what they add to a week in it: per game times games this week (for a
+ * percentage, how far above an average shooter on how many shots; for turnovers, the fewest a minute). Six a category.
+ */
+export const SPECIALISTS = 6
+export function specialists(ctx: Context, pool: NbaPlayer[], cats: Cat[], games: (id: string) => number): NbaPlayer[] {
+  const out: NbaPlayer[] = []
+  for (const c of cats) {
+    const by = (p: NbaPlayer) => {
+      const g = p.projection?.perGame, s = p.projection?.shooting
+      if (!g) return -Infinity
+      const n = games(p.id)
+      if (c === 'fg') return ((s?.fgPct ?? 0) - 0.47) * (s?.fga ?? 0) * n
+      if (c === 'ft') return ((s?.ftPct ?? 0) - 0.78) * (s?.fta ?? 0) * n
+      if (c === 'to') return g.min > 15 ? -(g.to / g.min) : -Infinity
+      return (g[c] ?? 0) * n
+    }
+    out.push(...[...pool].map((p) => ({ p, v: by(ctx.byId.get(p.id) ?? p) })).filter((x) => x.v > -Infinity && games(x.p.id) > 0).sort((a, b) => b.v - a.v).slice(0, SPECIALISTS).map((x) => x.p))
+  }
+  return out
+}
+
 /** The most one move for this week may cost the season, in matchups won: a stream's cap, a little looser. */
 export const WEEK_SEASON_COST = 0.25
 
@@ -518,6 +541,10 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
   const forWeek = shortlistForWeek(pool.map((p) => p.id), worth, openOn.size ? openGames : weekGames, floor, WEEK_POOL)
     .map((id) => ctx.byId.get(id)!)
   const cands = [...new Map([...forSeason, ...forWeek].map((p) => [p.id, p])).values()]
+  // For this week's plan, also the best in each race still in play, whatever they are worth overall: a specialist can
+  // decide a close category (2026-10-25: Kris Dunn's five steals on Sunday would have won Hoops' steals; on overall
+  // value he was nowhere near the list).
+  const weekCands = [...new Map([...cands, ...specialists(ctx, pool, (base.races ?? []).filter((r) => r.win >= 0.25 && r.win <= 0.75).map((r) => r.cat), weekGames)].map((p) => [p.id, p])).values()]
 
   // Per category, per game: his z less the dropped player's, in the categories in play; and the week's races that move.
   const whyCats = (add: string, drop: string, after?: { cat: Cat; win: number }[]) => {
@@ -731,7 +758,7 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
     const moves: WeekPlan['moves'] = []
     const max = Math.min(3, addsLeft ?? 3)
     let open = openSpots
-    let pool = cands
+    let pool = weekCands
     for (let step = 0; step < max; step++) {
       type Option = { men: Man[]; s: ReturnType<typeof scoreOf>; add: string; drop: string | null; from: string; il: boolean; ilDrop: string | null }
       const options: Option[] = []
@@ -786,7 +813,7 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
       if (best.drop == null) open--
       men = best.men; cur = best.s
       // The next step looks again at the best candidates of this one.
-      pool = [...new Map(tried.sort((a, b) => b.win - a.win).map((t) => [t.id, t])).keys()].slice(0, 15).map((id) => cands.find((x) => x.id === id)!).filter(Boolean)
+      pool = [...new Map(tried.sort((a, b) => b.win - a.win).map((t) => [t.id, t])).keys()].slice(0, 15).map((id) => weekCands.find((x) => x.id === id)!).filter(Boolean)
     }
     const kept = [...men.filter((m) => !m.until).map((m) => ({ id: m.id, eligible: m.eligible })), ...ilNow]
     return {

@@ -149,3 +149,23 @@ test('team rows count games by fantasy week, back-to-backs and each league\'s pl
   assert.deepEqual(dal.byWeek, { 20: 2, 22: 1 })
   assert.deepEqual(dal.playoffGames, { pts: 3, cats: 0 })
 })
+
+test('real minutes are trusted after a few games, what he does per minute only slowly; a game cut short is left out', async () => {
+  const { withForm, MIN_FORM_GAMES, FORM_GAMES } = await import('./outlook.js')
+  const dunn = { id: 'kd', name: 'Kris Dunn', team: 'LAC', positions: ['PG', 'SG'], projection: { gp: 70, perGame: { min: 22, pts: 5.9, reb: 2.9, ast: 2.9, stl: 1.4, blk: 0.3, tpm: 0.9, to: 1.0 }, shooting: { fgPct: 0.464, fga: 5, ftPct: 0.744, fta: 0.7 } } } as any
+  const box = (pts: number, stl: number) => ({ fgm: 3, fga: 6, ftm: 1, fta: 1, tpm: 1, pts, reb: 5, ast: 6, stl, blk: 1, to: 2 })
+  // Week 1 as he played it: 27, 34 and 33 minutes, ten steals.
+  const logs = [{ id: 'kd', date: '2026-10-21', team: 'LAC', min: 27, box: box(7, 3) }, { id: 'kd', date: '2026-10-23', team: 'LAC', min: 34, box: box(7, 2) }, { id: 'kd', date: '2026-10-25', team: 'LAC', min: 33, box: box(15, 5) }]
+  const f = withForm(dunn, logs)
+  const real = (27 + 34 + 33) / 3
+  assert.ok(Math.abs(f.projection!.perGame.min - (22 + (real - 22) * 3 / (3 + MIN_FORM_GAMES))) < 1e-9, `minutes ${f.projection!.perGame.min}`)
+  assert.ok(f.projection!.perGame.min > 26, 'three games of a bigger role move him most of the way')
+  // Steals per minute blended slowly, then times his new minutes: more steals than either the old line or his rate alone.
+  const w = 3 / (3 + FORM_GAMES), perMin = (1.4 / 22) * (1 - w) + (10 / 94) * w
+  assert.ok(Math.abs(f.projection!.perGame.stl - perMin * f.projection!.perGame.min) < 1e-9)
+  assert.ok(f.projection!.perGame.stl > 1.8, `steals ${f.projection!.perGame.stl}`)
+  // A game he left hurt (11 of a projected 32 minutes) does not pull his minutes down.
+  const cam = { ...dunn, id: 'cj', projection: { ...dunn.projection, perGame: { ...dunn.projection.perGame, min: 32 } } }
+  const hurt = withForm(cam, [{ id: 'cj', date: '2026-10-22', team: 'DEN', min: 11, box: box(5, 0) }])
+  assert.equal(hurt.projection!.perGame.min, 32)
+})

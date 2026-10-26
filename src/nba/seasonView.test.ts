@@ -7,7 +7,7 @@ import type { Cat } from './value.js'
 import { buildSeasonView, DO, LOOK, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonTile, verdictOf } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
 import { Context, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
-import { addDays, PAIR_MARGIN, shortlistForWeek, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, starLine, WEEK_SEASON_COST, WHATIFS, whatifFor, scoreWeek, type PairMove } from './adds.js'
+import { addDays, PAIR_MARGIN, shortlistForWeek, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, SPECIALISTS, specialists, starLine, WEEK_SEASON_COST, WHATIFS, whatifFor, scoreWeek, type PairMove } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
 import { diffStatus } from './news.js'
@@ -792,4 +792,19 @@ test('a status change reaches his teammates\' outlooks, and only theirs', () => 
   assert.equal(ctx.outlook(other.id, day)!.box.pts, before.other, `${other.name}, on another team, is untouched`)
   ctx.setStatus(star.id, null)
   assert.equal(ctx.outlook(mate.id, day)!.box.pts, before.mate, 'back to healthy, back to as he was')
+})
+
+test("specialists: each in-play race's best free agents by what they add this week, whatever their overall value", () => {
+  const { league, w } = realLeague('2026-10-19-hoops', { ...hoops, id: 'nba-hoops' }, '4', 18)
+  const ctx = new Context(league, w)
+  const mk = (id: string, pg: Partial<Record<string, number>>, sh: Partial<Record<string, number>> = {}) => ({ id, name: id, team: 'LAC', positions: ['PG'], projection: { gp: 70, perGame: { min: 24, pts: 4, reb: 2, ast: 2, stl: 0.5, blk: 0.2, tpm: 0.5, to: 1, ...pg }, shooting: { fgPct: 0.45, fga: 5, ftPct: 0.75, fta: 1, ...sh } } }) as unknown as NbaPlayer
+  const thief = mk('thief', { stl: 2.4 }), shooter = mk('shooter', {}, { ftPct: 0.85, fta: 6 }), sniper = mk('sniper', {}, { ftPct: 0.95, fta: 1 })
+  const plain = Array.from({ length: 10 }, (_, i) => mk(`p${i}`, { stl: 0.6 + i * 0.05, pts: 12 }))
+  for (const p of [thief, shooter, sniper, ...plain]) ctx.byId.set(p.id, p as any)
+  const two = () => 2, none = (id: string) => (id === 'thief' ? 0 : 2)
+  assert.equal(specialists(ctx, [...plain, thief], ['stl'], two)[0].id, 'thief', 'the steals specialist leads steals')
+  assert.ok(!specialists(ctx, [...plain, thief], ['stl'], none).some((p) => p.id === 'thief'), 'no games this week, no use this week')
+  const ft = specialists(ctx, [...plain, shooter, sniper], ['ft'], two).map((p) => p.id)
+  assert.ok(ft.indexOf('shooter') < ft.indexOf('sniper'), '.850 on six free throws does more than .950 on one')
+  assert.equal(specialists(ctx, plain, ['stl'], two).length, SPECIALISTS)
 })
