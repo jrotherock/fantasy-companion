@@ -3727,6 +3727,31 @@ function Settings({ sources }: { sources: Source[] }) {
 
 /* -------------------------------------------------------------------- app */
 
+/*
+ * The home screen's reads start as the page loads, alongside the sign-in check rather than after it, and the last
+ * tiles shown are kept on the phone and drawn at once while fresh ones come (2026-10-25: "it still takes 3-4 seconds
+ * to load the leagues home screen"; code, then the sign-in check, then five reads, each a round trip on a phone).
+ */
+const HOME_READS = ['/api/cockpit', '/api/cockpit/news', '/api/nba/season/all', '/api/cockpit/sources', '/api/cockpit/notifications']
+const early = new Map<string, Promise<any>>()
+if (/^\/(home|nba\/league\/|$)/.test(location.pathname)) {
+  for (const u of HOME_READS) {
+    const p = fetch(u).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    p.catch(() => {})
+    early.set(u, p)
+  }
+}
+/** A home read: the one started with the page, the first time; a fresh one after. */
+function homeRead(u: string): Promise<any> {
+  const p = early.get(u)
+  if (p) { early.delete(u); return p.catch(() => fetch(u).then((r) => r.json())) }
+  return fetch(u).then((r) => r.json())
+}
+const LAST_KEY = 'ck:last-cockpit'
+function lastCockpit(): any | null {
+  try { const raw = localStorage.getItem(LAST_KEY); return raw ? JSON.parse(raw) : null } catch { return null }
+}
+
 function Cockpit() {
   // Read once at mount so the whole app is sized correctly from the first
   // paint, rather than only after Settings has been opened.
@@ -3737,8 +3762,9 @@ function Cockpit() {
   }, [])
   const [tab, setTab] = useState<Tab>('now')
   const [openLeague, setOpenLeague] = useState<string | null>(null)
-  const [tiles, setTiles] = useState<Tile[] | null>(null)
-  const [nba, setNba] = useState<SeasonTile[]>([])
+  const [last] = useState(lastCockpit)
+  const [tiles, setTiles] = useState<Tile[] | null>(last?.tiles ?? null)
+  const [nba, setNba] = useState<SeasonTile[]>(last?.nba ?? [])
   const [nbaAll, setNbaAll] = useState<{ views: SeasonView[]; drafts: { id: string; label: string; leagueId: string; mock: boolean }[] }>({ views: [], drafts: [] })
   /*
    * A basketball league's page has an address of its own, /nba/league/<id>, so
@@ -3764,8 +3790,8 @@ function Cockpit() {
     try { return (localStorage.getItem(SPORT_KEY) as SportFilter) || 'All' } catch { return 'All' }
   })
   const setSport = (v: SportFilter) => { setSportState(v); try { localStorage.setItem(SPORT_KEY, v) } catch { /* private window */ } }
-  const [marks, setMarks] = useState<Record<string, any>>({})
-  const [closeCalls, setCloseCalls] = useState<Record<string, number>>({})
+  const [marks, setMarks] = useState<Record<string, any>>(last?.marks ?? {})
+  const [closeCalls, setCloseCalls] = useState<Record<string, number>>(last?.closeCalls ?? {})
   /** Why Yahoo has gone quiet, when it has. Null the rest of the time. */
   const [yahooOff, setYahooOff] = useState<{ why: string; since: number | null; until: number | null } | null>(null)
   const [news, setNews] = useState<{ items: Item[]; scanned: number; baseline: number | null } | null>(null)
@@ -3810,16 +3836,17 @@ function Cockpit() {
 
   useEffect(() => {
     const load = () => {
-      fetch('/api/cockpit').then((r) => r.json())
+      homeRead('/api/cockpit')
         .then((d) => {
           setTiles(d.tiles); setMarks(d.marks ?? {}); setNba(d.nba ?? [])
           setCloseCalls(d.closeCalls ?? {}); setYahooOff(d.yahoo ?? null); setErr(null)
+          try { localStorage.setItem(LAST_KEY, JSON.stringify({ tiles: d.tiles, nba: d.nba ?? [], marks: d.marks ?? {}, closeCalls: d.closeCalls ?? {} })) } catch { /* private mode: no copy kept */ }
         })
         .catch(() => setErr('The companion is not answering on :4600'))
-      fetch('/api/cockpit/news').then((r) => r.json()).then(setNews).catch(() => {})
-      fetch('/api/nba/season/all').then((r) => r.json()).then((d) => { if (d?.views) setNbaAll(d) }).catch(() => {})
-      fetch('/api/cockpit/sources').then((r) => r.json()).then((d) => setSources(d.sources)).catch(() => {})
-      fetch('/api/cockpit/notifications').then((r) => r.json()).then(setAlerts).catch(() => {})
+      homeRead('/api/cockpit/news').then(setNews).catch(() => {})
+      homeRead('/api/nba/season/all').then((d) => { if (d?.views) setNbaAll(d) }).catch(() => {})
+      homeRead('/api/cockpit/sources').then((d) => setSources(d.sources)).catch(() => {})
+      homeRead('/api/cockpit/notifications').then(setAlerts).catch(() => {})
     }
     load()
     const a = setInterval(load, 30000)

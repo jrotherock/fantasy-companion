@@ -2,6 +2,7 @@ import { handleNba } from './nbaDraft.js'
 import { startNbaYahoo } from './nbaYahoo.js'
 import { handleNbaSeason, nbaAlerts, seasonTiles, startNbaSeason } from './nbaSeason.js'
 import { createServer } from 'node:http'
+import { gzipSync } from 'node:zlib'
 import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs'
 import { extname, join, normalize } from 'node:path'
 import { WebSocketServer, type WebSocket } from 'ws'
@@ -815,11 +816,11 @@ function serveStatic(pathname: string, res: any): boolean {
    * have shipped.
    */
   const hashed = /-[A-Za-z0-9_-]{8,}\.(js|css)$/.test(target)
-  res.writeHead(200, {
-    'Content-Type': MIME[extname(target)] ?? 'application/octet-stream',
-    'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-store, must-revalidate',
-  })
-  res.end(readFileSync(target))
+  const type = MIME[extname(target)] ?? 'application/octet-stream'
+  const headers = { 'Content-Type': type, 'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-store, must-revalidate' }
+  // Text compresses; images and fonts already are.
+  if (/javascript|css|html|json|svg|text|manifest/.test(type)) send(res, 200, headers, readFileSync(target), hashed ? target : undefined)
+  else { res.writeHead(200, headers); res.end(readFileSync(target)) }
   return true
 }
 
@@ -964,12 +965,27 @@ const nextKickoffAfter = (now: number): number | null => {
  * all the world like the staleness bug we had just fixed.
  */
 const json = (res: any, code: number, body: unknown) => {
-  res.writeHead(code, {
+  send(res, code, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
     'Cache-Control': 'no-store, must-revalidate',
-  })
-  res.end(JSON.stringify(body))
+  }, Buffer.from(JSON.stringify(body)))
+}
+
+/**
+ * A response gzipped when the browser takes it and it is worth it (a kilobyte or more). Nothing was compressed: the
+ * home screen fetched about 310 KB of JSON on every load and every half minute, slow on a phone (2026-10-25: "it
+ * still takes 3-4 seconds to load the leagues home screen"); JSON shrinks to about a tenth. `key` caches the
+ * compressed bytes of a file that never changes (a hashed asset).
+ */
+const gzipped = new Map<string, Buffer>()
+function send(res: any, code: number, headers: Record<string, string>, buf: Buffer, key?: string) {
+  const takes = /\bgzip\b/.test(String(res.req?.headers?.['accept-encoding'] ?? ''))
+  if (!takes || buf.length < 1024) { res.writeHead(code, headers); res.end(buf); return }
+  let z = key ? gzipped.get(key) : undefined
+  if (!z) { z = gzipSync(buf, { level: 6 }); if (key) gzipped.set(key, z) }
+  res.writeHead(code, { ...headers, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' })
+  res.end(z)
 }
 
 async function body(req: any): Promise<any> {
