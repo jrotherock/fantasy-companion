@@ -77,6 +77,8 @@ export interface World {
   injuries: InjuryNote[]
   /** Return dates set by hand, by player id. */
   returns: Map<string, string>
+  /** Minutes set by hand for a stretch, by player id: `min` a game on dates before `until`. */
+  windows?: Map<string, { min: number; until: string }>
   schedule: Game[]
   noise: Noise
   /** Never-list ids: never offered as a pickup or a trade target. */
@@ -250,11 +252,13 @@ export class Context {
   private freshOutlook(id: string, date: string): GameOutlook | null {
     const p = this.byId.get(id)
     if (!p) return null
-    // His own line, with minutes from teammates who will miss the date.
+    // His own line, with minutes from teammates who will miss the date; or, inside a stretch you set, those minutes
+    // and no share on top.
     const box = perGameBox(p)
     const min = p.projection?.perGame.min ?? 0
-    const more = this.minutesFrom(id, date)
-    if (more > 0 && min > 0) { const f = (min + more) / min; for (const k of Object.keys(box) as (keyof Box)[]) box[k] *= f }
+    const win = this.world.windows?.get(id)
+    const more = win && date < win.until ? win.min - min : this.minutesFrom(id, date)
+    if (more !== 0 && min > 0) { const f = Math.max(0, (min + more) / min); for (const k of Object.keys(box) as (keyof Box)[]) box[k] *= f }
     const sleeper = this.world.dayProj.get(`${id}|${date}`)
     if (sleeper) {
       const w = this.world.sleeperWeight ?? SLEEPER_WEIGHT

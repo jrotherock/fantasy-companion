@@ -917,3 +917,20 @@ test('lineup watch and cleared claims, from the roster day and the transactions'
   const claims = claimsOf(ctx, { ...snap, transactions: [tx(3, 'waivers'), tx(3, 'freeagents'), tx(60, 'waivers')] } as any, '2')
   assert.deepEqual(claims.map((c) => c.id), ['t3waivers'], 'a waiver claim from the last two days; a free-agent add is your own doing')
 })
+
+test('minutes you set for a stretch: his line at those minutes, no teammate share on top, and normal after', () => {
+  const { league, w: w0 } = realLeague('2026-10-19-hoops', { ...hoops, id: 'nba-hoops' }, '4', 18)
+  const star = w0.players.filter((p) => p.team && p.projection && p.projection.perGame.min >= 30).sort((a, b) => b.projection!.perGame.min - a.projection!.perGame.min)[0]
+  const mate = w0.players.find((p) => p.team === star.team && p.id !== star.id && (p.projection?.perGame.min ?? 0) >= 18)!
+  const day = addDays(w0.today, 1), later = addDays(w0.today, 20)
+  const w = { ...w0, returns: new Map([[star.id, addDays(w0.today, 30)]]), windows: new Map([[mate.id, { min: 31, until: addDays(w0.today, 10) }]]) }
+  const ctx = new Context(league, w)
+  const min = ctx.byId.get(mate.id)!.projection!.perGame.min
+  const base = ctx.byId.get(mate.id)!.projection!.perGame.pts
+  // Inside the stretch: 31 minutes, whatever the share would have been.
+  assert.ok(Math.abs(ctx.outlook(mate.id, day)!.box.pts - base * 31 / min) < 1e-9, `${ctx.outlook(mate.id, day)!.box.pts} vs ${base * 31 / min}`)
+  // After it: his own minutes plus the absent star's share, as ever.
+  const share = ctx.minutesFrom(mate.id, later)
+  assert.ok(share > 0, 'the star is still out: a share')
+  assert.ok(Math.abs(ctx.outlook(mate.id, later)!.box.pts - base * (min + share) / min) < 1e-9)
+})

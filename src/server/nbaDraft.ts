@@ -957,6 +957,31 @@ export function injuryNotesNow(): InjuryNote[] {
 }
 
 /** Return dates set by hand, by player id. */
+/** Minutes you set for a stretch, by player id (preferences `windows`). */
+export function minuteWindows(): Map<string, { min: number; until: string }> {
+  const index = load().index
+  const out = new Map<string, { min: number; until: string }>()
+  for (const [name, w] of Object.entries(prefFile().windows ?? {})) {
+    const id = index.resolve(name, null)
+    if (id && w && Number.isFinite(w.min) && /^\d{4}-\d{2}-\d{2}$/.test(w.until)) out.set(id, w)
+  }
+  return out
+}
+
+/** Sets a player's minutes for a stretch (null clears it); every screen is worked out again. */
+export function setMinuteWindow(playerId: string, w: { min: number; until: string } | null): boolean {
+  const p = load().players.find((x) => x.id === playerId)
+  if (!p) return false
+  const file = prefFile()
+  const windows = { ...(file.windows ?? {}) }
+  if (w) windows[p.name] = w; else delete windows[p.name]
+  file.windows = windows
+  mkdirSync(STATE_DIR, { recursive: true })
+  writeFileSync(PREFS, JSON.stringify(file, null, 1))
+  for (const f of prefListeners) f()
+  return true
+}
+
 export function handReturns(): Map<string, string> {
   const index = load().index
   const out = new Map<string, string>()

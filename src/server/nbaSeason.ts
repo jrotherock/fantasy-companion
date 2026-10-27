@@ -30,7 +30,7 @@ import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { parseStandings, parseTransactions } from './yahooParse.js'
 import type { Alert } from './alerts.js'
-import { handReturns, injuryNotesNow, liveDrafts, neverIds, onPreferencesChange, seasonLeagues, seasonPlayers, seasonKeep, seasonPunts, setSeasonKeep, setSeasonPunts } from './nbaDraft.js'
+import { handReturns, minuteWindows, setMinuteWindow, injuryNotesNow, liveDrafts, neverIds, onPreferencesChange, seasonLeagues, seasonPlayers, seasonKeep, seasonPunts, setSeasonKeep, setSeasonPunts } from './nbaDraft.js'
 import { parseGameWeeks, parseLeagueRosters, parseNbaScoreboard, parsePlayers, parseRosterDay, parseSeasonSettings } from '../nba/yahooSeason.js'
 import { gameDay } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
@@ -176,6 +176,7 @@ function world(leagueId: string): World {
     dayProj: new Map(Object.values(sleeper.proj).flatMap((x) => x.rows)),
     injuries: injuryNotesNow(),
     returns: handReturns(),
+    windows: minuteWindows(),
     schedule,
     noise: noise!,
     never: neverIds(leagueId),
@@ -590,6 +591,17 @@ export async function handleNbaSeason(parts: string[], req: any, res: any, json:
   const l = leagues().find((x) => x.id === id)
   if (!l) { json(res, 404, { error: 'no such league' }); return true }
   if (req.method === 'GET' && !action) { json(res, 200, seasonView(id)); return true }
+  if (req.method === 'POST' && action === 'minutes') {
+    // A player's minutes for a stretch ({playerId, min, until}; min null clears it), in every league.
+    const b = await body(req)
+    const clear = b?.min == null
+    const min = Number(b?.min), until = String(b?.until ?? '')
+    if (!b?.playerId || (!clear && (!Number.isFinite(min) || min < 0 || min > 48 || !/^\d{4}-\d{2}-\d{2}$/.test(until)))) { json(res, 400, { error: 'playerId, min (0-48) and until (YYYY-MM-DD)' }); return true }
+    if (!setMinuteWindow(String(b.playerId), clear ? null : { min, until })) { json(res, 400, { error: 'unknown player' }); return true }
+    views.clear()
+    json(res, 200, { ok: true })
+    return true
+  }
   if (req.method === 'POST' && action === 'keep') {
     // A player you will not drop in this league ({playerId, keep}); every screen is worked out again.
     const b = await body(req)

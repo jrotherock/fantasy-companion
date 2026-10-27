@@ -47,6 +47,12 @@ export interface PreferenceFile extends Lists {
   adjust?: Record<string, Record<string, number>>
   /** Return dates you have set for injured players, by name: YYYY-MM-DD. */
   returns?: Record<string, string | null>
+  /**
+   * Minutes you expect for a stretch, by name: `min` a game until `until` (YYYY-MM-DD, not included), in every
+   * league; inside it the teammate-absence share is not added on top (2026-10-27: "JJJ's minutes go more to Ace, not
+   * Filipowski; Ace around 30-31 while he's out").
+   */
+  windows?: Record<string, { min: number; until: string } | null>
 }
 
 export interface Preferences {
