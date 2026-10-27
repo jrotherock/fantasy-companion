@@ -349,6 +349,8 @@ export interface YTransaction {
   at: number
   faabBid: number | null
   players: YMovePlayer[]
+  /** A pending waiver claim: the day it is processed and the player arrives (Yahoo's roster-reflect date). */
+  waiverDate?: string | null
 }
 
 const teamIdOf = (k: unknown) => (k ? String(k).split('.').pop() ?? null : null)
@@ -380,6 +382,7 @@ export function parseTransactions(body: Record<string, any>): YTransaction[] {
       at: (num(meta.timestamp) ?? 0) * 1000,
       faabBid: num(meta.faab_bid),
       players,
+      waiverDate: meta.waiver_roster_reflect_key ?? meta.waiver_date ?? null,
     }
   })
 }

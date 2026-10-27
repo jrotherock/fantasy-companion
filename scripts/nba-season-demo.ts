@@ -133,6 +133,12 @@ const snap = {
   weeks, rosters: teamsRows,
   mineToday: { team: meta(mineIdx), date: today, players: teamsRows[mineIdx].players.map((y, j) => ({ ...y, box: liveBox(rosters[mineIdx][j]) })) },
   scoreboard, past, standings, waivers, transactions: [], statusEvents,
+  // PENDING=1: a waiver claim of mine pending, the best free agent for my last bench player, clearing in two days.
+  pending: process.env.PENDING ? (() => {
+    const fa = pool.find((p) => !owned.has(p.id) && p.yahoo)!, out = rosters[mineIdx].at(-1)!
+    const mv = (p: NbaPlayer, kind: string) => ({ player: ypl(p, 'BN'), kind, fromTeamId: kind === 'drop' ? meta(mineIdx).id : null, toTeamId: kind === 'add' ? meta(mineIdx).id : null, toType: null, fromType: kind === 'add' ? 'waivers' : null })
+    return [{ key: 'demo.w.c.1', id: '', type: 'waiver', status: 'pending', at: 0, faabBid: null, players: [mv(fa, 'add'), mv(out, 'drop')], waiverDate: new Date(Date.parse(today + 'T12:00:00Z') + 2 * 86400000).toISOString().slice(0, 10) }]
+  })() : [],
   // Tomorrow's lineup as set: today's, as Yahoo keeps it until changed.
   mineTomorrow: { team: meta(mineIdx), date: new Date(Date.parse(today + 'T12:00:00Z') + 86400000).toISOString().slice(0, 10), players: teamsRows[mineIdx].players.map((y) => ({ ...y, box: null })) },
   // This week's lineups and lines day by day, mine and my opponent's, as the server reads them: each past day the

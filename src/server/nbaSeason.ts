@@ -37,7 +37,7 @@ import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designa
 import { diffStatus, type StatusEvent } from '../nba/news.js'
 import { buildSeasonView, losesStart, pickupAlerts, seasonAlerts, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
 import { parseEspnScoreboard, type LiveGame } from '../nba/scores.js'
-import { rollWeek, weekOf, type Fixture, type SeasonLeague, type Snapshot, type WeekDays, type World } from '../nba/inseason.js'
+import { claimsFailedOf, rollWeek, weekOf, type Fixture, type SeasonLeague, type Snapshot, type WeekDays, type World } from '../nba/inseason.js'
 import { daysFrom } from '../nba/week.js'
 import { addDays } from '../nba/adds.js'
 import type { Box } from '../nba/yahooSeason.js'
@@ -238,7 +238,7 @@ function gamesOn(now = clock()): boolean {
   return now >= Math.min(...tips) - HOUR && now <= Math.max(...tips) + 3 * HOUR
 }
 
-type Part = 'settings' | 'weeks' | 'rosters' | 'today' | 'tomorrow' | 'scoreboard' | 'standings' | 'waivers' | 'transactions' | 'past' | 'fixtures' | 'weekDays'
+type Part = 'settings' | 'weeks' | 'rosters' | 'today' | 'tomorrow' | 'scoreboard' | 'standings' | 'waivers' | 'transactions' | 'pending' | 'past' | 'fixtures' | 'weekDays'
 
 function every(part: Part, drafted: boolean, live: boolean): number {
   if (!drafted) return part === 'rosters' || part === 'settings' || part === 'weeks' ? 6 * HOUR : Infinity
@@ -249,6 +249,7 @@ function every(part: Part, drafted: boolean, live: boolean): number {
     case 'standings': return 3 * HOUR
     case 'waivers': return 2 * HOUR
     case 'transactions': return HOUR
+    case 'pending': return live ? 15 * MIN : 30 * MIN
     case 'past': return 12 * HOUR
     case 'fixtures': return 7 * 24 * HOUR
     case 'weekDays': return live ? 10 * MIN : HOUR
@@ -317,6 +318,21 @@ async function readLeague(l: SeasonLeague & { myTeamId: string | null }, force =
       await run('standings', async () => { s.standings = parseStandings(leagueBody(await yahooApi.call(`league/${key}/standings`, { by: 'nba-season' }))) })
       await run('waivers', async () => { s.waivers = parsePlayers(await yahooApi.call(`league/${key}/players;status=W;count=25`, { by: 'nba-season' })).map((p) => p.yahooId) })
       await run('transactions', async () => { s.transactions = parseTransactions(leagueBody(await yahooApi.call(`league/${key}/transactions;types=add,drop,trade;count=25`, { by: 'nba-season' }))) })
+      // My pending waiver claims (Yahoo shows a team's own), planned as if they clear (2026-10-27: "why can't the app
+      // read and understand claims I've put in?"). One gone: cleared if the player came to me, else it failed.
+      await run('pending', async () => {
+        if (!l.myTeamId) return
+        const before = s.pending ?? []
+        const now = parseTransactions(leagueBody(await yahooApi.call(`league/${key}/transactions;types=waiver;team_key=${key}.t.${l.myTeamId}`, { by: 'nba-season' })))
+          .filter((t) => t.status === 'pending')
+        const gone = before.filter((b) => !now.some((n) => n.key === b.key))
+        if (gone.length) {
+          s.transactions = parseTransactions(leagueBody(await yahooApi.call(`league/${key}/transactions;types=add,drop,trade;count=25`, { by: 'nba-season' })))
+          s.claimsFailed = [...(s.claimsFailed ?? []), ...claimsFailedOf(gone, s.transactions, l.myTeamId, Date.now())]
+        }
+        s.claimsFailed = (s.claimsFailed ?? []).filter((f) => Date.now() - f.at < 3 * 24 * HOUR)
+        s.pending = now
+      })
       await run('past', async () => {
         const current = weekOf(s.weeks, today)?.[0] ?? 0
         // Finished weeks are read once each.

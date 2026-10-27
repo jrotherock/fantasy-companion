@@ -363,7 +363,7 @@ export const WEEK_SEASON_COST = 0.25
 /** A pair is shown when its second move adds at least this much to the best single move. */
 export const PAIR_MARGIN = UPGRADE_WINS
 
-export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, opts: { punts?: Cat[]; limit?: number; addsLeft?: number | null } = {}): { pickups: Pickup[]; pairs: PairMove[]; ilBack: IlReturn[]; weekPlan: WeekPlan | null; ilSwap: IlSwap | null } {
+export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, opts: { punts?: Cat[]; limit?: number; addsLeft?: number | null; arrives?: Map<string, string | null> } = {}): { pickups: Pickup[]; pairs: PairMove[]; ilBack: IlReturn[]; weekPlan: WeekPlan | null; ilSwap: IlSwap | null } {
   const { today } = ctx.world
   const mine = snap.rosters.find((r) => r.team.id === myTeamId)
   if (!mine) return { pickups: [], pairs: [], ilBack: [], weekPlan: null, ilSwap: null }
@@ -507,7 +507,8 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
   // Never one you have said you will keep (2026-10-23: "I won't drop Caleb, and definitely not Herro"), and never a
   // star: one Yahoo's drafts took in the first 65% of a league this size (Herro, ADP 69, and Caleb Wilson, 80, were
   // offered for a week's stream).
-  const keep = new Set([...(ctx.league.keep ?? []), ...myIds.filter((x) => isStar(ctx, x.id)).map((x) => x.id)])
+  // Nor one arriving on a pending claim: you claimed him to keep him.
+  const keep = new Set([...(ctx.league.keep ?? []), ...myIds.filter((x) => isStar(ctx, x.id)).map((x) => x.id), ...(opts.arrives?.keys() ?? [])])
   const drops = myIds.filter((x) => !keep.has(x.id))
     .map((x) => ({ ...x, season: season(x.id), missed: missed(x.id) }))
     .sort((a, b) => a.missed - b.missed)
@@ -745,7 +746,8 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
     // out player (2026-10-24: Paolo out 4-6 weeks with Butler and Nurkić on Harker's IL; the app suggested nothing).
     let ilNow = [...ilMen]
     let ilFree = ilOpen
-    const start: Man[] = myIds.map((x) => ({ ...x, from: allDays[0], until: null }))
+    // A player on a pending claim counts from the day he arrives.
+    const start: Man[] = myIds.map((x) => ({ ...x, from: opts.arrives?.get(x.id) && opts.arrives.get(x.id)! > allDays[0] ? opts.arrives.get(x.id)! : allDays[0], until: null }))
     const scoreOf = (men: Man[]) => scoreWeek(ctx, mySide, opp!, theirs, seats, allDays, men)
     const lastGame = (id: string) => {
       const t = ctx.byId.get(id)?.team

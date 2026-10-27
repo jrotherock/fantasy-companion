@@ -53,6 +53,10 @@ export interface SeasonView {
   ilSwap: IlSwap | null
   /** My starters today listed questionable or doubtful, before their tip, and who on my bench would start instead. */
   lineupWatch: { id: string; name: string; status: string; tip: string; backups: { id: string; name: string; tip: string | null }[] }[]
+  /** My waiver claims still pending: who comes, who goes, from when. The moves on Adds assume they clear. */
+  pendingClaims: { id: string; add: string; addName: string; drop: string | null; dropName: string | null; from: string | null }[]
+  /** My claims that went away without the player arriving, in the last three days. */
+  claimsFailed: { id: string; at: number; add: string; addName: string; dropName: string | null }[]
   /** My waiver claims that cleared in the last two days. */
   claims: { id: string; at: number; add: string; addName: string; drop: string | null; dropName: string | null }[]
   /** The verdict for this week, beside the season's; `aligned` when the same move serves both. */
@@ -77,7 +81,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
     lineup: null, tomorrow: null, week: null, budget: null, pickups: [], keep: [], ilBack: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
-    standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null, lineupWatch: [], claims: [],
+    standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null, lineupWatch: [], claims: [], pendingClaims: [], claimsFailed: [],
   }
   if (!drafted || !me) return base
 
@@ -104,8 +108,11 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     }
   }
   const budget = budgetOf(snap, me.id, league, world.today)
-  const addsLeft = budget?.week ? Math.max(0, budget.week.max - budget.week.used) : null
-  const { pickups: picks, pairs, ilBack, weekPlan, ilSwap } = pickupsAndPairs(ctx, snap, me.id, { punts, addsLeft })
+  // My pending claims, planned as if they clear: the moves start from the roster they leave, the adds they use are
+  // spent, and a claimed player counts from the day he arrives.
+  const pendingClaims = pendingOf(ctx, snap, me.id)
+  const addsLeft = budget?.week ? Math.max(0, budget.week.max - budget.week.used - pendingClaims.length) : null
+  const { pickups: picks, pairs, ilBack, weekPlan, ilSwap } = pickupsAndPairs(ctx, withClaims(ctx, snap, me.id, pendingClaims), me.id, { punts, addsLeft, arrives: new Map(pendingClaims.map((c) => [c.add, c.from])) })
   const news = leagueNews(ctx, snap, me.id, events, week?.opponent?.id ?? null).slice(0, 40)
   const st = snap.standings.find((s) => s.teamId === me.id || s.mine)
 
@@ -119,6 +126,8 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     verdict: null, weekPlan, ilSwap, weekVerdict: null,
     lineupWatch: lineupWatchOf(ctx, lineup, punts),
     claims: claimsOf(ctx, snap, me.id),
+    pendingClaims,
+    claimsFailed: (snap.claimsFailed ?? []).map((f) => ({ id: f.id, at: f.at, add: ctx.resolve(f.add) ?? f.add.yahooId, addName: f.add.name, dropName: f.drop?.name ?? null })),
     catPlan: league.scoring === 'categories' && mine?.edges ? categoryPlan(ctx, snap, mine.edges, punts) : null,
     startsOn: (() => { const first = [...snap.weeks].map((w) => w[1]).sort()[0]; return first && first > world.today ? first : null })(),
   }
@@ -171,6 +180,38 @@ export function lineupWatchOf(ctx: Context, lineup: LineupCheck | null, punts: C
     .sort((a, b) => ctx.worth(b.id, punts) - ctx.worth(a.id, punts))
   return lineup.rows.filter((r) => ACTIVE(r.slot) && r.game && !r.game.started && r.game.tip && ['questionable', 'doubtful'].includes(r.status))
     .map((r) => ({ id: r.id, name: r.name, status: r.status, tip: r.game!.tip!, backups: bench.slice(0, 2).map((b) => ({ id: b.id, name: b.name, tip: b.game?.tip ?? null })) }))
+}
+
+/** My pending waiver claims: the player claimed, the one to go, and the day he arrives. */
+export function pendingOf(ctx: Context, snap: Snapshot, me: string): SeasonView['pendingClaims'] {
+  const out: SeasonView['pendingClaims'] = []
+  for (const t of snap.pending ?? []) {
+    const add = t.players.find((p) => p.kind === 'add'), drop = t.players.find((p) => p.kind === 'drop')
+    const aid = add ? ctx.resolve(add.player) : null
+    if (!add || !aid) continue
+    out.push({ id: t.key, add: aid, addName: add.player.name, drop: drop ? ctx.resolve(drop.player) : null, dropName: drop?.player.name ?? null, from: t.waiverDate ?? null })
+  }
+  return out
+}
+
+/** The snapshot with my pending claims made: each claimed player on my bench, each one to go gone. */
+export function withClaims(ctx: Context, snap: Snapshot, me: string, claims: SeasonView['pendingClaims']): Snapshot {
+  if (!claims.length) return snap
+  const t = (snap.pending ?? [])
+  return {
+    ...snap,
+    rosters: snap.rosters.map((r) => {
+      if (r.team.id !== me) return r
+      const gone = new Set(claims.map((c) => c.drop).filter(Boolean))
+      const kept = r.players.filter((y) => !gone.has(ctx.resolve(y) ?? ''))
+      const adds = claims.map((c) => {
+        const y = t.find((x) => x.key === c.id)!.players.find((p) => p.kind === 'add')!.player
+        const p = ctx.byId.get(c.add)
+        return { ...y, slot: 'BN', eligible: y.eligible?.length ? y.eligible : [...(p?.positions ?? []), 'Util'] }
+      })
+      return { ...r, players: [...kept, ...adds] }
+    }),
+  }
 }
 
 /** My waiver claims that cleared in the last two days: a player come to me from waivers. */
@@ -592,6 +633,16 @@ export function seasonAlerts(v: SeasonView, now: number): Alert[] {
       headline: `${L.label}: ${wv.headline}`,
       detail: `This week ${pctWord2(wv.winBefore)} → ${pctWord2(wv.winAfter)}${wv.races.length ? ` (${wv.races.slice(0, 2).map((r) => `${r.cat.toUpperCase()} ${pctWord2(r.before)}→${pctWord2(r.after)}`).join(', ')})` : ''}${late && adds != null ? `; ${adds} add${adds === 1 ? '' : 's'} left, ${daysLeft} day${daysLeft === 1 ? '' : 's'} to go` : ''}.`,
       consequence: late ? 60 : 50, deadline: Date.parse(`${w.end}T23:00:00Z`), link, playerId: wv.moves[0]?.add,
+    })
+  }
+  // 9b. A claim that failed, with the next best.
+  for (const f of v.claimsFailed) {
+    const next = v.weekVerdict?.level === 'do' ? v.weekVerdict.headline : v.verdict && v.verdict.level !== 'none' ? v.verdict.headline : null
+    out.push({
+      id: `nba-claimfail:${L.id}:${f.id}`, leagueId: L.id, rule: 'nba-claimfail',
+      headline: `${L.label}: claim for ${f.addName} didn't go through`,
+      detail: `${f.dropName ? `${f.dropName} stays. ` : ''}${next ? `Next best: ${next}.` : 'Nothing else is worth an add right now.'}`,
+      consequence: 55, deadline: null, link, playerId: f.add,
     })
   }
   // 15. A new role, from the minutes: mine up or down, a free agent up.

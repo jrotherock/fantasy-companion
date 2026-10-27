@@ -847,6 +847,7 @@ function Adds({ v, onChange }: { v: SeasonView; onChange: () => void }) {
       {cats && <PuntPicker v={v} onChange={onChange} />}
       <KeepPicker v={v} onChange={onChange} />
       <IlBack v={v} />
+      <PendingClaims v={v} />
       <WeekCard v={v} />
       <VerdictCard v={v} />
       <details className="nl-alloptions">
@@ -891,6 +892,33 @@ function Adds({ v, onChange }: { v: SeasonView; onChange: () => void }) {
       <p className="nl-note">Each move is re-scored under ten what-ifs: the players in it with their minutes up or down by about 15%, games played by about 10%, and form in each category by about 8%. "Holds" is how many of the ten it still helps in; the range is what it adds from a low case to a high one.</p>
       </details>
     </>
+  )
+}
+
+/**
+ * My waiver claims still pending, as Yahoo has them: who comes, who goes, the day. The moves below are planned as if
+ * they clear (2026-10-27: "why can't the app read and understand claims I've put in?"). A claim that failed, with the
+ * player who stays.
+ */
+function PendingClaims({ v }: { v: SeasonView }) {
+  if (!v.pendingClaims.length && !v.claimsFailed.length) return null
+  return (
+    <div className="nl-ilback">
+      {v.pendingClaims.length > 0 && (
+        <div className="nl-ilrow">
+          <div className="nl-vk">Claims pending</div>
+          <ul className="nl-weeksteps">
+            {v.pendingClaims.map((c) => (
+              <li key={c.id}><b>Add {c.addName}</b>{c.dropName ? <>, drop {c.dropName}</> : ' into your open spot'}<span className="nl-dim"> · {c.from ? `processes ${dateWord(c.from)}, counts from then` : 'pending'}</span></li>
+            ))}
+          </ul>
+          <div className="nl-dim">The moves below assume these clear.</div>
+        </div>
+      )}
+      {v.claimsFailed.map((f) => (
+        <div key={f.id} className="nl-ilrow ready"><div className="nl-vk">Claim failed</div><div>{f.addName} didn't come{f.dropName ? <>; {f.dropName} stays</> : ''}.</div></div>
+      ))}
+    </div>
   )
 }
 

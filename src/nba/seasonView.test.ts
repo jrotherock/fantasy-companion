@@ -1,12 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import type { YPlayer } from '../server/yahooParse.js'
+import { parseTransactions, type YPlayer } from '../server/yahooParse.js'
 import type { NbaPlayer, Game, YahooWeek } from './types.js'
 import type { Cat } from './value.js'
 import { buildSeasonView, claimsOf, DO, lineupWatchOf, LOOK, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonAlerts, seasonTile, verdictOf, type SeasonView } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
-import { Context, rollWeek, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
+import { claimsFailedOf, Context, rollWeek, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
 import { addDays, PAIR_MARGIN, shortlistForWeek, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, SPECIALISTS, specialists, starLine, WEEK_SEASON_COST, WHATIFS, whatifFor, scoreWeek, type PairMove } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
@@ -933,4 +933,43 @@ test('minutes you set for a stretch: his line at those minutes, no teammate shar
   const share = ctx.minutesFrom(mate.id, later)
   assert.ok(share > 0, 'the star is still out: a share')
   assert.ok(Math.abs(ctx.outlook(mate.id, later)!.box.pts - base * (min + share) / min) < 1e-9)
+})
+
+test('pending claims: read from Yahoo, planned as if they clear, and a failed one told', () => {
+  const { league, snap: s0, w } = realLeague('2026-10-19-public', publicLeague, '2', 20)
+  // Claim the app's own best add, dropping the player it would drop: both must then be out of every suggestion.
+  const plain0 = buildSeasonView(league, s0, w)
+  const top = plain0.pickups.find((p) => p.drop)!
+  const claimed = players.find((p) => p.id === top.add)!, goes = players.find((p) => p.id === top.drop)!
+  // Yahoo's answer for a pending claim, cut to the fields read (2026-10-27, Harker: Pritchard for Jalen Green).
+  const tx = (add: NbaPlayer, drop: NbaPlayer) => ({ transaction: [
+    { transaction_key: '478.l.96459.w.c.3_x', type: 'waiver', status: 'pending', waiver_date: '2026-10-21', waiver_roster_reflect_key: '2026-10-21' },
+    { players: { count: 2,
+      0: { player: [[{ player_key: `478.p.${add.yahoo!.yahooId}` }, { player_id: add.yahoo!.yahooId }, { name: { full: add.name } }], { transaction_data: [{ type: 'add', source_type: 'waivers', destination_type: 'team', destination_team_key: '478.l.96459.t.2' }] }] },
+      1: { player: [[{ player_key: `478.p.${drop.yahoo!.yahooId}` }, { player_id: drop.yahoo!.yahooId }, { name: { full: drop.name } }], { transaction_data: { type: 'drop', source_type: 'team', source_team_key: '478.l.96459.t.2', destination_type: 'waivers' } }] } } },
+  ] })
+  const pending = parseTransactions({ transactions: { count: 1, 0: tx(claimed, goes) } })
+  assert.equal(pending[0].waiverDate, '2026-10-21')
+  assert.deepEqual(pending[0].players.map((p) => [p.kind, p.player.yahooId]), [['add', claimed.yahoo!.yahooId], ['drop', goes.yahoo!.yahooId]])
+  const v = buildSeasonView(league, { ...s0, pending }, w)
+  assert.deepEqual(v.pendingClaims.map((c) => [c.add, c.drop, c.from]), [[claimed.id, goes.id, '2026-10-21']])
+  // Planned as if it clears: the claimed player is nobody's pickup, the one going is nobody's drop.
+  const moves = [...v.pickups.flatMap((p) => [[p.add, p.drop], ...p.alternatives.map((a) => [p.add, a.drop])]), ...(v.weekPlan?.moves ?? []).map((m) => [m.add, m.drop]), ...v.pairs.flatMap((p) => p.moves.map((m) => [m.add, m.drop]))]
+  for (const [a, d] of moves) { assert.notEqual(a, claimed.id, 'the claimed player is not offered'); assert.notEqual(d, goes.id, 'the player going is not a drop'); assert.notEqual(d, claimed.id, 'the player arriving is not a drop') }
+  // A weak player claimed (one the season would drop first): arriving, he is still nobody's drop.
+  const rostered = new Set(s0.rosters.flatMap((r) => r.players.map((y) => y.yahooId)))
+  const weak = players.filter((p) => p.yahoo && p.projection && p.team && !rostered.has(p.yahoo.yahooId) && p.projection.perGame.min >= 12).sort((a, b) => a.projection!.perGame.pts - b.projection!.perGame.pts)[0]
+  const vw = buildSeasonView(league, { ...s0, pending: parseTransactions({ transactions: { count: 1, 0: tx(weak, goes) } }) }, w)
+  const drops = [...vw.pickups.flatMap((p) => [p.drop, ...p.alternatives.map((a) => a.drop)]), ...(vw.weekPlan?.moves ?? []).map((m) => m.drop), ...vw.pairs.flatMap((p) => p.moves.map((m) => m.drop))]
+  assert.ok(!drops.includes(weak.id), `${weak.name}, arriving on a claim, is offered as a drop`)
+  // The adds the claim will use are spent.
+  const plain = buildSeasonView(league, s0, w)
+  assert.ok((v.weekPlan?.moves.length ?? 0) <= Math.max(0, (plain.budget!.week!.max - plain.budget!.week!.used) - 1))
+  // Gone without the player arriving: failed. Gone with him come to me: cleared, not failed.
+  const came = [{ key: 'm', id: '9', type: 'add/drop', status: 'successful', at: w.now, faabBid: null, players: [{ ...pending[0].players[0], toTeamId: '2' }] }]
+  assert.equal(claimsFailedOf(pending, came, '2', w.now).length, 0)
+  const failed = claimsFailedOf(pending, [], '2', w.now)
+  assert.deepEqual(failed.map((f) => f.add.yahooId), [claimed.yahoo!.yahooId])
+  const vf = buildSeasonView(league, { ...s0, claimsFailed: failed }, w)
+  assert.ok(seasonAlerts(vf, w.now).some((a) => a.rule === 'nba-claimfail' && a.headline.includes(`claim for ${claimed.name} didn't go through`) && a.detail.startsWith(`${goes.name} stays`)))
 })

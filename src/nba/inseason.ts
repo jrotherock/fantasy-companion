@@ -58,6 +58,10 @@ export interface Snapshot {
   fixtures?: Fixture[]
   /** This matchup week's lineups and lines day by day, mine and my opponent's: what has counted so far. */
   weekDays?: WeekDays
+  /** My waiver claims still pending (Yahoo shows a team's own): the adds are planned as if they clear. */
+  pending?: YTransaction[]
+  /** My claims that went away without the player arriving: lost to another team, or the drop no longer possible. */
+  claimsFailed?: { id: string; at: number; add: YPlayer; drop: YPlayer | null }[]
 }
 
 /** By team id, then by date: the day's roster with each player's slot and line, and when it was read. */
@@ -640,6 +644,21 @@ export function soFarOf(ctx: Context, days: Record<string, RosterDay> | undefine
     }
   }
   return [...byId.values()].sort((a, b) => b.started - a.started || b.box.pts - a.box.pts)
+}
+
+/**
+ * Claims that went away: each one whose player did not come to me in the moves read since (lost to another team, or
+ * the drop no longer possible). A claim that cleared is told by its move.
+ */
+export function claimsFailedOf(gone: YTransaction[], moves: YTransaction[], me: string, at: number): NonNullable<Snapshot['claimsFailed']> {
+  const out: NonNullable<Snapshot['claimsFailed']> = []
+  for (const g of gone) {
+    const add = g.players.find((p) => p.kind === 'add')
+    if (!add) continue
+    const came = moves.some((t) => t.players.some((p) => p.kind === 'add' && p.toTeamId === me && p.player.yahooId === add.player.yahooId))
+    if (!came) out.push({ id: g.key, at, add: add.player, drop: g.players.find((p) => p.kind === 'drop')?.player ?? null })
+  }
+  return out
 }
 
 /**
