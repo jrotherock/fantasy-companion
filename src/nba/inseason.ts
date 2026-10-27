@@ -33,6 +33,8 @@ export interface SeasonLeague {
   punts?: Cat[]
   /** Player ids you will not drop (preferences, set on the Adds screen): never offered as a drop. */
   keep?: string[]
+  /** A free agent added today plays today, if his game has not started (Yahoo's same-day adds). */
+  sameDayAdds?: boolean
 }
 
 /** What the server has read from Yahoo for one league. */

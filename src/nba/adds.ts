@@ -391,7 +391,10 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
   // today's games are under way, and a waiver claim only after it clears.
   const tomorrow = addDays(today, 1)
   const waiverDays = snap.settings?.waiverDays ?? 2
-  const days = start && end ? daysFrom(start, end, tomorrow) : []
+  // A free agent added in a league with same-day adds plays today if his game has not started (the day's lineup
+  // seats only games still to tip); otherwise from tomorrow (2026-10-27: "I can add someone playing after 4:30 today
+  // and it'll work in Hoops"; all three leagues allow it).
+  const days = start && end ? daysFrom(start, end, ctx.league.sameDayAdds ? today : tomorrow) : []
   const daysFor = (id: string) => (waiverIds.has(id) ? days.filter((d) => d >= addDays(today, waiverDays + 1)) : days)
 
   const theirs = m?.sides.find((s) => s.id !== myTeamId) ?? null

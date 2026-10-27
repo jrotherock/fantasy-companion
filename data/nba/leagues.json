@@ -2,7 +2,7 @@
   "note": "Read from Yahoo league settings and the API on 2026-10-02. Both are offline drafts with no date set. history: older seasons Yahoo's renewal chain does not reach, read off the league page's season selector; each is used only if Yahoo marks a team in it as yours. adpSpread: how far picks land from that season’s preseason ADP in this league’s own drafts (sd = a + b*ADP), measured 2026-10-04 from GET /api/nba/history/:id/spread. nba-public (Yahoo public league 231557, 2026-10-09): Yahoo's default 9-cat lineup (G, F, two C), 10 teams, live draft 2026-10-09 22:30 PT; no history, so the spread is the one that fit human mock rooms best (2 + 0.12·ADP).",
   "leagues": [
     {
-      "id": "nba-harker",
+      "id": "nba-harker", "sameDayAdds": true,
       "label": "Harker Fantasy Basketball",
       "sport": "nba",
       "leagueKey": "478.l.96459",
@@ -47,7 +47,7 @@
       }
     },
     {
-      "id": "nba-hoops",
+      "id": "nba-hoops", "sameDayAdds": true,
       "label": "Hoops 2025",
       "sport": "nba",
       "leagueKey": "478.l.103439",
@@ -167,7 +167,7 @@
       }
     },
     {
-      "id": "nba-public",
+      "id": "nba-public", "sameDayAdds": true,
       "label": "Public 231557",
       "sport": "nba",
       "leagueKey": "478.l.231557",

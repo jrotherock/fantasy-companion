@@ -973,3 +973,16 @@ test('pending claims: read from Yahoo, planned as if they clear, and a failed on
   const vf = buildSeasonView(league, { ...s0, claimsFailed: failed }, w)
   assert.ok(seasonAlerts(vf, w.now).some((a) => a.rule === 'nba-claimfail' && a.headline.includes(`claim for ${claimed.name} didn't go through`) && a.detail.startsWith(`${goes.name} stays`)))
 })
+
+test("same-day adds: a free agent playing later today counts today; without them, from tomorrow", () => {
+  const { league, snap, w } = realLeague('2026-10-19-public', publicLeague, '2', 20, '2026-10-22')
+  // Midday Eastern: tonight's games are still to tip.
+  const noon = { ...w, now: Date.parse('2026-10-22T16:00:00Z') }
+  const tonight = new Set(w.schedule.filter((g) => g.date === '2026-10-22').flatMap((g) => [g.home, g.away]))
+  assert.ok(tonight.size > 0, 'games tonight')
+  const same = buildSeasonView({ ...league, sameDayAdds: true }, snap, noon)
+  const next = buildSeasonView({ ...league, sameDayAdds: false }, snap, noon)
+  const days = (v: SeasonView) => [...v.pickups.flatMap((p) => p.playDays.map((d) => d.date)), ...(v.weekPlan?.moves ?? []).map((m) => m.from)]
+  assert.ok(days(same).includes('2026-10-22'), 'an add plays tonight')
+  assert.ok(!days(next).includes('2026-10-22'), 'without same-day adds, nothing before tomorrow')
+})

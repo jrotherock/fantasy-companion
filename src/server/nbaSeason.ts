@@ -75,6 +75,7 @@ function leagues(): (SeasonLeague & { myTeamId: string | null })[] {
     adds: l.adds ?? { perWeek: null, season: null },
     playoffWeeks: l.playoffWeeks ?? [],
     myTeamId: l.myTeamId ?? null,
+    sameDayAdds: !!(l as { sameDayAdds?: boolean }).sameDayAdds,
   }))
 }
 
