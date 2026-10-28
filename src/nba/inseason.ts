@@ -14,7 +14,7 @@ import { NameIndex } from './join.js'
 import { CATS, categoryZ, type Cat } from './value.js'
 import { addBox, emptyBox, type Box, type NbaMatchup, type RosterDay, type SeasonSettings, type Side, type TeamMeta } from './yahooSeason.js'
 import { daysFrom, projectWeek, seat, startingSeats, type GameOutlook, type Man, type WeekOutlook } from './week.js'
-import { categoryWeek, pointsWeek, type PointsOdds, type SideOutlook, type WeekOdds, type Weights } from './matchup.js'
+import { categoryWeek, pointsOf, pointsWeek, type PointsOdds, type SideOutlook, type WeekOdds, type Weights } from './matchup.js'
 import { daysBetween, designation, HEALTHY_PLAY, perGameBox, playChance, withForm, type Designation, type GameLog } from './outlook.js'
 import { typicalWeek, type Member, type Noise } from './strength.js'
 import { teamGame, type LiveGame } from './scores.js'
@@ -265,12 +265,14 @@ export class Context {
     const win = this.world.windows?.get(id)
     const more = win && date < win.until ? win.min - min : this.minutesFrom(id, date)
     if (more !== 0 && min > 0) { const f = Math.max(0, (min + more) / min); for (const k of Object.keys(box) as (keyof Box)[]) box[k] *= f }
+    let mins = min > 0 ? Math.max(0, min + more) : min
     const sleeper = this.world.dayProj.get(`${id}|${date}`)
     if (sleeper) {
       const w = this.world.sleeperWeight ?? SLEEPER_WEIGHT
       for (const k of Object.keys(box) as (keyof Box)[]) box[k] = w * sleeper.box[k] + (1 - w) * box[k]
+      if (sleeper.min > 0) mins = w * sleeper.min + (1 - w) * mins
     }
-    return { box, play: this.play(id, date) }
+    return { box, play: this.play(id, date), min: mins }
   }
 
   /** His chance of missing a date by designation or return date alone: no season rate, no rest nights. */
@@ -441,6 +443,29 @@ export interface LineupMove {
   why: string
   /** When the move stops being possible: the tip of the game it is about. */
   by: string | null
+  /** What the move is worth, where the week can be projected. */
+  effect?: MoveEffect
+}
+
+/**
+ * Why a start: tonight's line, his less the benched player's (each at his chance of playing), their minutes, and what
+ * it does to the week — the category races it moves and the chance of winning, as set and with the move (2026-10-28:
+ * "right now it just says start Caleb instead of Myles but not why").
+ */
+export interface MoveEffect {
+  diff: Box
+  /** The counting stats it moves most tonight (the shooting ones show as the races they move). */
+  stats: { cat: Exclude<Cat, 'fg' | 'ft'>; diff: number }[]
+  min: { start: number | null; bench: number | null }
+  /** Points leagues: fantasy points more tonight. */
+  points: number | null
+  win: { before: number; after: number } | null
+  /** Category leagues: categories expected won this week, as set and with the move (a move can be worth races while the week's chance barely moves). */
+  cats: { before: number; after: number } | null
+  /** Category leagues: the races the move shifts by a point or more, the biggest first. */
+  races: { cat: Cat; before: number; after: number }[]
+  /** All of it in a line, for notifications. */
+  summary: string
 }
 
 /** The short code for a designation Yahoo did not send one for, as the football screens show them. */
@@ -466,7 +491,7 @@ export interface LineupCheck {
  * Players whose games have tipped are locked where they are. Of the rest, the
  * best possible lineup is found and compared with the one set.
  */
-export function checkLineup(ctx: Context, day: RosterDay, seats: string[], date = ctx.world.today): LineupCheck {
+export function checkLineup(ctx: Context, day: RosterDay, seats: string[], date = ctx.world.today, value?: ((r: LineupRow) => number) | null): LineupCheck {
   const { now, schedule } = ctx.world
   const today = date
   const live = date === ctx.world.today ? ctx.world.scores ?? [] : []
@@ -502,17 +527,19 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[], date 
   }
   const movable = rows.filter((r) => r.slot !== 'IL' && r.slot !== 'IL+' && !r.game?.started)
   const able = movable.filter((r) => r.game && r.play > 0)
-  const worth = able.map((r) => ctx.worth(r.id) * r.play + 100 * r.play)
+  // Who is worth a seat tonight: with the week to play for, what his line tonight does for it; else his season worth.
+  const worthOf = (r: LineupRow) => (value ? value(r) : ctx.worth(r.id) * r.play)
+  const worth = able.map((r) => worthOf(r) + 100 * r.play)
   const best = new Set([...seat(able.map((r) => r.positions), worth, free).values()].map((i) => able[i].id))
   const startingNow = new Set(movable.filter((r) => isStarting(r.slot)).map((r) => r.id))
 
   const moves: LineupMove[] = []
   const toStart = able.filter((r) => best.has(r.id) && !startingNow.has(r.id))
-    .sort((a, b) => ctx.worth(b.id) - ctx.worth(a.id))
+    .sort((a, b) => worthOf(b) - worthOf(a))
   // Who comes out: starters who will not play first, then the weakest of the rest.
   const willPlay = (r: LineupRow) => !!r.game && r.play > 0
   const outs = movable.filter((r) => startingNow.has(r.id) && !best.has(r.id))
-    .sort((a, b) => Number(willPlay(a)) - Number(willPlay(b)) || ctx.worth(a.id) - ctx.worth(b.id))
+    .sort((a, b) => Number(willPlay(a)) - Number(willPlay(b)) || worthOf(a) - worthOf(b))
   let lostStarts = 0
   toStart.forEach((r, i) => {
     const out = outs[i] ?? null
@@ -703,7 +730,8 @@ export function rollWeek(snap: Snapshot, world: World): { snap: Snapshot; world:
   }
 }
 
-export function buildWeek(ctx: Context, snap: Snapshot, myTeamId: string): WeekView | null {
+/** The matchup week from today, both sides projected with their best lineups each night. */
+function weekSides(ctx: Context, snap: Snapshot, myTeamId: string) {
   const { today } = ctx.world
   const wk = weekOf(snap.weeks, today)
   const m = snap.scoreboard.find((x) => x.sides.some((s) => s.id === myTeamId))
@@ -716,10 +744,95 @@ export function buildWeek(ctx: Context, snap: Snapshot, myTeamId: string): WeekV
   const rosterOf = (teamId: string | undefined) => snap.rosters.find((r) => r.team.id === teamId)?.players ?? []
   const a = sideOutlook(ctx, mine, rosterIds(ctx, rosterOf(myTeamId)), seats, days)
   const b = sideOutlook(ctx, theirs, rosterIds(ctx, rosterOf(theirs?.id)), seats, days)
-  const odds = ctx.league.scoring === 'categories' ? categoryWeek(a.side, b.side) : null
-  const points = ctx.league.scoring === 'points'
-    ? pointsWeek(a.side, b.side, ctx.league.points ?? {}, { mine: mine?.points ?? null, theirs: theirs?.points ?? null })
-    : null
+  const score = (side: SideOutlook) => ({
+    odds: ctx.league.scoring === 'categories' ? categoryWeek(side, b.side) : null,
+    points: ctx.league.scoring === 'points'
+      ? pointsWeek(side, b.side, ctx.league.points ?? {}, { mine: mine?.points ?? null, theirs: theirs?.points ?? null })
+      : null,
+  })
+  return { m, wk, start, end, mine, theirs, seats, days, rosterOf, a, b, score }
+}
+
+/**
+ * What a player's line on a day is worth to this week's matchup, for seating him: in a category league the chance of
+ * winning the week it adds, plus the categories it adds (so a week all but won or lost still ranks by races), on the
+ * season worth's scale; in points his fantasy points. Each at his chance of playing. Null with no week to play for that
+ * day. Season worth alone started Wiggins over Zion in a week Zion's points and FG% swung (2026-10-28).
+ */
+export function weekValue(ctx: Context, snap: Snapshot, myTeamId: string, date: string): ((r: LineupRow) => number) | null {
+  const w = weekSides(ctx, snap, myTeamId)
+  if (!w || !w.theirs || !w.days.includes(date)) return null
+  const line = (r: LineupRow) => (r.game && r.tonight ? addBox(emptyBox(), r.tonight, r.play) : emptyBox())
+  if (ctx.league.scoring === 'points') return (r) => pointsOf(line(r), ctx.league.points ?? {})
+  const base = w.score(w.a.side).odds!
+  const memo = new Map<string, number>()
+  return (r) => {
+    let v = memo.get(r.id)
+    if (v == null) {
+      const o = w.score({ ...w.a.side, rest: addBox(w.a.side.rest, line(r)) }).odds!
+      v = 100 * ((o.win - base.win) + (o.expected - base.expected) / CATS.length)
+      memo.set(r.id, v)
+    }
+    return v
+  }
+}
+
+const STAT_LABEL: Record<Cat, string> = { fg: 'FG%', ft: 'FT%', tpm: '3s', pts: 'pts', reb: 'reb', ast: 'ast', stl: 'stl', blk: 'blk', to: 'TO' }
+
+/**
+ * Each move's worth, put on it: the week as the lineup stands (the move's line taken back out of the best lineup's
+ * week) against the week with it. Only a move on a day the matchup week still has, against an opponent.
+ */
+export function moveEffects(ctx: Context, snap: Snapshot, myTeamId: string, check: LineupCheck): void {
+  if (!check.moves.length) return
+  const w = weekSides(ctx, snap, myTeamId)
+  const rows = new Map(check.rows.map((r) => [r.id, r]))
+  const after = w && w.theirs && w.days.includes(check.date) ? w.score(w.a.side) : null
+  const pct = (x: number) => `${Math.round(x * 100)}%`
+  for (const m of check.moves) {
+    const s = rows.get(m.start), bn = m.bench ? rows.get(m.bench) : undefined
+    if (!s) continue
+    const line = (r: LineupRow | undefined) => (r?.game && r.tonight ? addBox(emptyBox(), r.tonight, r.play) : emptyBox())
+    const diff = addBox(line(s), line(bn), -1)
+    const minOf = (r: LineupRow | undefined) => (r?.game && r.play > 0 ? ctx.outlook(r.id, check.date)?.min ?? null : null)
+    const min = { start: minOf(s), bench: minOf(bn) }
+    const points = ctx.league.scoring === 'points' ? pointsOf(diff, ctx.league.points ?? {}) : null
+    let win: MoveEffect['win'] = null
+    let cats: MoveEffect['cats'] = null
+    let races: MoveEffect['races'] = []
+    if (after && w) {
+      const before = w.score({ ...w.a.side, rest: addBox(w.a.side.rest, diff, -1) })
+      if (after.odds && before.odds) {
+        win = { before: before.odds.win, after: after.odds.win }
+        cats = { before: before.odds.expected, after: after.odds.expected }
+        const share = (r: { win: number; tie: number }) => r.win + r.tie / 2
+        races = after.odds.races.map((r) => ({ cat: r.cat, before: share(before.odds!.races.find((x) => x.cat === r.cat)!), after: share(r) }))
+          .filter((r) => Math.abs(r.after - r.before) >= 0.01)
+          .sort((x, y) => Math.abs(y.after - y.before) - Math.abs(x.after - x.before))
+      } else if (after.points && before.points) win = { before: before.points.win, after: after.points.win }
+    }
+    // Points weigh a fifth as much as the rest: 1 point and 0.3 of a steal are each about as much as matters.
+    const scale = (c: string) => (c === 'pts' ? 5 : 1)
+    const stats = (['tpm', 'pts', 'reb', 'ast', 'stl', 'blk', 'to'] as const)
+      .map((cat) => ({ cat, diff: diff[cat] })).filter((x) => Math.abs(x.diff) >= 0.3 * scale(x.cat))
+      .sort((x, y) => Math.abs(y.diff) / scale(y.cat) - Math.abs(x.diff) / scale(x.cat)).slice(0, 4)
+    const parts = [
+      points != null ? `${points >= 0 ? '+' : ''}${points.toFixed(1)} fantasy pts tonight` : stats.map((x) => `${x.diff >= 0 ? '+' : '−'}${Math.abs(x.diff).toFixed(1)} ${STAT_LABEL[x.cat]}`).join(', '),
+      min.start != null && min.bench != null && Math.abs(min.start - min.bench) >= 2 ? `${Math.round(min.start)} min vs ${Math.round(min.bench)}` : '',
+      races.slice(0, 2).map((r) => `${STAT_LABEL[r.cat]} ${pct(r.before)}→${pct(r.after)}`).join(', '),
+      win ? `week ${pct(win.before)}→${pct(win.after)}` : '',
+      cats && Math.abs(win!.after - win!.before) < 0.005 ? `${cats.after - cats.before >= 0 ? '+' : '−'}${Math.abs(cats.after - cats.before).toFixed(2)} cats expected` : '',
+    ].filter(Boolean)
+    m.effect = { diff, stats, min, points, win, cats, races, summary: parts.join('; ') }
+  }
+}
+
+export function buildWeek(ctx: Context, snap: Snapshot, myTeamId: string): WeekView | null {
+  const w = weekSides(ctx, snap, myTeamId)
+  if (!w) return null
+  const { today } = ctx.world
+  const { m, wk, start, end, mine, theirs, days, rosterOf, a, b } = w
+  const { odds, points } = w.score(a.side)
   return {
     week: m?.week ?? wk![0], start, end,
     opponent: theirs ? { id: theirs.id, name: theirs.name, manager: theirs.manager } : null,

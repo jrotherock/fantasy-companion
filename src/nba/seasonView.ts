@@ -6,7 +6,7 @@
 import type { Weights } from './matchup.js'
 import type { Cat } from './value.js'
 import { startingSeats } from './week.js'
-import { buildWeek, checkLineup, Context, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
+import { buildWeek, checkLineup, Context, moveEffects, weekValue, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
 import { addDays, addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type IlReturn, type IlSwap, type PairMove, type Pickup, type WeekPlan } from './adds.js'
 import { leagueNews, type NewsItem, type StatusEvent } from './news.js'
 import { allPlay, playoffPlan, power, tradeIdeas, type AllPlay, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
@@ -93,12 +93,14 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   // The punts you set, not ones guessed from the roster: a 32% category read as given up on the Season tab and as
   // live on Adds (2026-10-23, Hoops AST), and only you know whether you are chasing it.
   const punts = league.scoring === 'categories' ? league.punts ?? [] : []
-  const lineup = snap.mineToday ? checkLineup(ctx, snap.mineToday, startingSeats(league.roster)) : null
+  const lineup = snap.mineToday ? checkLineup(ctx, snap.mineToday, startingSeats(league.roster), world.today, weekValue(ctx, snap, me.id, world.today)) : null
   // Tomorrow's lineup as set: a starter with no game tomorrow while a bench player has one is a start lost unless
   // changed (2026-10-20: Harden, Murray and Allen started a Wednesday their teams did not play).
   const tomorrowDate = addDays(world.today, 1)
-  const tomorrow = snap.mineTomorrow?.date === tomorrowDate ? checkLineup(ctx, snap.mineTomorrow, startingSeats(league.roster), tomorrowDate) : null
+  const tomorrow = snap.mineTomorrow?.date === tomorrowDate ? checkLineup(ctx, snap.mineTomorrow, startingSeats(league.roster), tomorrowDate, weekValue(ctx, snap, me.id, tomorrowDate)) : null
   const week = buildWeek(ctx, snap, me.id)
+  if (lineup) moveEffects(ctx, snap, me.id, lineup)
+  if (tomorrow) moveEffects(ctx, snap, me.id, tomorrow)
   // Games left in the matchup week for each player on today's lineup: what decides who starts and who streams.
   if (lineup && week) {
     const from = world.today > week.start ? world.today : week.start
@@ -253,7 +255,7 @@ export function seasonTile(v: SeasonView, now: number): SeasonTile {
   // A start lost outright — an empty seat, or a starter with no game or ruled out — is worse than a weaker start.
   const lost = moves.filter(losesStart)
   const soonest = lost.map((m) => (m.by ? Date.parse(m.by) : Infinity)).reduce((a, b) => Math.min(a, b), Infinity)
-  const say = (m: (typeof moves)[number]) => `Start ${name(m.start)}${m.bench ? ` over ${name(m.bench)}` : ''} — ${m.why}`
+  const say = (m: (typeof moves)[number]) => `Start ${name(m.start)}${m.bench ? ` over ${name(m.bench)}` : ''} — ${m.why}${m.effect?.summary ? ` (${m.effect.summary})` : ''}`
   if (lost.length && soonest - now < 3 * HOUR) {
     return { ...base, urgency: 'act', action: 'Set lineup', why: say(lost[0]), score }
   }

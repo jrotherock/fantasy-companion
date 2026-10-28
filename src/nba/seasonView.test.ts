@@ -986,3 +986,81 @@ test("same-day adds: a free agent playing later today counts today; without them
   assert.ok(days(same).includes('2026-10-22'), 'an add plays tonight')
   assert.ok(!days(next).includes('2026-10-22'), 'without same-day adds, nothing before tomorrow')
 })
+
+/** Today's lineup with the best of mine who plays today benched for the weakest bench player who also plays. */
+function benchTheBest(league: SeasonLeague & { myTeamId: string }, today: string) {
+  const { snap } = snapshotFor(league, today)
+  const plays = new Set(schedule.filter((g) => g.date === today).flatMap((g) => [g.home, g.away]))
+  const day = snap.mineToday!.players
+  const adp = (y: YPlayer) => players.find((p) => p.yahoo?.yahooId === y.yahooId)!.yahoo!.adp ?? 999
+  const best = day.filter((y) => y.slot !== 'BN' && y.slot !== 'IL' && plays.has(y.team!)).sort((a, b) => adp(a) - adp(b))[0]
+  const weak = day.filter((y) => y.slot === 'BN' && plays.has(y.team!)).sort((a, b) => adp(b) - adp(a))[0]
+  assert.ok(best && weak, 'the fixture has a starter and a bench player who both play today')
+  ;[best.slot, weak.slot] = ['BN', best.slot]
+  const id = (y: YPlayer) => players.find((p) => p.yahoo?.yahooId === y.yahooId)!.id
+  return { snap, best: id(best), weak: id(weak) }
+}
+
+test('a better start says why: his line over the benched player, the minutes, the races and the week it moves', () => {
+  const today = '2026-11-18'
+  const { snap, best, weak } = benchTheBest(hoops, today)
+  const v = buildSeasonView(hoops, snap, world(today))
+  const m = v.lineup!.moves.find((x) => x.start === best)!
+  assert.ok(m && m.bench === weak && /better start/.test(m.why), 'the best player goes back in for the weak one')
+  const e = m.effect!
+  assert.ok(e, 'the move carries its effect')
+  const row = (id: string) => v.lineup!.rows.find((r) => r.id === id)!
+  for (const k of ['pts', 'reb', 'tpm', 'blk', 'to'] as const) {
+    const byHand = row(best).tonight![k] * row(best).play - row(weak).tonight![k] * row(weak).play
+    assert.ok(Math.abs(e.diff[k] - byHand) < 1e-9, `${k}: ${e.diff[k]} vs ${byHand}`)
+  }
+  assert.ok(e.stats.length > 0 && e.stats.every((s) => Math.abs(s.diff) >= 0.3), 'the stats it moves tonight')
+  // With the move is the week as projected; as set is worse, and the races it moves are the ones his line moves.
+  assert.ok(Math.abs(e.win!.after - v.week!.odds!.win) < 1e-9, 'with the move: the Week tab chance')
+  assert.ok(e.win!.after > e.win!.before, `${e.win!.before} → ${e.win!.after}`)
+  assert.ok(e.races.length > 0)
+  for (const r of e.races.filter((x) => x.cat !== 'fg' && x.cat !== 'ft')) {
+    const d = r.cat === 'to' ? -e.diff.to : e.diff[r.cat as 'pts']
+    assert.equal(Math.sign(r.after - r.before), Math.sign(d), `${r.cat} moves the way his line does`)
+  }
+  assert.ok(e.cats!.after > e.cats!.before && Math.abs(e.cats!.after - v.week!.odds!.expected) < 1e-9, 'categories expected, with the move: the Week tab')
+  assert.ok(e.min.start != null && e.min.bench != null)
+  assert.ok(/week \d+%→\d+%/.test(e.summary), e.summary)
+  // The notification says it too.
+  assert.ok(seasonTile(v, world(today).now).why.includes(e.summary))
+})
+
+test('points: a better start says the fantasy points it adds tonight and the week it moves', () => {
+  const today = '2026-11-18'
+  const { snap, best } = benchTheBest(harker, today)
+  const v = buildSeasonView(harker, snap, world(today))
+  const m = v.lineup!.moves.find((x) => x.start === best)!
+  assert.ok(m && m.bench, 'the best player goes back in')
+  const row = (id: string) => v.lineup!.rows.find((r) => r.id === id)!
+  const fp = (b: any) => Object.entries(harker.points!).reduce((s, [k, x]) => s + (x ?? 0) * (b[k] ?? 0), 0)
+  const out = row(m.bench!)
+  const byHand = fp(row(best).tonight) * row(best).play - (out.game ? fp(out.tonight) * out.play : 0)
+  assert.ok(Math.abs(m.effect!.points! - byHand) < 1e-6, `${m.effect!.points} vs ${byHand}`)
+  assert.ok(m.effect!.points! > 0)
+  assert.ok(Math.abs(m.effect!.win!.after - v.week!.points!.win) < 1e-9)
+  assert.ok(m.effect!.win!.after > m.effect!.win!.before)
+  assert.deepEqual([m.effect!.races, m.effect!.cats], [[], null], 'no races in points')
+  assert.ok(/fantasy pts tonight/.test(m.effect!.summary))
+})
+
+test('a better start never costs the week: seating goes by what each line tonight does for this week, not season worth', () => {
+  // As drafted on 2026-11-18, season worth started Andrew Wiggins over Zion Williamson in a week Zion's points and FG%
+  // swung: the week went 63% → 62% for a "better start".
+  let swaps = 0
+  for (const [league, today] of [[hoops, '2026-11-18'], [hoops, '2026-11-20'], [hoops, '2026-11-24'], [harker, '2026-11-18'], [harker, '2026-11-21']] as const) {
+    const { snap } = snapshotFor(league, today)
+    const v = buildSeasonView(league, snap, world(today))
+    for (const m of v.lineup!.moves.filter((x) => /better start/.test(x.why))) {
+      swaps++
+      assert.ok(m.effect!.win!.after >= m.effect!.win!.before - 1e-9, `${league.id} ${today}: ${m.why} — ${m.effect!.summary}`)
+    }
+    const zion = players.find((p) => p.name === 'Zion Williamson')!.id
+    if (league === hoops && today === '2026-11-18') assert.ok(!v.lineup!.moves.some((m) => m.bench === zion), 'Zion stays in')
+  }
+  assert.ok(swaps > 0, 'some better starts were checked')
+})

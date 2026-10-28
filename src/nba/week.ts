@@ -63,7 +63,8 @@ export interface Man {
 }
 
 /** A player's expected line in one game, if he plays, and the chance that he does. */
-export interface GameOutlook { box: Box; play: number }
+/** `min`: his projected minutes for the game, where worked out. */
+export interface GameOutlook { box: Box; play: number; min?: number }
 
 export interface WeekInput {
   men: Man[]

@@ -11,6 +11,7 @@
 import { Fragment, useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { SeasonView } from '../../../nba/seasonView'
 import type { CatRace } from '../../../nba/matchup'
+import type { MoveEffect } from '../../../nba/inseason'
 import type { Cat } from '../../../nba/value'
 import { LeagueSize } from './LeagueSize'
 
@@ -326,7 +327,7 @@ function Today({ v }: { v: SeasonView }) {
         {actions > 0 && (
           <ul className="nl-moves">
             {l.moves.map((m) => (
-              <li key={m.start}><b>Start {name(m.start)}</b>{m.bench && <> for <b>{name(m.bench)}</b></>}<span className="nl-why">{m.why}{m.by ? ` · by ${time(m.by)}` : ''}</span></li>
+              <li key={m.start}><b>Start {name(m.start)}</b>{m.bench && <> for <b>{name(m.bench)}</b></>}<span className="nl-why">{m.why}{m.by ? ` · by ${time(m.by)}` : ''}</span><MoveWhy e={m.effect} /></li>
             ))}
             {l.ilMoves.map((m) => (
               <li key={m.id}><b className="nl-amber">{m.action === 'to-il' ? `Move ${m.name} to IL` : `Take ${m.name} off IL`}</b><span className="nl-why">{m.why}</span></li>
@@ -348,6 +349,26 @@ function Today({ v }: { v: SeasonView }) {
 }
 
 /**
+ * Why a start, in numbers: what he adds tonight over the player benched (a turnover more is red), the minutes each is
+ * projected for, the week's category races it moves, and the chance of winning the week as set and with the move.
+ */
+function MoveWhy({ e }: { e: MoveEffect | undefined }) {
+  if (!e) return null
+  const sign = (d: number, digits = 1) => `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(digits)}`
+  const minutes = e.min.start != null && e.min.bench != null && Math.abs(e.min.start - e.min.bench) >= 2
+  return (
+    <span className="nl-movewhy" title="Tonight: his projected line less the benched player's, each at his chance to play. Then this week's chance to win each category it moves, and the week, as the lineup stands → with the move; and the categories you expect to win this week, more or fewer">
+      {e.points != null && <span className={`nl-catchip ${e.points >= 0 ? 'up' : 'down'}`}>{sign(e.points)} FP tonight</span>}
+      {e.points == null && e.stats.map((s) => <span key={s.cat} className={`nl-catchip ${(s.cat === 'to' ? -s.diff : s.diff) > 0 ? 'up' : 'down'}`}>{sign(s.diff)} {LABEL[s.cat]}</span>)}
+      {minutes && <span className={`nl-catchip ${e.min.start! > e.min.bench! ? 'up' : 'down'}`}>{Math.round(e.min.start!)} min vs {Math.round(e.min.bench!)}</span>}
+      {e.races.slice(0, 3).map((r) => <span key={r.cat} className={`nl-catchip ${r.after > r.before ? 'up' : 'down'}`}>{LABEL[r.cat]} {pct(r.before)}→{pct(r.after)}</span>)}
+      {e.win && <span className={`nl-catchip ${e.win.after > e.win.before + 0.005 ? 'up' : e.win.after < e.win.before - 0.005 ? 'down' : 'flat'}`}>week {pct(e.win.before)}→{pct(e.win.after)}</span>}
+      {e.cats && <span className={`nl-catchip ${e.cats.after > e.cats.before + 0.005 ? 'up' : e.cats.after < e.cats.before - 0.005 ? 'down' : 'flat'}`}>{sign(e.cats.after - e.cats.before, 2)} cats expected</span>}
+    </span>
+  )
+}
+
+/**
  * Tomorrow's lineup as set, a day ahead: Yahoo keeps a lineup for each day, and one left as today's can start players
  * whose teams do not play while bench players who do sit (2026-10-20: Harden, Murray and Allen started a Wednesday
  * their teams were off, Wilson, Powell and Turner on the bench). Shown whenever tomorrow's needs a change; a quiet
@@ -365,7 +386,7 @@ function Tomorrow({ v }: { v: SeasonView }) {
       <div className="nl-acth">Tomorrow, {dateWord(t.date)}: {t.moves.length} change{t.moves.length === 1 ? '' : 's'} to the lineup as set{lost ? <span className="nl-cost"> · {lost} start{lost === 1 ? '' : 's'} lost otherwise</span> : null}</div>
       <ul className="nl-moves">
         {t.moves.map((m) => (
-          <li key={m.start}><b>Start {name(m.start)}</b>{m.bench && <> for <b>{name(m.bench)}</b></>}<span className="nl-why">{m.why}{m.by ? ` · his game tips ${time(m.by)}` : ''}</span></li>
+          <li key={m.start}><b>Start {name(m.start)}</b>{m.bench && <> for <b>{name(m.bench)}</b></>}<span className="nl-why">{m.why}{m.by ? ` · his game tips ${time(m.by)}` : ''}</span><MoveWhy e={m.effect} /></li>
         ))}
       </ul>
       <div className="nl-acts nl-dim">Yahoo keeps a lineup for each day: set tomorrow's in Yahoo (pick the date) any time before each tip.</div>

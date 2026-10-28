@@ -181,6 +181,7 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-catchip.up { color: var(--green); border-color: color-mix(in srgb, var(--green) 50%, var(--line)); }
 .nl-catchip.down { color: var(--red); border-color: color-mix(in srgb, var(--red) 50%, var(--line)); }
 .nl-catchip.flat { color: var(--muted); }
+.nl-movewhy { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.2rem; }
 
 /* Your players this week: a row each, the categories in play highlighted. */
 .nl-scroll { overflow-x: auto; }
