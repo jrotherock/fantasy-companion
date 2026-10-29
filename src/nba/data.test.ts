@@ -168,4 +168,11 @@ test('real minutes are trusted after a few games, what he does per minute only s
   const cam = { ...dunn, id: 'cj', projection: { ...dunn.projection, perGame: { ...dunn.projection.perGame, min: 32 } } }
   const hurt = withForm(cam, [{ id: 'cj', date: '2026-10-22', team: 'DEN', min: 11, box: box(5, 0) }])
   assert.equal(hurt.projection!.perGame.min, 32)
+  // Short games that are most of his games are his role (Filipowski, projected 21.5, played 9, 8 and 8): they count.
+  const fil = { ...dunn, id: 'kf', projection: { ...dunn.projection, perGame: { ...dunn.projection.perGame, min: 21.5 } } }
+  const role = withForm(fil, ['2026-10-22', '2026-10-24', '2026-10-26'].map((date, i) => ({ id: 'kf', date, team: 'UTA', min: [9, 8, 8][i], box: box(3, 0) })))
+  assert.ok(Math.abs(role.projection!.perGame.min - (21.5 + (25 / 3 - 21.5) * 3 / (3 + MIN_FORM_GAMES))) < 1e-9, `minutes ${role.projection!.perGame.min}`)
+  // Two short games among five are still games cut short.
+  const mixed = withForm(fil, [22, 6, 22, 7, 22].map((min, i) => ({ id: 'kf', date: `2026-10-2${i}`, team: 'UTA', min, box: box(8, 1) })))
+  assert.ok(Math.abs(mixed.projection!.perGame.min - (21.5 + (22 - 21.5) * 3 / (3 + MIN_FORM_GAMES))) < 1e-9, `minutes ${mixed.projection!.perGame.min}`)
 })

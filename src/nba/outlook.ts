@@ -91,8 +91,12 @@ export function withForm(p: NbaPlayer, logs: GameLog[]): NbaPlayer & { formGames
   const w = games / (games + FORM_GAMES)
   const tot = mine.reduce((acc, l) => { for (const k of Object.keys(acc) as (keyof Box)[]) acc[k] += l.box[k]; return acc }, emptyBox())
   const g = p.projection.perGame, s = p.projection.shooting
-  // Minutes: his real ones, games cut short left out, trusted after a few games.
-  const full = mine.filter((l) => !(g.min > 0 && l.min < g.min / 2))
+  // Minutes: his real ones, games cut short left out, trusted after a few games. Short games that are most of his
+  // games are his role, not games cut short: they count (2026-10-29: Filipowski's 9, 8 and 8 minutes were all left
+  // out, and he stayed at a projected 21).
+  const short = (l: GameLog) => g.min > 0 && l.min < g.min / 2
+  const shorts = mine.filter(short).length
+  const full = shorts >= 2 && shorts * 2 > games ? mine : mine.filter((l) => !short(l))
   const realMin = full.length ? full.reduce((t, l) => t + l.min, 0) / full.length : null
   const wm = full.length / (full.length + MIN_FORM_GAMES)
   const min = realMin == null ? g.min : g.min * (1 - wm) + realMin * wm
