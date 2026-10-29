@@ -2560,6 +2560,15 @@ const server = createServer(async (req, res) => {
              * on the bench.
              */
             change: !c.keep.starter,
+            /*
+             * And who it would be a substitution for. A call between two men
+             * on the bench named neither the slot's occupant nor the fact
+             * that there was one.
+             */
+            displaces: c.displaces && {
+              id: c.displaces.id, name: c.displaces.name, pos: c.displaces.pos,
+              projected: c.displaces.projected,
+            },
           }))
           /*
            * A call the projection had already decided is only worth handing

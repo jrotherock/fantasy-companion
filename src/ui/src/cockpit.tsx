@@ -546,6 +546,9 @@ interface Detail {
           caveat: string | null
         } | null
         keep: any; alternative: any; change?: boolean
+        /** Who leaves the lineup if the preferred man comes into it. */
+        displaces?: { id: string; name: string; pos: string | null
+                      projected: number | null } | null
         /** A free agent better than both, by more than a coin flip, scored the league's way. */
         wire?: { id: string; name: string; pos: string | null; projected: number | null
                  onWaivers: boolean; over: number } | null
@@ -3121,8 +3124,17 @@ function Advice({ advice }: { advice: NonNullable<Detail['roster']>['advice'] })
      * bench — and the moment split calls joined them it was telling you that a
      * receiver tagged "in lineup" two lines below was on your bench.
      */
+    /*
+     * And who comes out for him. Both sides of a call can sit on the bench —
+     * the optimiser promotes one of them and the other is the near miss — and
+     * then "he is on your bench" was said about two men while the one actually
+     * in the slot was never named. Where the promotion is itself inside the
+     * coin flip the swap is not printed either, so this was the only line on
+     * the screen that could say it.
+     */
     return c.change
-      ? <>{why} — <b className="ckcc-act">he is on your bench</b></>
+      ? <>{why} — <b className="ckcc-act">he is on your bench</b>{c.displaces
+          ? <> and would come in for <b>{c.displaces.name}</b></> : null}</>
       : <>{why} — <b className="ckcc-keep">he is the one you are starting</b></>
   }
 

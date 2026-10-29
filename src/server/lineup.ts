@@ -192,6 +192,19 @@ export interface CloseCall {
    * is only worth showing if other signals contradict it.
    */
   tight: boolean
+  /**
+   * Who leaves the lineup if `keep` comes into it, where `keep` is on the
+   * bench. Null when he is already starting and nothing has to move.
+   *
+   * Without it a call between two benched players named neither the slot's
+   * occupant nor the fact that one existed: "A or B, and he is on your bench"
+   * for two men you are not starting, while the man you are went unmentioned.
+   * Worse where the promotion itself is inside the coin flip, because then
+   * the swap is not printed either and nothing on the screen says who the
+   * comparison is really against. The pairing is the swap's own, so the card
+   * and the advice above it name the same player.
+   */
+  displaces: Candidate | null
 }
 
 /**
@@ -490,6 +503,12 @@ export function advise(
       : 'nothing'
     closeCalls.push({
       slot: slots[idx].name, keep, alternative: rival, gap: Number(gap.toFixed(2)), by, tight,
+      /*
+       * Only a promotion has anybody to displace, and only a benched man is
+       * ever promoted — so a starter finds no swap here and the answer is
+       * null without having to ask whether he is one.
+       */
+      displaces: swaps.find((x) => x.in.id === keep.id)?.out ?? null,
     })
   }
   closeCalls.sort((a, b) => a.gap - b.gap)

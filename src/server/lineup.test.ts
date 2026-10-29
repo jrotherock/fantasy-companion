@@ -525,3 +525,50 @@ test('a bye does not win a tie on a stale consensus rank', () => {
   ])
   assert.equal(best.get(0)?.name, 'A Playing Back')
 })
+
+test('a call between two benched players names the man who comes out', () => {
+  /*
+   * Both sides of a close call can be on the bench: the optimiser promotes
+   * one of them and the other is the near miss. The card then read "A or B,
+   * and he is on your bench" about two men you are not starting, with the one
+   * you are never mentioned — which is a comparison the reader cannot place.
+   */
+  const slots = slotsFor({}, [{ name: 'W/R/T', eligible: ['RB', 'WR', 'TE'], count: 1 }])
+  const out = advise(slots, [
+    { id: 'c', name: 'Starter C', pos: 'RB', projected: 10.0, starter: true, injuryStatus: null },
+    { id: 'a', name: 'Bench A', pos: 'RB', projected: 12.0, starter: false, injuryStatus: null },
+    { id: 'b', name: 'Bench B', pos: 'RB', projected: 11.9, starter: false, injuryStatus: null },
+  ])
+  assert.equal(out.closeCalls.length, 1)
+  const [cc] = out.closeCalls
+  assert.equal(cc.keep.name, 'Bench A')
+  assert.equal(cc.alternative.name, 'Bench B')
+  assert.equal(cc.displaces?.name, 'Starter C', 'the slot had an occupant and the card must say so')
+  assert.equal(cc.displaces?.id, out.swaps.find((s) => s.in.id === 'a')?.out?.id,
+    'and the same one the swap above it names, not a second opinion')
+})
+
+test('the man who comes out is still named when the promotion is itself a coin flip', () => {
+  // The worse case: a gain under COIN_FLIP is not printed as a swap at all,
+  // so the close call is the only line left that can say who is involved.
+  const slots = slotsFor({}, [{ name: 'W/R/T', eligible: ['RB', 'WR', 'TE'], count: 1 }])
+  const out = advise(slots, [
+    { id: 'c', name: 'Starter C', pos: 'RB', projected: 11.5, starter: true, injuryStatus: null },
+    { id: 'a', name: 'Bench A', pos: 'RB', projected: 12.0, starter: false, injuryStatus: null },
+    { id: 'b', name: 'Bench B', pos: 'RB', projected: 11.9, starter: false, injuryStatus: null },
+  ])
+  assert.equal(out.swaps.filter((s) => !s.close).length, 0, 'nothing is printed as a swap here')
+  assert.equal(out.closeCalls[0].displaces?.name, 'Starter C')
+})
+
+test('nothing is displaced when the man preferred is already starting', () => {
+  // There is no substitution to describe, and inventing one would read as an
+  // instruction to make a change the optimiser did not ask for.
+  const slots = slotsFor({}, [{ name: 'W/R/T', eligible: ['RB', 'WR', 'TE'], count: 1 }])
+  const out = advise(slots, [
+    { id: 'c', name: 'Starter C', pos: 'RB', projected: 12.0, starter: true, injuryStatus: null },
+    { id: 'b', name: 'Bench B', pos: 'RB', projected: 11.9, starter: false, injuryStatus: null },
+  ])
+  assert.equal(out.closeCalls[0].keep.name, 'Starter C')
+  assert.equal(out.closeCalls[0].displaces, null)
+})
