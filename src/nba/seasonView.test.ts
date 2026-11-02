@@ -827,6 +827,16 @@ test('after the last game of a matchup week the screens plan the next one; a two
   assert.equal(v.week!.start, '2026-10-26')
   const opp = wk2.pairs.find((p) => p.includes('4'))!.find((id) => id !== '4')
   assert.equal(v.week!.opponent!.id, opp)
+  // Sunday night, before midnight: Yahoo's adds are still last week's, so the moves wait for midnight.
+  const night = buildSeasonView(league, r.snap, { ...r.world, now: Date.parse('2026-10-26T05:30:00Z') })
+  assert.equal(night.addsOpen, '2026-10-26')
+  const whens = [night.verdict?.when, ...(night.addPlan?.steps ?? []).map((st) => st.when)].filter((x): x is string => !!x)
+  assert.ok(whens.length > 0 && whens.every((x) => !/\bnow\b/.test(x)), `waits for midnight: ${whens.join('; ')}`)
+  assert.ok(whens.some((x) => x.includes('at midnight')))
+  // Past midnight: open, as planned.
+  const after = buildSeasonView(league, r.snap, { ...r.world, now: Date.parse('2026-10-26T07:30:00Z') })
+  assert.equal(after.addsOpen, null)
+  assert.ok(!(after.addPlan?.steps ?? []).some((st) => st.when.includes('midnight')))
   // A game still going: not yet.
   assert.equal(rollWeek(snap, { ...done, scores: done.scores.map((g, i) => (i ? g : { ...g, state: 'in' as const })) }), null)
   // Not the week's last day: not yet.

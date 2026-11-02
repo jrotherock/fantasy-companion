@@ -863,6 +863,7 @@ function Adds({ v, onChange }: { v: SeasonView; onChange: () => void }) {
           {b.week && <div><b>{Math.max(0, b.week.max - b.week.used)}</b> of {b.week.max} left this week</div>}
           {b.season && <div><b>{Math.max(0, b.season.max - b.season.used)}</b> of {b.season.max} left this season</div>}
           <div className="nl-dim">{b.note}</div>
+          {v.addsOpen && <div className="nl-pre">This week's adds open at midnight: until then Yahoo still counts last week's. Every move below still works from then.</div>}
         </div>
       )}
       {cats && <PuntPicker v={v} onChange={onChange} />}

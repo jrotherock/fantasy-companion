@@ -43,6 +43,8 @@ export interface SeasonView {
   players: Record<string, PlayerRef>
   /** Before week 1: the day the season starts. Streams and lineups have nothing to say until then. */
   startsOn: string | null
+  /** The new week's first day while the screens have rolled into it ahead of the clock: Yahoo opens its adds at midnight. */
+  addsOpen: string | null
   /** The week's adds as a plan, and the season's category plan (categories leagues). */
   addPlan: AddPlan | null
   /** The one thing the Adds screen says first: do this, worth a look, or nothing worth an add. */
@@ -81,7 +83,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
     lineup: null, tomorrow: null, week: null, budget: null, pickups: [], keep: [], ilBack: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
-    standing: null, players: {}, startsOn: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null, lineupWatch: [], claims: [], pendingClaims: [], claimsFailed: [],
+    standing: null, players: {}, startsOn: null, addsOpen: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null, lineupWatch: [], claims: [], pendingClaims: [], claimsFailed: [],
   }
   if (!drafted || !me) return base
 
@@ -131,12 +133,20 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     pendingClaims,
     claimsFailed: claimsFailedNow(snap, world.today).map((f) => ({ id: f.id, at: f.at, add: ctx.resolve(f.add) ?? f.add.yahooId, addName: f.add.name, dropName: f.drop?.name ?? null })),
     catPlan: league.scoring === 'categories' && mine?.edges ? categoryPlan(ctx, snap, mine.edges, punts) : null,
+    // Rolled into the next week after Sunday's last game, but Yahoo still counts last week's adds until midnight (Pacific,
+    // as the user reads it; 2026-11-01: "ugh i can't grab him until midnight" while Adds said 0 of 10 used, now).
+    addsOpen: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(world.now) < world.today ? world.today : null,
     startsOn: (() => { const first = [...snap.weeks].map((w) => w[1]).sort()[0]; return first && first > world.today ? first : null })(),
   }
   view.verdict = verdictOf(view)
   view.weekVerdict = weekVerdictOf(view)
   // The week's plan says what the verdict says: a pair is both of the plan's first steps, at the verdict's time.
   if (view.verdict?.kind === 'pair' && view.addPlan && view.pairs[0]) view.addPlan = planWithPair(view.addPlan, view.verdict, view.pairs[0])
+  if (view.addsOpen) {
+    const later = (w: string) => w.replace(/\bnow\b/, 'at midnight')
+    if (view.verdict?.when) view.verdict.when = later(view.verdict.when)
+    if (view.addPlan) view.addPlan = { ...view.addPlan, steps: view.addPlan.steps.map((st) => ({ ...st, when: later(st.when) })) }
+  }
   // Names for every id the screen mentions, so the page needs no player file.
   const ids = new Set<string>()
   lineup?.rows.forEach((r) => ids.add(r.id))
