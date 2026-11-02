@@ -977,6 +977,14 @@ test('pending claims: read from Yahoo, planned as if they clear, and a failed on
   const vg = buildSeasonView(league, got, w)
   assert.deepEqual(vg.claimsFailed, [])
   assert.ok(!seasonAlerts(vg, w.now).some((a) => a.rule === 'nba-claimfail'))
+  // Another team has him: nothing left to act on.
+  const theirs = { ...s0, claimsFailed: failed, rosters: s0.rosters.map((r) => r.team.id === '5' ? { ...r, players: [...r.players, { ...failed[0].add, slot: 'BN' }] } : r) }
+  assert.deepEqual(buildSeasonView(league, theirs, w).claimsFailed, [])
+  // Failed in a week now over: no longer told.
+  const start = s0.weeks.find(([, a, b]) => a <= w.today && w.today <= b)?.[1] ?? w.today
+  const old = failed.map((f) => ({ ...f, at: Date.parse(`${start}T04:00:00Z`) - 3_600_000 }))
+  assert.deepEqual(buildSeasonView(league, { ...s0, claimsFailed: old }, w).claimsFailed, [])
+  assert.equal(buildSeasonView(league, { ...s0, claimsFailed: failed }, w).claimsFailed.length, 1, 'still told the week it failed')
 })
 
 test("same-day adds: a free agent playing later today counts today; without them, from tomorrow", () => {

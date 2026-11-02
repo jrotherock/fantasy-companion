@@ -37,7 +37,7 @@ import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designa
 import { diffStatus, type StatusEvent } from '../nba/news.js'
 import { buildSeasonView, losesStart, pickupAlerts, seasonAlerts, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
 import { parseEspnScoreboard, type LiveGame } from '../nba/scores.js'
-import { claimsFailedOf, rollWeek, weekOf, type Fixture, type SeasonLeague, type Snapshot, type WeekDays, type World } from '../nba/inseason.js'
+import { claimsFailedNow, claimsFailedOf, rollWeek, weekOf, type Fixture, type SeasonLeague, type Snapshot, type WeekDays, type World } from '../nba/inseason.js'
 import { daysFrom } from '../nba/week.js'
 import { addDays } from '../nba/adds.js'
 import type { Box } from '../nba/yahooSeason.js'
@@ -331,7 +331,7 @@ async function readLeague(l: SeasonLeague & { myTeamId: string | null }, force =
           s.transactions = parseTransactions(leagueBody(await yahooApi.call(`league/${key}/transactions;types=add,drop,trade;count=25`, { by: 'nba-season' })))
           s.claimsFailed = [...(s.claimsFailed ?? []), ...claimsFailedOf(gone, s.transactions, l.myTeamId, Date.now())]
         }
-        s.claimsFailed = (s.claimsFailed ?? []).filter((f) => Date.now() - f.at < 3 * 24 * HOUR)
+        s.claimsFailed = claimsFailedNow(s, today)
         s.pending = now
       })
       await run('past', async () => {

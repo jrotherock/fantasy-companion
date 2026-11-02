@@ -9,7 +9,7 @@
  */
 import type { YPlayer, YStanding, YTransaction } from '../server/yahooParse.js'
 import type { NbaPlayer, Game, YahooWeek } from './types.js'
-import type { InjuryNote } from './sources.js'
+import { easternDate, type InjuryNote } from './sources.js'
 import { NameIndex } from './join.js'
 import { CATS, categoryZ, type Cat } from './value.js'
 import { addBox, emptyBox, type Box, type NbaMatchup, type RosterDay, type SeasonSettings, type Side, type TeamMeta } from './yahooSeason.js'
@@ -688,6 +688,16 @@ export function claimsFailedOf(gone: YTransaction[], moves: YTransaction[], me: 
     if (!came) out.push({ id: g.key, at, add: add.player, drop: g.players.find((p) => p.kind === 'drop')?.player ?? null })
   }
   return out
+}
+
+/**
+ * Failed claims still worth telling: until the player comes to me another way, another team rosters him, or the
+ * matchup week the claim failed in ends (2026-10-29: Achiuwa, added as a free agent, still "didn't come").
+ */
+export function claimsFailedNow(snap: Snapshot, today: string): NonNullable<Snapshot['claimsFailed']> {
+  const rostered = new Set(snap.rosters.flatMap((r) => r.players.map((y) => y.yahooId)))
+  const start = weekOf(snap.weeks, today)?.[1] ?? today
+  return (snap.claimsFailed ?? []).filter((f) => !rostered.has(f.add.yahooId) && easternDate(f.at) >= start)
 }
 
 /**

@@ -6,7 +6,7 @@
 import type { Weights } from './matchup.js'
 import type { Cat } from './value.js'
 import { startingSeats } from './week.js'
-import { buildWeek, checkLineup, Context, moveEffects, weekValue, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
+import { buildWeek, checkLineup, claimsFailedNow, Context, moveEffects, weekValue, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
 import { addDays, addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type IlReturn, type IlSwap, type PairMove, type Pickup, type WeekPlan } from './adds.js'
 import { leagueNews, type NewsItem, type StatusEvent } from './news.js'
 import { allPlay, playoffPlan, power, tradeIdeas, type AllPlay, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
@@ -129,9 +129,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     lineupWatch: lineupWatchOf(ctx, lineup, punts),
     claims: claimsOf(ctx, snap, me.id),
     pendingClaims,
-    // A failed claim is told until the player comes another way (2026-10-29: Achiuwa's claim failed, then he was added
-    // as a free agent, and Adds still said he didn't come).
-    claimsFailed: (snap.claimsFailed ?? []).filter((f) => !snap.rosters.find((r) => r.team.id === me.id)?.players.some((y) => y.yahooId === f.add.yahooId)).map((f) => ({ id: f.id, at: f.at, add: ctx.resolve(f.add) ?? f.add.yahooId, addName: f.add.name, dropName: f.drop?.name ?? null })),
+    claimsFailed: claimsFailedNow(snap, world.today).map((f) => ({ id: f.id, at: f.at, add: ctx.resolve(f.add) ?? f.add.yahooId, addName: f.add.name, dropName: f.drop?.name ?? null })),
     catPlan: league.scoring === 'categories' && mine?.edges ? categoryPlan(ctx, snap, mine.edges, punts) : null,
     startsOn: (() => { const first = [...snap.weeks].map((w) => w[1]).sort()[0]; return first && first > world.today ? first : null })(),
   }
