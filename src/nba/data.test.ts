@@ -151,13 +151,15 @@ test('team rows count games by fantasy week, back-to-backs and each league\'s pl
 })
 
 test('real minutes are trusted after a few games, what he does per minute only slowly; a game cut short is left out', async () => {
-  const { withForm, MIN_FORM_GAMES, FORM_GAMES } = await import('./outlook.js')
+  const { withForm, MIN_FORM_GAMES, FORM_GAMES, MIN_HALF_LIFE } = await import('./outlook.js')
+  // His minutes so far, recent games counting more: each half the one MIN_HALF_LIFE games later.
+  const recent = (ms: number[]) => { const w = ms.map((_, i) => 0.5 ** ((ms.length - 1 - i) / MIN_HALF_LIFE)); return ms.reduce((t, m, i) => t + w[i] * m, 0) / w.reduce((a, b) => a + b, 0) }
   const dunn = { id: 'kd', name: 'Kris Dunn', team: 'LAC', positions: ['PG', 'SG'], projection: { gp: 70, perGame: { min: 22, pts: 5.9, reb: 2.9, ast: 2.9, stl: 1.4, blk: 0.3, tpm: 0.9, to: 1.0 }, shooting: { fgPct: 0.464, fga: 5, ftPct: 0.744, fta: 0.7 } } } as any
   const box = (pts: number, stl: number) => ({ fgm: 3, fga: 6, ftm: 1, fta: 1, tpm: 1, pts, reb: 5, ast: 6, stl, blk: 1, to: 2 })
   // Week 1 as he played it: 27, 34 and 33 minutes, ten steals.
   const logs = [{ id: 'kd', date: '2026-10-21', team: 'LAC', min: 27, box: box(7, 3) }, { id: 'kd', date: '2026-10-23', team: 'LAC', min: 34, box: box(7, 2) }, { id: 'kd', date: '2026-10-25', team: 'LAC', min: 33, box: box(15, 5) }]
   const f = withForm(dunn, logs)
-  const real = (27 + 34 + 33) / 3
+  const real = recent([27, 34, 33])
   assert.ok(Math.abs(f.projection!.perGame.min - (22 + (real - 22) * 3 / (3 + MIN_FORM_GAMES))) < 1e-9, `minutes ${f.projection!.perGame.min}`)
   assert.ok(f.projection!.perGame.min > 26, 'three games of a bigger role move him most of the way')
   // Steals per minute blended slowly, then times his new minutes: more steals than either the old line or his rate alone.
@@ -171,8 +173,14 @@ test('real minutes are trusted after a few games, what he does per minute only s
   // Short games that are most of his games are his role (Filipowski, projected 21.5, played 9, 8 and 8): they count.
   const fil = { ...dunn, id: 'kf', projection: { ...dunn.projection, perGame: { ...dunn.projection.perGame, min: 21.5 } } }
   const role = withForm(fil, ['2026-10-22', '2026-10-24', '2026-10-26'].map((date, i) => ({ id: 'kf', date, team: 'UTA', min: [9, 8, 8][i], box: box(3, 0) })))
-  assert.ok(Math.abs(role.projection!.perGame.min - (21.5 + (25 / 3 - 21.5) * 3 / (3 + MIN_FORM_GAMES))) < 1e-9, `minutes ${role.projection!.perGame.min}`)
+  assert.ok(Math.abs(role.projection!.perGame.min - (21.5 + (recent([9, 8, 8]) - 21.5) * 3 / (3 + MIN_FORM_GAMES))) < 1e-9, `minutes ${role.projection!.perGame.min}`)
   // Two short games among five are still games cut short.
   const mixed = withForm(fil, [22, 6, 22, 7, 22].map((min, i) => ({ id: 'kf', date: `2026-10-2${i}`, team: 'UTA', min, box: box(8, 1) })))
   assert.ok(Math.abs(mixed.projection!.perGame.min - (21.5 + (22 - 21.5) * 3 / (3 + MIN_FORM_GAMES))) < 1e-9, `minutes ${mixed.projection!.perGame.min}`)
+  // A bigger role lately counts for more than his early games: 20 minutes for six games, then 30 for six.
+  const ms = [20, 20, 20, 20, 20, 20, 30, 30, 30, 30, 30, 30]
+  const grew = withForm(fil, ms.map((min, i) => ({ id: 'kf', date: `2026-11-${String(i + 1).padStart(2, '0')}`, team: 'UTA', min, box: box(8, 1) })))
+  const wm = ms.length / (ms.length + MIN_FORM_GAMES)
+  assert.ok(Math.abs(grew.projection!.perGame.min - (21.5 * (1 - wm) + recent(ms) * wm)) < 1e-9)
+  assert.ok(grew.projection!.perGame.min > 21.5 * (1 - wm) + 25 * wm + 0.5, `recent games count more: ${grew.projection!.perGame.min}`)
 })

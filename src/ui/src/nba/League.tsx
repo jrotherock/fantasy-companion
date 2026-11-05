@@ -12,6 +12,7 @@ import { Fragment, useCallback, useEffect, useState, type ReactNode } from 'reac
 import type { SeasonView } from '../../../nba/seasonView'
 import type { CatRace } from '../../../nba/matchup'
 import type { MoveEffect } from '../../../nba/inseason'
+import type { StartSit } from '../../../nba/startsit'
 import type { Cat } from '../../../nba/value'
 import { LeagueSize } from './LeagueSize'
 
@@ -336,6 +337,7 @@ function Today({ v }: { v: SeasonView }) {
         )}
       </div>
       <Tomorrow v={v} />
+      <StartSitCard v={v} />
       {gamesToday
         ? <>
             <RosterGroup title="Playing tonight" rows={tonight} points={v.league.points} total />
@@ -365,6 +367,59 @@ function MoveWhy({ e }: { e: MoveEffect | undefined }) {
       {e.win && <span className={`nl-catchip ${e.win.after > e.win.before + 0.005 ? 'up' : e.win.after < e.win.before - 0.005 ? 'down' : 'flat'}`}>week {pct(e.win.before)}→{pct(e.win.after)}</span>}
       {e.cats && <span className={`nl-catchip ${e.cats.after > e.cats.before + 0.005 ? 'up' : e.cats.after < e.cats.before - 0.005 ? 'down' : 'flat'}`}>{sign(e.cats.after - e.cats.before, 2)} cats expected</span>}
     </span>
+  )
+}
+
+/**
+ * Start/sit: any two of mine on a day this week, which to start and how sure (src/nba/startsit.ts). How sure is
+ * backtested: a coin flip is right about half the time, "confident" about four times in five.
+ */
+function StartSitCard({ v }: { v: SeasonView }) {
+  const rows = (v.lineup?.rows ?? []).filter((r) => r.slot !== 'IL' && r.slot !== 'IL+')
+  const days = [...new Set([v.today, ...(v.week?.days ?? []).map((d) => d.date).filter((d) => d >= v.today)])].sort()
+  const [date, setDate] = useState(days[0])
+  const [a, setA] = useState('')
+  const [b, setB] = useState('')
+  const [res, setRes] = useState<StartSit | { error: string } | null>(null)
+  useEffect(() => {
+    if (!a || !b || a === b) { setRes(null); return }
+    let live = true
+    fetch(`/api/nba/season/${v.league.id}/startsit?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}&date=${date}`)
+      .then((r) => r.json()).then((x) => { if (live) setRes(x) }).catch(() => { if (live) setRes({ error: 'could not reach the server' }) })
+    return () => { live = false }
+  }, [a, b, date, v.league.id, v.at])
+  if (rows.length < 2) return null
+  const pick = (val: string, set: (x: string) => void, other: string, label: string) => (
+    <select className="nl-ss-sel" value={val} onChange={(e) => set(e.target.value)} aria-label={label}>
+      <option value="">{label}</option>
+      {rows.filter((r) => r.id !== other).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+    </select>
+  )
+  const ok = res && !('error' in res) ? res : null
+  const basis = ok?.basis === 'week' ? "by what each does for this week's matchup" : ok?.basis === 'points' ? 'by fantasy points' : 'by overall value'
+  return (
+    <div className="nl-act nl-ss">
+      <div className="nl-acth">Start/Sit <span className="nl-dim">· any two of yours</span></div>
+      <div className="nl-ss-pick">
+        {pick(a, setA, b, 'First player')}
+        <span className="nl-dim">or</span>
+        {pick(b, setB, a, 'Second player')}
+        <select className="nl-ss-sel" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Day">
+          {days.map((d) => <option key={d} value={d}>{d === v.today ? 'Today' : dateWord(d)}</option>)}
+        </select>
+      </div>
+      {res && 'error' in res && <div className="nl-dim">{res.error}</div>}
+      {ok && (
+        <div className="nl-ss-out">
+          <div className="nl-ss-head">{ok.pick && <><span className={`nl-ss-sure ${ok.sureness.replace(' ', '-')}`}>{ok.sureness}</span> </>}<b>{ok.headline}</b></div>
+          <ul className="nl-ss-why">
+            {ok.reasons.map((r, i) => <li key={i}>{r}</li>)}
+            {ok.flip && <li className="nl-amber">{ok.flip}</li>}
+          </ul>
+          <div className="nl-dim">Judged {basis}{ok.lock ? ` · first lock ${time(ok.lock)}` : ''}</div>
+        </div>
+      )}
+    </div>
   )
 }
 

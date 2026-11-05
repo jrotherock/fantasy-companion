@@ -15,6 +15,7 @@ import { CATS, categoryZ, type Cat } from './value.js'
 import { addBox, emptyBox, type Box, type NbaMatchup, type RosterDay, type SeasonSettings, type Side, type TeamMeta } from './yahooSeason.js'
 import { daysFrom, projectWeek, seat, startingSeats, type GameOutlook, type Man, type WeekOutlook } from './week.js'
 import { categoryWeek, pointsOf, pointsWeek, type PointsOdds, type SideOutlook, type WeekOdds, type Weights } from './matchup.js'
+import { againstTeam, allowedFrom, groupOf, OPP_STRENGTH, type Allowed } from './opponent.js'
 import { daysBetween, designation, HEALTHY_PLAY, perGameBox, playChance, withForm, type Designation, type GameLog } from './outlook.js'
 import { typicalWeek, type Member, type Noise } from './strength.js'
 import { teamGame, type LiveGame } from './scores.js'
@@ -94,6 +95,10 @@ export interface World {
   now: number
   /** Today's date in US Eastern, the league's calendar. */
   today: string
+  /** Last season's opponent totals, where each team's factor starts (data/nba/opponent-2025.json). */
+  opponentPrior?: Allowed | null
+  /** How far a line moves toward its opponent's factors (OPP_STRENGTH); 0 leaves it alone. */
+  opponentStrength?: number
 }
 
 const YAHOO_TEAM: Record<string, string> = { GS: 'GSW', NO: 'NOP', NY: 'NYK', SA: 'SAS', PHO: 'PHX', UTAH: 'UTA', WSH: 'WAS', BKLYN: 'BKN', BRK: 'BKN', CHO: 'CHA' }
@@ -149,11 +154,14 @@ export class Context {
   private readonly status = new Map<string, Designation>()
   private readonly z = new Map<string, Record<Cat, number>>()
   readonly teamDates = new Map<string, string[]>()
+  /** This season's opponent totals so far, from the logs. */
+  readonly allowed: Allowed
 
   constructor(readonly league: SeasonLeague, readonly world: World, yahooStatus: Map<string, string | null> = new Map()) {
     const logs = new Map<string, GameLog[]>()
     for (const l of world.logs) (logs.get(l.id) ?? logs.set(l.id, []).get(l.id)!).push(l)
     for (const p of world.players) this.byId.set(p.id, withForm(p, logs.get(p.id) ?? []))
+    this.allowed = allowedFrom(world.logs, world.schedule, (id) => { const p = this.byId.get(id); return p ? groupOf(p.positions) : null })
     this.index = new NameIndex(world.players.map((p) => ({ id: p.id, name: p.name, team: p.team })))
     for (const p of world.players) if (p.yahoo?.yahooId) this.byYahoo.set(p.yahoo.yahooId, p.id)
     for (const i of world.injuries) {
@@ -260,12 +268,15 @@ export class Context {
     if (!p) return null
     // His own line, with minutes from teammates who will miss the date; or, inside a stretch you set, those minutes
     // and no share on top.
-    const box = perGameBox(p)
+    let box = perGameBox(p)
     const min = p.projection?.perGame.min ?? 0
     const win = this.world.windows?.get(id)
     const more = win && date < win.until ? win.min - min : this.minutesFrom(id, date)
     if (more !== 0 && min > 0) { const f = Math.max(0, (min + more) / min); for (const k of Object.keys(box) as (keyof Box)[]) box[k] *= f }
     let mins = min > 0 ? Math.max(0, min + more) : min
+    // Against tonight's opponent: what it gives up to his kind of player, a minute.
+    const g = gameToday(this.world.schedule, p.team, date)
+    if (g) box = againstTeam(box, this.allowed, this.world.opponentPrior ?? null, g.vs, groupOf(p.positions), this.world.opponentStrength ?? OPP_STRENGTH)
     const sleeper = this.world.dayProj.get(`${id}|${date}`)
     if (sleeper) {
       const w = this.world.sleeperWeight ?? SLEEPER_WEIGHT

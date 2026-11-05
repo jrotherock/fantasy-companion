@@ -1087,3 +1087,24 @@ test('a better start never costs the week: seating goes by what each line tonigh
   }
   assert.ok(swaps > 0, 'some better starts were checked')
 })
+
+test("a line is moved by tonight's opponent: a team that gives his kind of player more a minute lifts it, and only that night", () => {
+  const today = '2026-11-18'
+  const p = players.find((x) => x.positions[0] === 'PG' && x.projection && x.projection.perGame.min >= 30 && schedule.filter((g) => g.date >= today && (g.home === x.team || g.away === x.team)).length >= 2)!
+  const [g1, g2] = schedule.filter((g) => g.date >= today && (g.home === p.team || g.away === p.team))
+  const vs = g1.home === p.team ? g1.away : g1.home
+  const other = g2.home === p.team ? g2.away : g2.home
+  assert.notEqual(vs, other)
+  // Last season, tonight's opponent gave guards half again the league's points and threes a minute.
+  const L = { min: 1000, s: { fgm: 200, fga: 400, ftm: 80, fta: 100, tpm: 60, pts: 540, reb: 150, ast: 150, stl: 30, blk: 10, to: 50 } }
+  const prior = { league: { G: L, F: L, C: L }, teams: { [`${vs}|G`]: { min: 1000, s: { ...L.s, pts: 810, tpm: 90 } } }, games: { [vs]: 82 } }
+  const lg = { ...hoops, myTeamId: '4' }
+  const plain = new Context(lg, { ...world(today), opponentPrior: prior })
+  const off = new Context(lg, { ...world(today), opponentPrior: prior, opponentStrength: 0 })
+  const on = plain.outlook(p.id, g1.date)!.box, base = off.outlook(p.id, g1.date)!.box
+  assert.ok(Math.abs(on.pts / base.pts - 1.25) < 1e-9, `half strength: points ×1.25, got ${on.pts / base.pts}`)
+  assert.ok(Math.abs(on.tpm / base.tpm - 1.25) < 1e-9)
+  assert.ok(Math.abs(on.reb / base.reb - 1) < 1e-9, 'what that team gives up as the league does is left alone')
+  // His next game is against someone else: no change.
+  assert.ok(Math.abs(plain.outlook(p.id, g2.date)!.box.pts - off.outlook(p.id, g2.date)!.box.pts) < 1e-9)
+})

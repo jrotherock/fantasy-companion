@@ -6,7 +6,8 @@
 import type { Weights } from './matchup.js'
 import type { Cat } from './value.js'
 import { startingSeats } from './week.js'
-import { buildWeek, checkLineup, claimsFailedNow, Context, moveEffects, weekValue, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
+import { startSit, type StartSit } from './startsit.js'
+import { buildWeek, checkLineup, claimsFailedNow, Context, rosterIds, moveEffects, weekValue, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
 import { addDays, addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type IlReturn, type IlSwap, type PairMove, type Pickup, type WeekPlan } from './adds.js'
 import { leagueNews, type NewsItem, type StatusEvent } from './news.js'
 import { allPlay, playoffPlan, power, tradeIdeas, type AllPlay, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
@@ -66,6 +67,21 @@ export interface SeasonView {
   catPlan: CategoryPlan | null
 }
 
+
+/**
+ * Start/sit for two of my players on a day (src/nba/startsit.ts), from the snapshot and world the screen is built
+ * from. Both must be on my roster and not on IL.
+ */
+export function startSitView(league: SeasonLeague & { myTeamId?: string | null }, snap: Snapshot, world: World, aId: string, bId: string, date = world.today): StartSit | { error: string } {
+  const ctx = new Context(league, world)
+  const me = myTeamOf(snap, league.myTeamId)
+  if (!me) return { error: 'no team of yours in this league' }
+  if (aId === bId) return { error: 'pick two different players' }
+  // Reading the roster sets each player's Yahoo status, as the screen does.
+  const ids = new Set(rosterIds(ctx, snap.rosters.find((r) => r.team.id === me.id)?.players ?? []).map((x) => x.id))
+  if (!ids.has(aId) || !ids.has(bId)) return { error: 'both players must be on your roster, off IL' }
+  return startSit(ctx, snap, me.id, date, aId, bId)
+}
 
 export function myTeamOf(snap: Snapshot, configured?: string | null): { id: string; name: string } | null {
   const t = snap.rosters.find((r) => r.team.mine)?.team

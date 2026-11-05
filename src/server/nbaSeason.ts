@@ -21,6 +21,7 @@
  *   GET  tiles               one tile per league, for the home screen
  *   GET  exposure            players rostered in more than one league
  *   GET  all                 every league's screen and the drafts under way
+ *   GET  :id/startsit        two of my players on a day: which to start, how sure (?a=&b=&date=)
  *   POST :id/refresh         read this league again now
  *   POST :id/snapshot        a test league's snapshot, by hand
  */
@@ -35,8 +36,9 @@ import { parseGameWeeks, parseLeagueRosters, parseNbaScoreboard, parsePlayers, p
 import { gameDay } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
 import { diffStatus, type StatusEvent } from '../nba/news.js'
-import { buildSeasonView, losesStart, pickupAlerts, seasonAlerts, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
+import { buildSeasonView, startSitView, losesStart, pickupAlerts, seasonAlerts, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
 import { parseEspnScoreboard, type LiveGame } from '../nba/scores.js'
+import type { Allowed } from '../nba/opponent.js'
 import { claimsFailedNow, claimsFailedOf, rollWeek, weekOf, type Fixture, type SeasonLeague, type Snapshot, type WeekDays, type World } from '../nba/inseason.js'
 import { daysFrom } from '../nba/week.js'
 import { addDays } from '../nba/adds.js'
@@ -158,9 +160,12 @@ async function refreshSleeper(weeks: Snapshot['weeks'], today: string) {
 // ── The world every league shares ──
 
 let schedule: Game[] | null = null
+/** Last season's opponent totals, read once (src/nba/opponent.ts). */
+let opponentPrior: Allowed | null | undefined
 let noise: World['noise'] | null = null
 
 function world(leagueId: string): World {
+  opponentPrior ??= existsSync(`${DATA}/opponent-2025.json`) ? JSON.parse(readFileSync(`${DATA}/opponent-2025.json`, 'utf8')) as Allowed : null
   schedule ??= JSON.parse(readFileSync(`${DATA}/schedule.json`, 'utf8')).games as Game[]
   noise ??= { sdWeekly: Object.fromEntries(Object.entries<any>(JSON.parse(readFileSync(`${DATA}/category-noise.json`, 'utf8')).raw).map(([k, v]) => [k, v.sdWeekly])) as any }
   const live = sleeper.players?.byId ?? {}
@@ -184,6 +189,7 @@ function world(leagueId: string): World {
     now,
     today: gameDay(now),
     scores: scores?.date === gameDay(now) ? scores.games : [],
+    opponentPrior,
   }
 }
 
@@ -608,6 +614,17 @@ export async function handleNbaSeason(parts: string[], req: any, res: any, json:
   const l = leagues().find((x) => x.id === id)
   if (!l) { json(res, 404, { error: 'no such league' }); return true }
   if (req.method === 'GET' && !action) { json(res, 200, seasonView(id)); return true }
+  if (req.method === 'GET' && action === 'startsit') {
+    // Two of my players on a day (?a=&b=&date=, app ids; date defaults to today): which to start, how sure.
+    const q = new URL(req.url ?? '', 'http://x').searchParams
+    const a = q.get('a'), b = q.get('b'), date = q.get('date')
+    if (!a || !b || (date && !/^\d{4}-\d{2}-\d{2}$/.test(date))) { json(res, 400, { error: 'a and b (player ids), date YYYY-MM-DD' }); return true }
+    const snap = snapOf(l.id), w = world(l.id)
+    const rolled = rollWeek(snap, w)
+    const out = startSitView({ ...l, punts: seasonPunts(l.id), keep: seasonKeep(l.id) }, rolled?.snap ?? snap, rolled?.world ?? w, a, b, date ?? (rolled?.world ?? w).today)
+    json(res, 'error' in out ? 400 : 200, out)
+    return true
+  }
   if (req.method === 'POST' && action === 'minutes') {
     // A player's minutes for a stretch ({playerId, min, until}; min null clears it), in every league.
     const b = await body(req)
