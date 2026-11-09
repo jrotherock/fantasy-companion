@@ -45,6 +45,7 @@ import { addDays } from '../nba/adds.js'
 import type { Box } from '../nba/yahooSeason.js'
 import type { Game, NbaPlayer } from '../nba/types.js'
 import { CATS } from '../nba/value.js'
+import { record, review, type OddsHistory } from '../nba/history.js'
 
 const DATA = 'data/nba'
 const DIR = join(STATE_DIR, 'nba-season')
@@ -405,7 +406,32 @@ function buildView(l: SeasonLeague & { myTeamId: string | null }): SeasonView {
   const rolled = rollWeek(snap, w)
   const view = buildSeasonView({ ...l, punts: seasonPunts(l.id), keep: seasonKeep(l.id) }, rolled?.snap ?? snap, rolled?.world ?? w, status.events)
   views.set(l.id, { at: Date.now(), view })
+  saveOdds(l.id, view)
   return view
+}
+
+// ── What each screen said, day by day (src/nba/history.ts) ──
+
+let odds: OddsHistory | null = null
+let oddsWritten = 0
+const oddsFile = () => file('odds-history.json')
+function saveOdds(id: string, view: SeasonView) {
+  if (isTest(id) && !showTest()) return
+  odds ??= readJson<OddsHistory>(oddsFile(), {})
+  try {
+    const had = Object.keys(odds[id] ?? {}).length
+    // Written at most every few minutes (a view is worked out again every minute while games are on), and at once
+    // for a new day, so the morning's first read is never lost to a restart.
+    if (record(odds, id, view, clock()) && (Object.keys(odds[id] ?? {}).length !== had || Date.now() - oddsWritten > 3 * MIN)) {
+      writeFileSync(oddsFile(), JSON.stringify(odds)); oddsWritten = Date.now()
+    }
+  } catch (e) { console.warn('nba odds history:', id, String((e as Error)?.message ?? e)) }
+}
+/** A league's days read back: each week from its first read, and the saved lines against the games played. */
+export function oddsReview(id: string) {
+  odds ??= readJson<OddsHistory>(oddsFile(), {})
+  const l = leagues().find((x) => x.id === id)
+  return review(odds[id], Object.values(sleeper.logs).flatMap((x) => x.rows), l?.scoring === 'points' ? l.points ?? null : null)
 }
 
 const queued = new Set<string>()
@@ -614,6 +640,7 @@ export async function handleNbaSeason(parts: string[], req: any, res: any, json:
   const l = leagues().find((x) => x.id === id)
   if (!l) { json(res, 404, { error: 'no such league' }); return true }
   if (req.method === 'GET' && !action) { json(res, 200, seasonView(id)); return true }
+  if (req.method === 'GET' && action === 'review') { json(res, 200, oddsReview(id)); return true }
   if (req.method === 'GET' && action === 'startsit') {
     // Two of my players on a day (?a=&b=&date=, app ids; date defaults to today): which to start, how sure.
     const q = new URL(req.url ?? '', 'http://x').searchParams

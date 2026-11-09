@@ -402,6 +402,8 @@ export interface WeekVerdict {
   winBefore: number
   winAfter: number
   moves: WeekPlan['moves']
+  /** Off IL first, before the moves (Yahoo blocks adds until it is done). */
+  activations: WeekPlan['activations']
   /** What the roster left after the week is worth over the season, against the roster as it is. */
   season: number | null
   /** The races the plan moves most (category leagues). */
@@ -430,11 +432,11 @@ export function weekVerdictOf(v: SeasonView): WeekVerdict | null {
   const seasonAdds = new Set((v.verdict?.level === 'none' ? [] : v.verdict?.moves ?? []).map((m) => m.add))
   const races = (p.races ?? []).filter((r) => Math.abs(r.after - r.before) >= 0.02).sort((a, b) => Math.abs(b.after - b.before) - Math.abs(a.after - a.before)).slice(0, 4)
   return {
-    level, chance, winBefore: p.winBefore, winAfter: p.winAfter, moves: level === 'none' ? [] : p.moves, season: level === 'none' ? null : p.seasonWins, races,
+    level, chance, winBefore: p.winBefore, winAfter: p.winAfter, moves: level === 'none' ? [] : p.moves, activations: level === 'none' ? [] : p.activations, season: level === 'none' ? null : p.seasonWins, races,
     aligned: level !== 'none' && p.moves.some((m) => seasonAdds.has(m.add)),
     headline: level === 'none'
       ? (p.moves.length ? 'No add moves this week by a point' : 'No add helps this week')
-      : p.moves.map((m, i) => `${i ? 'then add' : 'Add'} ${m.name}${m.drop ? m.toIl ? ` (${m.dropName} to IL${m.ilDrop ? `, ${m.ilDropName} dropped from it` : ''})` : ` for ${m.dropName}` : ''}`).join(', '),
+      : [...p.activations.map((x, i) => `${i ? 'and' : 'Activate'} ${x.name}${x.drop && x.drop !== x.id ? ` for ${x.dropName}` : ''}`), ...p.moves.map((m, i) => `${i || p.activations.length ? 'then add' : 'Add'} ${m.name}${m.drop ? m.toIl ? ` (${m.dropName} to IL${m.ilDrop ? `, ${m.ilDropName} dropped from it` : ''})` : ` for ${m.dropName}` : ''}`)].join(', '),
   }
 }
 

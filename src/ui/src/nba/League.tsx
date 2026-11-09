@@ -13,12 +13,13 @@ import type { SeasonView } from '../../../nba/seasonView'
 import type { CatRace } from '../../../nba/matchup'
 import type { MoveEffect } from '../../../nba/inseason'
 import type { StartSit } from '../../../nba/startsit'
+import type { Review as ReviewData, OddsEntry } from '../../../nba/history'
 import type { Cat } from '../../../nba/value'
 import { LeagueSize } from './LeagueSize'
 
 const LABEL: Record<Cat, string> = { fg: 'FG%', ft: 'FT%', tpm: '3PM', pts: 'PTS', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO' }
 const pct = (x: number) => `${Math.round(x * 100)}%`
-const TABS = ['Today', 'Week', 'Adds', 'News', 'Season'] as const
+const TABS = ['Today', 'Week', 'Adds', 'News', 'Season', 'Review'] as const
 type Tab = typeof TABS[number]
 
 /**
@@ -100,6 +101,7 @@ export function NbaLeague({ id, onBack }: { id: string; onBack: () => void }) {
           {tab === 'Adds' && <Adds v={v} onChange={() => refresh()} />}
           {tab === 'News' && <News v={v} />}
           {tab === 'Season' && <Season v={v} onChange={() => refresh()} />}
+          {tab === 'Review' && <Review v={v} />}
         </>
       )}
     </div>
@@ -1019,6 +1021,8 @@ function IlBack({ v }: { v: SeasonView }) {
                   {r.drop === r.id
                     ? 'Back, he adds nothing over your roster, so dropping him is the move.'
                     : <>Rest of season <span className={effect(r.seasonWins ?? 0, 0.03)}>{wins(r.seasonWins ?? 0)}</span>{r.drop ? ` over keeping ${r.dropName}` : ''}. The moves below assume it is done.</>}
+                  {r.weekBefore != null && r.weekAfter != null && <>{' '}<WeekWin before={r.weekBefore} after={r.weekAfter} prefix="This week " />.</>}
+                  {' '}If he is ruled out, he can stay on IL and none of this is needed.
                 </div>
               </>
             : <div className="nl-dim"><b className="nl-amber">{r.name}</b> ({r.status}) is due back {dateWord(r.returns!)}: keep a spot in mind for him.</div>}
@@ -1130,6 +1134,12 @@ function WeekCard({ v }: { v: SeasonView }) {
       {d.level !== 'none' ? (
         <>
           <ol className="nl-weeksteps">
+            {(d.activations ?? []).map((x) => (
+              <li key={`il-${x.id}`}>
+                <b>Take {x.name} off IL</b>{x.drop && x.drop !== x.id ? <>, drop {x.dropName}</> : x.drop === x.id ? ' (let him go)' : ' into your open spot'}
+                <span className="nl-dim"> · first: Yahoo blocks adds while he is on IL and not out</span>
+              </li>
+            ))}
             {d.moves.map((m) => (
               <li key={m.add}>
                 {m.toIl ? <>{m.ilDrop && <><b>Drop {m.ilDropName}</b> from IL, </>}<b>move {m.dropName} to IL</b> (out; kept), <b>add {m.name}</b></> : <><b>Add {m.name}</b>{m.drop ? <>, drop {m.dropName}</> : ' into your open spot'}</>}
@@ -1489,5 +1499,174 @@ function Season({ v, onChange }: { v: SeasonView; onChange: () => void }) {
         </Section>
       )}
     </>
+  )
+}
+
+
+// ── Review ──
+
+/**
+ * The week looked back on, any time (2026-11-07: "save the odds so we can do an anytime analysis like we just did"):
+ * what the week opened at and how it moved, race by race; each side against its projection so far; past weeks'
+ * openings against how they ended; and the nightly lines saved for my players against the games they played.
+ */
+const FP_YARD: Record<string, number> = { pts: 1, reb: 1.2, ast: 1.5, stl: 3, blk: 3, to: -1 }
+const fpYard = (b: Record<string, number>, w?: Record<string, number> | null) => Object.entries(w && Object.keys(w).length ? w : FP_YARD).reduce((t, [k, x]) => t + x * (b[k] ?? 0), 0)
+const signed = (x: number, d = 1) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(d)}`
+const chanceOf = (e: OddsEntry) => e.cats?.win ?? e.points?.win ?? 0
+
+function Review({ v }: { v: SeasonView }) {
+  const [rv, setRv] = useState<ReviewData | null>(null)
+  const [err, setErr] = useState(false)
+  useEffect(() => {
+    let live = true
+    fetch(`/api/nba/season/${v.league.id}/review`).then((r) => r.json()).then((x) => { if (live) setRv(x) }).catch(() => { if (live) setErr(true) })
+    return () => { live = false }
+  }, [v.league.id, v.at])
+  const w = v.week
+  const cats = v.league.scoring === 'categories'
+  const weights = v.league.points as Record<string, number> | null
+  const thisWeek = rv?.weeks.find((x) => x.week === w?.week) ?? null
+  const past = (rv?.weeks ?? []).filter((x) => x.week !== w?.week)
+  const now = w?.odds?.win ?? w?.points?.win ?? null
+  const result = (week: number) => v.allPlay?.byWeek.find((b) => b.week === week)?.result ?? null
+  return (
+    <>
+      {err && <div className="nl-none">Could not reach the server for the saved days.</div>}
+      <Section title="This week" hint={w ? `week ${w.week}${w.opponent ? ` · against ${w.opponent.name}` : ''}` : undefined}>
+        {!w ? <div className="nl-none">No matchup this week.</div> : (
+          <>
+            <p className="nl-line">
+              {thisWeek
+                ? <>{thisWeek.days[0].date <= thisWeek.start ? 'It opened' : 'First saved'} {day(thisWeek.days[0].date)} at <b>{pct(chanceOf(thisWeek.opening))}</b>{cats && thisWeek.opening.cats ? <> ({thisWeek.opening.cats.expected.toFixed(1)} categories expected)</> : null}{thisWeek.days[0].date > thisWeek.start ? ' (saving began mid-week)' : ''}; </>
+                : <>This week's first read was not saved (saving began {rv?.weeks.length ? 'later in the week' : 'today'}); </>}
+              {now != null && <>it stands at <b className={thisWeek ? effect(now - chanceOf(thisWeek.opening), 0.03) : ''}>{pct(now)}</b> now</>}
+              {w.score.mine != null && <>, {cats ? `${w.score.mine}–${w.score.theirs} in categories` : `${w.score.mine.toFixed(1)}–${w.score.theirs!.toFixed(1)}`} so far</>}.
+            </p>
+            {thisWeek && thisWeek.days.length > 1 && (
+              <div className="nl-chips">{thisWeek.days.map((d) => <span key={d.date} className="nl-chip">{day(d.date)} <b>{pct(d.first)}</b>{Math.abs(d.last - d.first) >= 0.01 && <span className="nl-dim"> → {pct(d.last)}</span>}</span>)}</div>
+            )}
+            {cats && w.odds && (
+              <table className="nl-table nl-rv">
+                <thead><tr><th className="l">Cat</th>{thisWeek?.opening.cats && <th>{thisWeek.days[0].date <= thisWeek.start ? 'Opened' : 'First saved'}</th>}<th>So far</th><th>Projected end</th><th>Chance</th></tr></thead>
+                <tbody>
+                  {w.odds.races.map((r) => {
+                    const o = thisWeek?.opening.cats?.races.find((x) => x.cat === r.cat)
+                    const shot = (x: number) => (r.cat === 'fg' || r.cat === 'ft' ? (x * 100).toFixed(1) : Math.round(x).toString())
+                    const ch = r.win + r.tie / 2
+                    return (
+                      <tr key={r.cat}>
+                        <td className="l">{LABEL[r.cat]}</td>
+                        {thisWeek?.opening.cats && <td>{o ? <>{shot(o.mine)}–{shot(o.theirs)} <span className="nl-dim">{pct(o.win + o.tie / 2)}</span></> : '—'}</td>}
+                        <td>{shot(r.mineNow)}–{shot(r.theirsNow)}</td>
+                        <td>{shot(r.mine)}–{shot(r.theirs)}</td>
+                        <td className={o ? effect(ch - (o.win + o.tie / 2), 0.05) : ''}>{pct(ch)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+            {!cats && w.points && (
+              <p className="nl-line">
+                {thisWeek?.opening.points && <>{thisWeek.days[0].date <= thisWeek.start ? 'Opened' : 'First saved'} projected <b>{thisWeek.opening.points.mine.toFixed(0)}–{thisWeek.opening.points.theirs.toFixed(0)}</b>; </>}
+                now projected <b>{w.points.mine.toFixed(0)}–{w.points.theirs.toFixed(0)}</b>.
+              </p>
+            )}
+          </>
+        )}
+      </Section>
+
+      {w?.soFar && <AgainstProjection v={v} weights={cats ? null : weights} />}
+
+      <Section title="Past weeks" hint="how each opened, against how it ended">
+        {!past.length ? <div className="nl-none">Nothing saved yet: from now on each week keeps its first read and its last.</div> : (
+          <table className="nl-table nl-rv">
+            <thead><tr><th className="l">Week</th><th className="l">Against</th><th>Opened</th><th>Last read</th><th>Result</th></tr></thead>
+            <tbody>
+              {past.map((x) => (
+                <tr key={x.week}>
+                  <td className="l">{x.week}</td>
+                  <td className="l">{x.opponent ?? '—'}</td>
+                  <td>{pct(chanceOf(x.opening))}</td>
+                  <td>{pct(chanceOf(x.latest))}{x.latest.score.mine != null && <span className="nl-dim"> · {cats ? `${x.latest.score.mine}–${x.latest.score.theirs}` : `${Math.round(x.latest.score.mine)}–${Math.round(x.latest.score.theirs ?? 0)}`}</span>}</td>
+                  <td className={result(x.week) === 'W' ? 'nl-help' : result(x.week) === 'L' ? 'nl-hurt' : ''}>{result(x.week) ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Section>
+
+      <Section title="The season" hint="as it stands">
+        <p className="nl-line">
+          {v.standing?.rank != null && <>{ordinal(v.standing.rank)} in the standings{v.standing.w != null && <> ({v.standing.w}–{v.standing.l}{v.standing.t ? `–${v.standing.t}` : ''})</>}. </>}
+          {(() => { const me = v.power.find((p) => p.mine); return me ? <>Your roster is {ordinal(me.rank)} of {v.power.length} on strength. </> : null })()}
+          {v.allPlay && <>Against every team every week you would have won {pct(v.allPlay.allPlay)}{Math.abs(v.allPlay.luck) >= 0.1 ? (v.allPlay.luck < 0 ? ', better than your record' : ', worse than your record') : ''}.</>}
+        </p>
+      </Section>
+
+      <Section title="Projections against real games" hint="your players' lines as saved before each tip">
+        {!rv?.lines ? <div className="nl-none">No saved lines with games played yet: each night's line for your players is kept from now on.</div> : (
+          <>
+            <p className="nl-line">
+              Over {rv.lines.games} games, {rv.lines.minErr != null && <>minutes were off by <b>{rv.lines.minErr.toFixed(1)}</b> a game ({Math.abs(rv.lines.minBias!) < 0.5 ? 'no lean either way' : rv.lines.minBias! > 0 ? `${rv.lines.minBias!.toFixed(1)} high on average` : `${(-rv.lines.minBias!).toFixed(1)} low on average`}) and </>}
+              fantasy points by <b>{rv.lines.fpErr.toFixed(1)}</b> ({Math.abs(rv.lines.fpBias) < 1 ? 'no lean either way' : rv.lines.fpBias > 0 ? `${rv.lines.fpBias.toFixed(1)} high on average` : `${(-rv.lines.fpBias).toFixed(1)} low on average`}).
+            </p>
+            <table className="nl-table nl-rv">
+              <thead><tr><th className="l">Player</th><th>Games</th><th>Min: line · real</th><th>FP: line · real</th></tr></thead>
+              <tbody>
+                {rv.lines.players.slice(0, 15).map((p) => (
+                  <tr key={p.id}>
+                    <td className="l">{p.name}</td>
+                    <td>{p.games}</td>
+                    <td>{p.min != null ? p.min.toFixed(1) : '—'} · {p.realMin.toFixed(1)}</td>
+                    <td>{p.fp.toFixed(1)} · <span className={effect(p.realFp - p.fp, 2)}>{p.realFp.toFixed(1)}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="nl-note">{cats ? 'Fantasy points here are a yardstick for a whole line (points, 1.2 a rebound, 1.5 an assist, 3 a steal or block, −1 a turnover). ' : ''}Green ran above his line, red below.</p>
+          </>
+        )}
+      </Section>
+    </>
+  )
+}
+
+/** Each side this week against what its projection said for the games that counted, and who ran furthest from it. */
+function AgainstProjection({ v, weights }: { v: SeasonView; weights: Record<string, number> | null }) {
+  const sf = v.week!.soFar!
+  const cats = v.league.scoring === 'categories'
+  const side = (rows: SoFarRow[]) => {
+    const tot = (k: 'box' | 'proj') => rows.reduce((acc, r) => { for (const [s, x] of Object.entries(r[k])) acc[s] = (acc[s] ?? 0) + (x as number); return acc }, {} as Record<string, number>)
+    const act = tot('box'), proj = tot('proj')
+    const who = rows.filter((r) => r.started > 0).map((r) => ({ name: r.name, d: fpYard(r.box as any, weights) - fpYard(r.proj as any, weights) })).sort((a, b) => b.d - a.d)
+    return { act, proj, fa: fpYard(act, weights), fp: fpYard(proj, weights), up: who.filter((x) => x.d > 3).slice(0, 3), down: who.filter((x) => x.d < -3).reverse().slice(0, 3) }
+  }
+  const me = side(sf.mine), them = side(sf.theirs)
+  const sentence = (label: string, s: ReturnType<typeof side>) => (
+    <p className="nl-line">
+      <b>{label}</b> {Math.round(s.fa)} fantasy points against {Math.round(s.fp)} projected (<span className={effect(s.fa - s.fp, s.fp * 0.02)}>{signed(s.fp ? ((s.fa - s.fp) / s.fp) * 100 : 0, 0)}%</span>).
+      {s.up.length > 0 && <> Above: {s.up.map((x) => `${x.name} ${signed(x.d, 0)}`).join(', ')}.</>}
+      {s.down.length > 0 && <> Below: {s.down.map((x) => `${x.name} ${signed(x.d, 0)}`).join(', ')}.</>}
+    </p>
+  )
+  const CAT_KEYS: { c: Cat; k: string }[] = [{ c: 'pts', k: 'pts' }, { c: 'reb', k: 'reb' }, { c: 'ast', k: 'ast' }, { c: 'tpm', k: 'tpm' }, { c: 'stl', k: 'stl' }, { c: 'blk', k: 'blk' }, { c: 'to', k: 'to' }]
+  const shot = (b: Record<string, number>, m: string, a: string) => (b[a] ? ((b[m] / b[a]) * 100).toFixed(1) : '—')
+  return (
+    <Section title="Against the projection so far" hint={`the games that counted, ${sf.days.map(day).join(', ')}`}>
+      {sentence('You:', me)}
+      {sentence(`${v.week!.opponent?.name ?? 'Them'}:`, them)}
+      {cats && (
+        <table className="nl-table nl-rv">
+          <thead><tr><th className="l">You</th>{CAT_KEYS.map((x) => <th key={x.c}>{LABEL[x.c]}</th>)}<th>FG%</th><th>FT%</th></tr></thead>
+          <tbody>
+            <tr><td className="l">Real</td>{CAT_KEYS.map((x) => <td key={x.c} className={effect(x.c === 'to' ? me.proj[x.k] - me.act[x.k] : me.act[x.k] - me.proj[x.k], Math.max(1, me.proj[x.k] * 0.05))}>{Math.round(me.act[x.k] ?? 0)}</td>)}<td>{shot(me.act, 'fgm', 'fga')}</td><td>{shot(me.act, 'ftm', 'fta')}</td></tr>
+            <tr><td className="l nl-dim">Projected</td>{CAT_KEYS.map((x) => <td key={x.c} className="nl-dim">{Math.round(me.proj[x.k] ?? 0)}</td>)}<td className="nl-dim">{shot(me.proj, 'fgm', 'fga')}</td><td className="nl-dim">{shot(me.proj, 'ftm', 'fta')}</td></tr>
+          </tbody>
+        </table>
+      )}
+    </Section>
   )
 }

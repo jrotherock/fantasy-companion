@@ -7,7 +7,7 @@ import type { Cat } from './value.js'
 import { buildSeasonView, claimsOf, DO, lineupWatchOf, LOOK, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonAlerts, seasonTile, verdictOf, type SeasonView } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
 import { claimsFailedOf, Context, rollWeek, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
-import { addDays, PAIR_MARGIN, shortlistForWeek, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, SPECIALISTS, specialists, starLine, WEEK_SEASON_COST, WHATIFS, whatifFor, scoreWeek, type PairMove } from './adds.js'
+import { addDays, IL_WEEK_SLACK, PAIR_MARGIN, shortlistForWeek, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, SPECIALISTS, specialists, starLine, WEEK_SEASON_COST, WHATIFS, whatifFor, scoreWeek, type PairMove } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
 import { diffStatus } from './news.js'
@@ -603,6 +603,58 @@ test('a punted category moves no pickup over the season, and this week is still 
   assert.deepEqual(v.punts, ['ast'])
 })
 
+test('a player off IL goes back for the drop this week misses least among those nearly as good for the season, and Adds reads the week as it stands', () => {
+  const { league: l0, snap, w: w0, myIds } = realLeague('2026-10-19-hoops', { ...hoops, id: 'nba-hoops' }, '4', 18, '2026-10-25')
+  // Hoops' same-day adds: the last day of the week still takes one.
+  const league = { ...l0, sameDayAdds: true }
+  // A star from another roster, put on my IL listed questionable.
+  const mine = new Set(snap.rosters.find((r) => r.team.id === '4')!.players.map((y) => y.yahooId))
+  const idOfY = new Map(players.filter((p) => p.yahoo).map((p) => [p.yahoo!.yahooId, p.id]))
+  const P = new Map(players.map((p) => [p.id, p]))
+  const theirs = snap.rosters.filter((r) => r.team.id !== '4').flatMap((r) => r.players).map((y) => P.get(idOfY.get(y.yahooId) ?? ''))
+  const playsLeft = (id: string) => w0.schedule.filter((g) => g.date >= w0.today && g.date <= '2026-10-25' && (g.home === P.get(id)!.team || g.away === P.get(id)!.team)).length
+  // He plays today, so having him back moves the week.
+  const free = theirs.filter((p): p is NbaPlayer => !!p?.projection && !!p.team && !p.injury && !mine.has(p.yahoo!.yahooId) && playsLeft(p.id) > 0).sort((a, b) => b.projection!.perGame.pts - a.projection!.perGame.pts)[0]
+  const gtd = { ...snap, rosters: snap.rosters.map((r) => r.team.id === '4' ? { ...r, players: [...r.players, ypl(free, 'IL', 'GTD')] } : { ...r, players: r.players.filter((y) => y.yahooId !== free.yahoo!.yahooId) }) }
+  const d0 = buildSeasonView(league, gtd, w0).ilBack.find((x) => x.id === free.id)!.drop!
+  // The season's least-missed player is done for the week; another, still to play, is given his line a shade weaker,
+  // so the season would sooner drop him: alike for the season, apart for the week. Of those still to play, the one
+  // whose season then comes nearest the first's.
+  const line = (f: number) => { const pr = P.get(d0)!.projection!; return { ...pr, perGame: Object.fromEntries(Object.entries(pr.perGame).map(([k, x]) => [k, k === 'min' ? x : (x as number) * f])) as typeof pr.perGame } }
+  assert.equal(playsLeft(d0), 0, 'the season\'s drop is done for the week')
+  const done = d0
+  const him0 = { id: free.id, eligible: [...free.positions, 'Util'] }
+  const as = (id: string, f: number) => ({ ...w0, players: w0.players.map((p) => p.id === id ? { ...p, projection: line(f) } : p) })
+  const gainOf = (wx: World, d: string) => winsByHand(league, gtd, wx, [...myIds.filter((x) => x.id !== d), him0]) - winsByHand(league, gtd, wx, myIds)
+  const plays = myIds.map((x) => x.id).filter((id) => playsLeft(id) > 0)
+    .map((id) => { const wx = as(id, 0.97); const g = gainOf(wx, id) - gainOf(wx, d0); return { id, g } }).filter((x) => x.g > 0 && x.g < IL_WEEK_SLACK).sort((a, b) => a.g - b.g)[0]?.id
+  assert.ok(plays, 'a player still to play, a little more missable for the season')
+  const w = as(plays, 0.97)
+  const v = buildSeasonView(league, gtd, w)
+  const back = v.ilBack.find((x) => x.id === free.id)!
+  assert.ok(back?.ready && back.drop && back.drop !== free.id, `${free.name} comes back for someone`)
+  const him = { id: free.id, eligible: [...free.positions, 'Util'] }
+  const now = winsByHand(league, gtd, w, myIds)
+  const seasonOf = new Map(myIds.map((d) => [d.id, winsByHand(league, gtd, w, [...myIds.filter((x) => x.id !== d.id), him]) - now]))
+  const top = Math.max(...seasonOf.values())
+  assert.ok(Math.abs(back.seasonWins! - seasonOf.get(back.drop)!) < 1e-9)
+  assert.ok(back.seasonWins! >= top - IL_WEEK_SLACK - 1e-9, 'within the slack of the best')
+  // The week as Today reads it, with him on the bench in the dropped player's place.
+  const weekWith = (d: string) => buildSeasonView(league, { ...gtd, rosters: gtd.rosters.map((r) => r.team.id !== '4' ? r : { ...r, players: r.players.filter((y) => y.yahooId !== free.yahoo!.yahooId && idOfY.get(y.yahooId) !== d).concat([ypl(free, 'BN', 'GTD')]) }) }, w).week!.odds!.win
+  const near = myIds.filter((d) => seasonOf.get(d.id)! >= top - IL_WEEK_SLACK)
+  const weeks = new Map(near.map((d) => [d.id, weekWith(d.id)]))
+  assert.ok(new Set([...weeks.values()].map((x) => x.toFixed(4))).size > 1, `the fixture offers a choice: ${[...weeks].join(' ')}`)
+  for (const [d, wk] of weeks) assert.ok(wk <= weeks.get(back.drop)! + 1e-9, `dropping ${d} costs this week less`)
+  assert.equal(back.drop, done, 'the one done for the week goes, not the season\'s least-missed who still plays')
+  assert.ok(Math.abs(back.weekBefore! - v.week!.odds!.win) < 1e-9, 'the week before is the week as it stands')
+  assert.ok(Math.abs(back.weekAfter! - weeks.get(back.drop)!) < 1e-9, 'the week after, with him in')
+  // Every week number on Adds starts from the week as it stands, as on Today.
+  assert.ok(v.pickups.length > 0, 'moves to read')
+  for (const p of v.pickups) assert.ok(Math.abs(p.winBefore - v.week!.odds!.win) < 1e-9, `${p.name}: ${p.winBefore}`)
+  assert.ok(v.weekPlan && Math.abs(v.weekPlan.winBefore - v.week!.odds!.win) < 1e-9, `plan ${v.weekPlan?.winBefore} ${v.weekPlan?.winAfter} ${v.weekPlan?.moves.length} week ${v.week!.odds!.win}`)
+  if (v.weekPlan.moves.length) assert.deepEqual(v.weekPlan.activations.map((x) => [x.id, x.drop]), [[free.id, back.drop]])
+})
+
 test('a player on IL who is no longer out comes off it first, for the one the season misses least, and the adds assume it', () => {
   const { league, snap, w, myIds } = realLeague('2026-10-19-hoops', { ...hoops, id: 'nba-hoops' }, '4', 18)
   const rostered = new Set(snap.rosters.flatMap((r) => r.players.map((y) => y.yahooId)))
@@ -619,7 +671,6 @@ test('a player on IL who is no longer out comes off it first, for the one the se
   const now = winsByHand(league, gtd, w, myIds)
   const swap = (d: string) => winsByHand(league, gtd, w, [...myIds.filter((x) => x.id !== d), him]) - now
   assert.ok(Math.abs(back.seasonWins! - swap(back.drop)) < 1e-9)
-  for (const d of myIds) assert.ok(swap(d.id) <= back.seasonWins! + 1e-9, `dropping ${d.id} is no better`)
   // The adds come after: none drops the player already gone for him.
   for (const p of v.pickups) assert.notEqual(p.drop, back.drop, `${p.name} drops ${p.dropName}, already gone`)
   // Still out, due back this week: named, and the adds are what they were without him.
@@ -874,7 +925,7 @@ test('notifications: each says what to do, inside its window, once per fact', ()
   assert.ok(!ids(better(0.9)).some((x) => x.rule === 'nba-better'), 'a lopsided week: not worth it')
 
   // 5. Off IL, with the drop decided.
-  const il = ids({ ...v0, ilBack: [{ id: a, name: v0.players[a].name, status: 'questionable', ready: true, returns: null, drop: b, dropName: v0.players[b].name, seasonWins: 0.4 }] }).find((x) => x.rule === 'nba-il')!
+  const il = ids({ ...v0, ilBack: [{ id: a, name: v0.players[a].name, status: 'questionable', ready: true, returns: null, drop: b, dropName: v0.players[b].name, seasonWins: 0.4, weekBefore: null, weekAfter: null }] }).find((x) => x.rule === 'nba-il')!
   assert.ok(il.detail.startsWith(`Activate ${v0.players[a].name} and drop ${v0.players[b].name}`), il.detail)
   // 6. To IL, with the add it makes room for.
   const toIl = ids({ ...v0, lineup: { ...(v0.lineup ?? {} as any), rows: [], moves: [], ilMoves: [{ id: a, name: v0.players[a].name, action: 'to-il', why: '' }] } as any, weekPlan: { ...v0.weekPlan!, moves: [{ add: c, name: v0.players[c].name, team: null, drop: a, dropName: v0.players[a].name, from: v0.today, toIl: true, ilDrop: null, ilDropName: null, waiver: false, winAfter: 0.6, seasonWins: 0.1 }] } }).find((x) => x.rule === 'nba-toil')!
@@ -883,12 +934,12 @@ test('notifications: each says what to do, inside its window, once per fact', ()
   const sw = { drop: b, dropName: 'B', dropBack: '2027-01-20', toIl: a, toIlName: 'A', toIlBack: '2026-11-30', add: c, name: 'C', seasonWins: 1.2, waiver: false }
   assert.ok(ids({ ...v0, ilSwap: { ...sw, options: [sw] } }).some((x) => x.rule === 'nba-ilswap' && x.headline.endsWith('drop B from IL, move A there, add C')))
   // 8. Due back this week.
-  assert.ok(ids({ ...v0, ilBack: [{ id: a, name: 'A', status: 'out', ready: false, returns: '2026-10-24', drop: null, dropName: null, seasonWins: null }] }).some((x) => x.rule === 'nba-ilreturn' && x.headline.includes('due back Sat')))
+  assert.ok(ids({ ...v0, ilBack: [{ id: a, name: 'A', status: 'out', ready: false, returns: '2026-10-24', drop: null, dropName: null, seasonWins: null, weekBefore: null, weekAfter: null }] }).some((x) => x.rule === 'nba-ilreturn' && x.headline.includes('due back Sat')))
   // 9. A claim cleared.
   assert.ok(ids({ ...v0, claims: [{ id: 'tx1', at: now, add: a, addName: 'A', drop: b, dropName: 'B' }] }).some((x) => x.id.endsWith(':tx1') && x.headline.includes('A is yours')))
 
   // 10. The week ahead, when it starts; 11. mid-week, the best adds; 12. late, pressed.
-  const wv = { level: 'do' as const, headline: 'Add C for B', winBefore: 0.45, winAfter: 0.55, moves: [{ add: c } as any], season: 0, races: [], aligned: false, chance: 'in play' as const }
+  const wv = { level: 'do' as const, headline: 'Add C for B', winBefore: 0.45, winAfter: 0.55, moves: [{ add: c } as any], activations: [], season: 0, races: [], aligned: false, chance: 'in play' as const }
   const at = (today: string) => ({ ...v0, today, weekVerdict: wv, week: { ...close(0.45), start: '2026-10-20', end: '2026-10-25', days: ['2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25'].map((d) => ({ date: d, mine: 6, theirs: 6, idle: 0, open: 2 })) } })
   assert.ok(ids(at('2026-10-20')).some((x) => x.rule === 'nba-weekplan' && x.detail.includes('Open spots: Tue 2')))
   assert.ok(ids(at('2026-10-21')).some((x) => x.rule === 'nba-weekmove'))
