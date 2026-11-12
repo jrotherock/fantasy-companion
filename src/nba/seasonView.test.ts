@@ -994,6 +994,16 @@ test('minutes you set for a stretch: his line at those minutes, no teammate shar
   const share = ctx.minutesFrom(mate.id, later)
   assert.ok(share > 0, 'the star is still out: a share')
   assert.ok(Math.abs(ctx.outlook(mate.id, later)!.box.pts - base * (min + share) / min) < 1e-9)
+  // Sleeper's line for a night inside the stretch: your minutes stand, and only its rate a minute is blended in.
+  const line = { box: { ...emptyBox(), pts: 10 }, min: 20 }
+  const sl = new Context(league, { ...w, dayProj: new Map([[`${mate.id}|${day}`, line], [`${mate.id}|${later}`, line]]) })
+  const o = sl.outlook(mate.id, day)!
+  assert.equal(o.min, 31)
+  assert.ok(Math.abs(o.box.pts - (0.5 * (10 / 20) * 31 + 0.5 * base * 31 / min)) < 1e-9, `${o.box.pts}`)
+  // After the stretch, Sleeper's line counts half as ever, minutes too.
+  const after = sl.outlook(mate.id, later)!
+  assert.ok(Math.abs(after.box.pts - (0.5 * 10 + 0.5 * base * (min + share) / min)) < 1e-9)
+  assert.ok(Math.abs(after.min! - (0.5 * 20 + 0.5 * (min + share))) < 1e-9)
 })
 
 test('pending claims: read from Yahoo, planned as if they clear, and a failed one told', () => {

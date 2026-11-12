@@ -280,8 +280,11 @@ export class Context {
     const sleeper = this.world.dayProj.get(`${id}|${date}`)
     if (sleeper) {
       const w = this.world.sleeperWeight ?? SLEEPER_WEIGHT
-      for (const k of Object.keys(box) as (keyof Box)[]) box[k] = w * sleeper.box[k] + (1 - w) * box[k]
-      if (sleeper.min > 0) mins = w * sleeper.min + (1 - w) * mins
+      // Minutes you set override Sleeper's: only what it expects him to do a minute is blended, at your minutes
+      // (2026-11-11: Ace Bailey set to 33 with Markkanen out read 29.5, half of it Sleeper's 26).
+      const hand = !!win && date < win.until && sleeper.min > 0 && mins > 0
+      for (const k of Object.keys(box) as (keyof Box)[]) box[k] = w * (hand ? (sleeper.box[k] / sleeper.min) * mins : sleeper.box[k]) + (1 - w) * box[k]
+      if (sleeper.min > 0 && !hand) mins = w * sleeper.min + (1 - w) * mins
     }
     return { box, play: this.play(id, date), min: mins }
   }
