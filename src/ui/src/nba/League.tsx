@@ -8,7 +8,8 @@
  *
  * The server works everything out (src/nba/seasonView.ts); this only draws it.
  */
-import { Fragment, useCallback, useEffect, useState, type ReactNode } from 'react'
+import React, { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { SeasonView } from '../../../nba/seasonView'
 import type { CatRace } from '../../../nba/matchup'
 import type { MoveEffect } from '../../../nba/inseason'
@@ -284,11 +285,34 @@ const ordinal = (n: number) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['
  * (or a tap, which focuses it) a card with the status, the note, the chance he plays and a way out to the news.
  */
 const SEVERITY: Record<string, string> = { out: 'likely-out', injured: 'likely-out', suspended: 'likely-out', inactive: 'likely-out', doubtful: 'likely-out', questionable: 'coin-flip', probable: 'likely-plays' }
+/**
+ * Where the card goes: placed against the window, so the scrolling table it sits in cannot cut it off (2026-11-14:
+ * Jalen Smith's news lost its top lines, the card opening upward past the top of the table's scroll box). Above the
+ * tag where there is room, else below; kept inside the window's width.
+ */
+function cardPlace(tag: HTMLElement): React.CSSProperties {
+  const b = tag.getBoundingClientRect()
+  const width = Math.min(352, window.innerWidth - 16)
+  const left = Math.max(8, Math.min(b.left, window.innerWidth - width - 8))
+  const above = b.top > window.innerHeight - b.bottom
+  const room = (above ? b.top : window.innerHeight - b.bottom) - 8
+  return above
+    ? { position: 'fixed', left, bottom: window.innerHeight - b.top - 1, top: 'auto', right: 'auto', maxHeight: room, overflowY: 'auto', maxWidth: width }
+    : { position: 'fixed', left, top: b.bottom - 1, bottom: 'auto', right: 'auto', maxHeight: room, overflowY: 'auto', maxWidth: width }
+}
 function InjuryTag({ r }: { r: NonNullable<SeasonView['lineup']>['rows'][number] }) {
+  // Drawn at the top of the page (a portal), so neither the table's scroll box nor its pinned column can cover it.
+  const [place, setPlace] = useState<React.CSSProperties | null>(null)
+  const closing = useRef<number | null>(null)
+  const hold = () => { if (closing.current) { window.clearTimeout(closing.current); closing.current = null } }
+  const open = (e: React.SyntheticEvent<HTMLElement>) => { hold(); setPlace(cardPlace((e.currentTarget.querySelector('.ckinj') as HTMLElement) ?? e.currentTarget)) }
+  const close = () => { hold(); closing.current = window.setTimeout(() => setPlace(null), 150) }
+  useEffect(() => () => hold(), [])
   return (
-    <span className="ckinjwrap">
-      <span className={`ckinj ${SEVERITY[r.status] ?? 'coin-flip'}`} tabIndex={0} role="button" aria-label={`${r.status} — what is known`}>{r.code ?? r.status}</span>
-      <span className="ckinjcard">
+    <span className="ckinjwrap" onMouseEnter={open} onMouseLeave={close} onFocus={open} onBlur={close}>
+      <span className={`ckinj ${SEVERITY[r.status] ?? 'coin-flip'}`} tabIndex={0} role="button" aria-label={`${r.status} — what is known`} aria-expanded={!!place}>{r.code ?? r.status}</span>
+      {place && createPortal(
+        <span className="ckinjcard nl-injcard" style={{ ...place, display: 'block' }} onMouseEnter={hold} onMouseLeave={close} onFocus={hold} onBlur={close}>
         <span className="ckics">{r.status[0].toUpperCase() + r.status.slice(1)}</span>
         {r.game && <span className="ckicr">Plays {pct(r.play)}</span>}
         {r.note ? <span className="ckicn">{r.note}</span> : <span className="ckicn dim">No note published</span>}
@@ -304,7 +328,10 @@ function InjuryTag({ r }: { r: NonNullable<SeasonView['lineup']>['rows'][number]
           </span>
         )}
         <a className="ckicl" href={`https://www.google.com/search?q=${encodeURIComponent(`${r.name} injury news`)}&tbm=nws`} target="_blank" rel="noreferrer noopener">Search the news ›</a>
-      </span>
+        </span>,
+        // Inside the app's root, where its colours are set; placed against the window all the same.
+        document.querySelector('.ckapp') ?? document.body,
+      )}
     </span>
   )
 }

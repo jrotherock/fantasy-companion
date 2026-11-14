@@ -344,3 +344,7 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-head { display: flex; flex-direction: column; color: var(--ink); text-decoration: none; font-size: var(--t-sm); line-height: 1.35; }
 .nl-head:hover span:last-child { text-decoration: underline; }
 .nl-heads-src { font-size: var(--t-xs); color: var(--muted); }
+
+/* The status card is placed against the window (cardPlace), touching its tag, so the pointer never crosses a gap. */
+.nl-injcard::after { display: none; }
+.nl-head span:last-child { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
