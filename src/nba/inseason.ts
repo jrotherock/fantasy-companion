@@ -447,6 +447,8 @@ export interface LineupRow {
   tonight: Box | null
   /** Tonight's projected minutes, with a game today. */
   tonightMin?: number | null
+  /** The latest news on him where his status is in doubt (src/nba/headlines.ts): shown, never counted. */
+  headlines?: { title: string; source: string; at: number; link: string }[]
   /** What he has actually done today, from Yahoo, once his game is under way; null before. */
   live: Box | null
   play: number

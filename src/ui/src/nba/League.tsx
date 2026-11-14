@@ -292,6 +292,17 @@ function InjuryTag({ r }: { r: NonNullable<SeasonView['lineup']>['rows'][number]
         <span className="ckics">{r.status[0].toUpperCase() + r.status.slice(1)}</span>
         {r.game && <span className="ckicr">Plays {pct(r.play)}</span>}
         {r.note ? <span className="ckicn">{r.note}</span> : <span className="ckicn dim">No note published</span>}
+        {(r.headlines ?? []).length > 0 && (
+          <span className="nl-heads">
+            <span className="nl-headsk">Latest news</span>
+            {r.headlines!.map((h) => (
+              <a key={h.link} className="nl-head" href={h.link} target="_blank" rel="noreferrer noopener">
+                <span className="nl-heads-src">{h.source} · {ago(h.at)}</span>
+                <span>{h.title}</span>
+              </a>
+            ))}
+          </span>
+        )}
         <a className="ckicl" href={`https://www.google.com/search?q=${encodeURIComponent(`${r.name} injury news`)}&tbm=nws`} target="_blank" rel="noreferrer noopener">Search the news ›</a>
       </span>
     </span>

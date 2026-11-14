@@ -337,3 +337,10 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-rv { font-size: var(--t-xs); }
 .nl-rv td, .nl-rv th { padding: 0.3rem 0.25rem; }
 @media (max-width: 600px) { .nl-sect:has(.nl-rv) { overflow-x: auto; } }
+
+/* The latest news in a status card: outlet and time above each headline, each a link out. */
+.nl-heads { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.45rem; padding-top: 0.4rem; border-top: 1px solid var(--line); }
+.nl-headsk { font-family: var(--mono); font-size: var(--t-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.nl-head { display: flex; flex-direction: column; color: var(--ink); text-decoration: none; font-size: var(--t-sm); line-height: 1.35; }
+.nl-head:hover span:last-child { text-decoration: underline; }
+.nl-heads-src { font-size: var(--t-xs); color: var(--muted); }

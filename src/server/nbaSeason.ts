@@ -46,6 +46,7 @@ import type { Box } from '../nba/yahooSeason.js'
 import type { Game, NbaPlayer } from '../nba/types.js'
 import { CATS } from '../nba/value.js'
 import { record, review, type OddsHistory } from '../nba/history.js'
+import { headlinesDue, parseHeadlines, searchUrl, SEARCHED, type Headline } from '../nba/headlines.js'
 
 const DATA = 'data/nba'
 const DIR = join(STATE_DIR, 'nba-season')
@@ -405,9 +406,61 @@ function buildView(l: SeasonLeague & { myTeamId: string | null }): SeasonView {
   const snap = snapOf(l.id), w = world(l.id)
   const rolled = rollWeek(snap, w)
   const view = buildSeasonView({ ...l, punts: seasonPunts(l.id), keep: seasonKeep(l.id) }, rolled?.snap ?? snap, rolled?.world ?? w, status.events)
+  attachHeadlines(view)
   views.set(l.id, { at: Date.now(), view })
   saveOdds(l.id, view)
   return view
+}
+
+// ── The latest news on my players whose status is in doubt (src/nba/headlines.ts) ──
+
+let news: Record<string, { at: number; items: Headline[] }> | null = null
+const newsFile = () => file('headlines.json')
+const newsNow = () => (news ??= readJson<Record<string, { at: number; items: Headline[] }>>(newsFile(), {}))
+function attachHeadlines(view: SeasonView) {
+  const n = newsNow()
+  for (const rows of [view.lineup?.rows ?? [], view.tomorrow?.rows ?? []]) for (const r of rows) {
+    const h = SEARCHED.has(r.status) ? n[r.id]?.items : undefined
+    if (h?.length) r.headlines = h
+  }
+}
+/**
+ * One pass: every player of mine, in any league, listed anything but healthy, searched where due (more often as his
+ * tip nears), one at a time, a couple of seconds apart. Screens are worked out again when anything new came in.
+ */
+let newsBusy = false
+async function refreshHeadlines() {
+  if (newsBusy || (process.env.NBA_NOW && !process.env.RAILWAY_ENVIRONMENT)) return
+  newsBusy = true
+  try {
+    const n = newsNow(), now = Date.now()
+    const who = new Map<string, { name: string; tip: number | null }>()
+    for (const l of leagues().filter((x) => !isTest(x.id))) {
+      for (const r of views.get(l.id)?.view.lineup?.rows ?? []) {
+        if (!SEARCHED.has(r.status)) continue
+        const tip = r.game?.tip ? Date.parse(r.game.tip) : null
+        const had = who.get(r.id)
+        who.set(r.id, { name: r.name, tip: had?.tip ?? tip })
+      }
+    }
+    let changed = false, fetched = false
+    for (const [id, p] of who) {
+      if (!headlinesDue(now, n[id]?.at ?? null, p.tip)) continue
+      try {
+        const res = await fetch(searchUrl(p.name), { headers: { 'user-agent': 'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/128 Safari/537.36' } })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const items = parseHeadlines(await res.text(), p.name, Date.now())
+        if (JSON.stringify(items) !== JSON.stringify(n[id]?.items ?? [])) changed = true
+        n[id] = { at: Date.now(), items }
+        fetched = true
+      } catch (e) { console.warn('nba headlines:', p.name, String((e as Error)?.message ?? e)) }
+      await new Promise((r) => setTimeout(r, 2_000))
+    }
+    // Nobody kept past a week since his last search.
+    for (const id of Object.keys(n)) if (now - n[id].at > 7 * 24 * HOUR) { delete n[id]; changed = true }
+    if (changed || fetched) writeFileSync(newsFile(), JSON.stringify(n))
+    if (changed) staleViews()
+  } finally { newsBusy = false }
 }
 
 // ── What each screen said, day by day (src/nba/history.ts) ──
@@ -625,6 +678,8 @@ export function startNbaSeason() {
   timer = setTimeout(tick, 20_000)
   setTimeout(warmViews, 30_000)
   setInterval(warmViews, MIN).unref?.()
+  setTimeout(() => void refreshHeadlines(), 90_000)
+  setInterval(() => void refreshHeadlines(), 10 * MIN).unref?.()
 }
 
 // ── Routes ──
