@@ -33,14 +33,29 @@ const decode = (s: string) =>
     .trim()
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
+/** Each team's city and name, as newsrooms write them. */
+export const TEAM_WORDS: Record<string, string[]> = {
+  ATL: ['Atlanta', 'Hawks'], BOS: ['Boston', 'Celtics'], BKN: ['Brooklyn', 'Nets'], CHA: ['Charlotte', 'Hornets'], CHI: ['Chicago', 'Bulls'],
+  CLE: ['Cleveland', 'Cavaliers', 'Cavs'], DAL: ['Dallas', 'Mavericks', 'Mavs'], DEN: ['Denver', 'Nuggets'], DET: ['Detroit', 'Pistons'],
+  GSW: ['Golden State', 'Warriors'], HOU: ['Houston', 'Rockets'], IND: ['Indiana', 'Pacers'], LAC: ['Clippers'], LAL: ['Lakers'],
+  MEM: ['Memphis', 'Grizzlies'], MIA: ['Miami', 'Heat'], MIL: ['Milwaukee', 'Bucks'], MIN: ['Minnesota', 'Timberwolves', 'Wolves'],
+  NOP: ['New Orleans', 'Pelicans'], NYK: ['New York', 'Knicks'], OKC: ['Oklahoma City', 'Thunder'], ORL: ['Orlando', 'Magic'],
+  PHI: ['Philadelphia', '76ers', 'Sixers'], PHX: ['Phoenix', 'Suns'], POR: ['Portland', 'Trail Blazers', 'Blazers'], SAC: ['Sacramento', 'Kings'],
+  SAS: ['San Antonio', 'Spurs'], TOR: ['Toronto', 'Raptors'], UTA: ['Utah', 'Jazz'], WAS: ['Washington', 'Wizards'],
+}
+/** Words that place a headline in basketball, for a name shared with someone else. */
+const HOOPS_WORDS = /\b(nba|basketball|g league|fantasy|hoops|scor\w*|points|rebounds|assists|double-double|triple-double|starting lineup|rotation|minutes|trade\w*)\b/i
+
 /** Words that mark a headline as about whether he plays. */
 const STATUS_WORDS = /\b(injur\w*|status|out|questionable|doubtful|probable|cleared|return\w*|sidelined|ruled|available|game[- ]time|gtd|rest\w*|sprain\w*|strain\w*|ankle|knee|hamstring|wrist|shoulder|back|foot|hip|calf|groin|concussion|illness|surgery|mri|week[- ]to[- ]week|day[- ]to[- ]day|upgraded|downgraded|expected to (play|start|miss)|will (play|start|miss)|won't play|not play|miss\w*|absence|injury report)\b/i
 
 /**
- * The feed's items about him: his last name in the title, within the last few days, those about whether he plays
- * first, each group newest first.
+ * The feed's items about him: his last name in the title with basketball, his team or his status beside it, within
+ * the last few days, those about whether he plays first, each group newest first.
  */
-export function parseHeadlines(xml: string, name: string, now: number): Headline[] {
+export function parseHeadlines(xml: string, name: string, now: number, team?: string | null): Headline[] {
+  const teamWords = team ? TEAM_WORDS[team] ?? [] : []
+  const aboutHim = (t: string) => STATUS_WORDS.test(t) || HOOPS_WORDS.test(t) || teamWords.some((w) => new RegExp(`\\b${w}\\b`, 'i').test(t))
   const last = fold(name.split(' ').filter((w) => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(w)).slice(-1)[0] ?? name)
   const items: (Headline & { status: boolean })[] = []
   for (const [, body] of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
@@ -51,7 +66,8 @@ export function parseHeadlines(xml: string, name: string, now: number): Headline
     if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3)).trim()
     const at = Date.parse(tag('pubDate'))
     const link = tag('link')
-    if (!title || !Number.isFinite(at) || !fold(title).includes(last)) continue
+    // His name, and something that says it is him: a namesake in the news is someone else (2026-11-14: Mark Williams).
+    if (!title || !Number.isFinite(at) || !fold(title).includes(last) || !aboutHim(title)) continue
     if (now - at > HEADLINE_DAYS * 24 * HOUR || at - now > HOUR) continue
     items.push({ title, source: source || 'News', at, link, status: STATUS_WORDS.test(title) })
   }

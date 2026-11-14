@@ -434,13 +434,13 @@ async function refreshHeadlines() {
   newsBusy = true
   try {
     const n = newsNow(), now = Date.now()
-    const who = new Map<string, { name: string; tip: number | null }>()
+    const who = new Map<string, { name: string; team: string | null; tip: number | null }>()
     for (const l of leagues().filter((x) => !isTest(x.id))) {
       for (const r of views.get(l.id)?.view.lineup?.rows ?? []) {
         if (!SEARCHED.has(r.status)) continue
         const tip = r.game?.tip ? Date.parse(r.game.tip) : null
         const had = who.get(r.id)
-        who.set(r.id, { name: r.name, tip: had?.tip ?? tip })
+        who.set(r.id, { name: r.name, team: views.get(l.id)?.view.players[r.id]?.team ?? null, tip: had?.tip ?? tip })
       }
     }
     let changed = false, fetched = false
@@ -449,7 +449,7 @@ async function refreshHeadlines() {
       try {
         const res = await fetch(searchUrl(p.name), { headers: { 'user-agent': 'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/128 Safari/537.36' } })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const items = parseHeadlines(await res.text(), p.name, Date.now())
+        const items = parseHeadlines(await res.text(), p.name, Date.now(), p.team)
         if (JSON.stringify(items) !== JSON.stringify(n[id]?.items ?? [])) changed = true
         n[id] = { at: Date.now(), items }
         fetched = true

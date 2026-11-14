@@ -35,6 +35,15 @@ test('headlines: his own, recent, about whether he plays first, newest first, th
   assert.deepEqual(plain.map((h) => h.title), ["Bucks' Myles Turner scores 20 in win"])
 })
 
+test('headlines: a namesake in other news is left out; his team, basketball or his status place him', () => {
+  const xml = `<rss>${item('Toronto man arrested in Calgary (Mark Williams)', 'Reddit', 1)}${item('Suns big Mark Williams sits out shootaround', 'Arizona Republic', 2)}${item('Mark Williams posts 18 and 12', 'NBA.com', 3)}${item('Mark Williams on the Phoenix bench', 'Local', 4)}</rss>`
+  assert.deepEqual(parseHeadlines(xml, 'Mark Williams', NOW, 'PHX').map((h) => h.source), ['Arizona Republic', 'Local'])
+  // Without his team: only what is plainly basketball, or about whether he plays.
+  assert.deepEqual(parseHeadlines(xml, 'Mark Williams', NOW, null).map((h) => h.source), ['Arizona Republic'])
+  assert.deepEqual(parseHeadlines(`<rss>${item('Mark Williams scores 18 in Suns loss', 'NBA.com', 1)}</rss>`, 'Mark Williams', NOW, null).map((h) => h.source), ['NBA.com'])
+  assert.deepEqual(parseHeadlines(`<rss>${item('Mark Williams joins Ronnie O’Sullivan in British Seniors Open lineup', 'SnookerHQ', 1)}</rss>`, 'Mark Williams', NOW, 'PHX'), [])
+})
+
 test('headlines: a suffix or accent in his name still finds him', () => {
   const xml = `<rss>${item('Jaren Jackson: Ruled out Saturday', 'RotoWire', 1)}${item('Luka Doncic (ankle) doubtful', 'CBS Sports', 1)}</rss>`
   assert.equal(parseHeadlines(xml, 'Jaren Jackson Jr.', NOW).length, 1)
