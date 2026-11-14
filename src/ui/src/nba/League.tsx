@@ -8,7 +8,7 @@
  *
  * The server works everything out (src/nba/seasonView.ts); this only draws it.
  */
-import React, { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import React, { createContext, Fragment, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { SeasonView } from '../../../nba/seasonView'
 import type { CatRace } from '../../../nba/matchup'
@@ -72,6 +72,9 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
  * draft it is the league's draft prep — the draft room, mocks and what they
  * say; after it, the season.
  */
+/** The league on screen and a way to read it again, for parts deep in it that change a setting (the status card). */
+const LeagueCtx = createContext<{ leagueId: string; refresh: () => void } | null>(null)
+
 export function NbaLeague({ id, onBack }: { id: string; onBack: () => void }) {
   const { view, error, refresh } = useSeason(id)
   const [tab, setTab] = useState<Tab>(() => { try { return (sessionStorage.getItem(`nl-tab-${id}`) as Tab) || 'Today' } catch { return 'Today' } })
@@ -81,6 +84,7 @@ export function NbaLeague({ id, onBack }: { id: string; onBack: () => void }) {
   const v = view
   const rec = v.standing && v.standing.w != null ? `${v.standing.w}-${v.standing.l}${v.standing.t ? `-${v.standing.t}` : ''}${v.standing.rank ? ` · ${ordinal(v.standing.rank)}` : ''}` : null
   return (
+    <LeagueCtx.Provider value={{ leagueId: v.league.id, refresh: () => refresh() }}>
     <div className="nl">
       {crumb}
       <header className="ckhdr">
@@ -106,6 +110,7 @@ export function NbaLeague({ id, onBack }: { id: string; onBack: () => void }) {
         </>
       )}
     </div>
+    </LeagueCtx.Provider>
   )
 }
 
@@ -300,22 +305,56 @@ function cardPlace(tag: HTMLElement): React.CSSProperties {
     ? { position: 'fixed', left, bottom: window.innerHeight - b.top - 1, top: 'auto', right: 'auto', maxHeight: room, overflowY: 'auto', maxWidth: width }
     : { position: 'fixed', left, top: b.bottom - 1, bottom: 'auto', right: 'auto', maxHeight: room, overflowY: 'auto', maxWidth: width }
 }
+/**
+ * When he is expected back, set from his card (2026-11-14: "where do I set the return date for Caleb?" — it was on the
+ * draft board). Your date counts in every league until you clear it; cleared, CBS's comes back.
+ */
+function BackDate({ r }: { r: NonNullable<SeasonView['lineup']>['rows'][number] }) {
+  const lg = useContext(LeagueCtx)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  if (!lg || !r.back) return null
+  const save = async (date: string | null) => {
+    setBusy(true); setErr(null)
+    try {
+      const res = await fetch(`/api/nba/season/${lg.leagueId}/return`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: r.id, date }) })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+      lg.refresh()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <span className="nl-back">
+      <label>
+        <span className="nl-backk">Back</span>
+        <input type="date" aria-label={`When ${r.name} is back`} value={r.back.date ?? ''} disabled={busy}
+          onChange={(e) => void save(e.target.value || null)} />
+      </label>
+      <span className="nl-dim">{r.back.yours ? 'your date' : r.back.date ? "CBS's date" : 'no date known'}</span>
+      {r.back.yours && <button className="nl-link" disabled={busy} onClick={() => void save(null)}>use CBS's</button>}
+      {err && <span className="nl-hurt">{err}</span>}
+    </span>
+  )
+}
+
 function InjuryTag({ r }: { r: NonNullable<SeasonView['lineup']>['rows'][number] }) {
   // Drawn at the top of the page (a portal), so neither the table's scroll box nor its pinned column can cover it.
   const [place, setPlace] = useState<React.CSSProperties | null>(null)
   const closing = useRef<number | null>(null)
   const hold = () => { if (closing.current) { window.clearTimeout(closing.current); closing.current = null } }
   const open = (e: React.SyntheticEvent<HTMLElement>) => { hold(); setPlace(cardPlace((e.currentTarget.querySelector('.ckinj') as HTMLElement) ?? e.currentTarget)) }
-  const close = () => { hold(); closing.current = window.setTimeout(() => setPlace(null), 150) }
+  const card = useRef<HTMLSpanElement | null>(null)
+  // Not while something in the card has focus: picking a date opens the browser's calendar outside the card.
+  const close = () => { hold(); closing.current = window.setTimeout(() => { if (!card.current?.contains(document.activeElement)) setPlace(null) }, 150) }
   useEffect(() => () => hold(), [])
   return (
     <span className="ckinjwrap" onMouseEnter={open} onMouseLeave={close} onFocus={open} onBlur={close}>
       <span className={`ckinj ${SEVERITY[r.status] ?? 'coin-flip'}`} tabIndex={0} role="button" aria-label={`${r.status} — what is known`} aria-expanded={!!place}>{r.code ?? r.status}</span>
       {place && createPortal(
-        <span className="ckinjcard nl-injcard" style={{ ...place, display: 'block' }} onMouseEnter={hold} onMouseLeave={close} onFocus={hold} onBlur={close}>
+        <span ref={card} className="ckinjcard nl-injcard" style={{ ...place, display: 'block' }} onMouseEnter={hold} onMouseLeave={close} onFocus={hold} onBlur={close}>
         <span className="ckics">{r.status[0].toUpperCase() + r.status.slice(1)}</span>
         {r.game && <span className="ckicr">Plays {pct(r.play)}</span>}
         {r.note ? <span className="ckicn">{r.note}</span> : <span className="ckicn dim">No note published</span>}
+        <BackDate r={r} />
         {(r.headlines ?? []).length > 0 && (
           <span className="nl-heads">
             <span className="nl-headsk">Latest news</span>

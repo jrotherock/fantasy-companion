@@ -351,7 +351,7 @@ const prefListeners: (() => void)[] = []
 export function onPreferencesChange(f: () => void) { prefListeners.push(f) }
 
 /** A return date you set for a player, by name, kept with your lists. Null goes back to CBS's. */
-function setReturn(playerId: string, date: string | null) {
+export function setReturn(playerId: string, date: string | null) {
   const p = load().players.find((x) => x.id === playerId)
   if (!p) return false
   const file = prefFile()

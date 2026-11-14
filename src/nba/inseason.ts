@@ -447,6 +447,8 @@ export interface LineupRow {
   tonight: Box | null
   /** Tonight's projected minutes, with a game today. */
   tonightMin?: number | null
+  /** When he is expected back, and whether that date is the one you set (else CBS's). */
+  back?: { date: string | null; yours: boolean }
   /** The latest news on him where his status is in doubt (src/nba/headlines.ts): shown, never counted. */
   headlines?: { title: string; source: string; at: number; link: string }[]
   /** What he has actually done today, from Yahoo, once his game is under way; null before. */
@@ -531,6 +533,7 @@ export function checkLineup(ctx: Context, day: RosterDay, seats: string[], date 
       weekGames: null,
       tonight: g ? (ctx.outlook(id, today)?.box ?? null) : next ? (ctx.outlook(id, next.date)?.box ?? null) : null,
       tonightMin: g ? (ctx.outlook(id, today)?.min ?? null) : null,
+      back: { date: ctx.returnOf(id).date, yours: ctx.world.returns.has(id) },
       live: (y as { box?: Box | null }).box ?? null,
       note: [y.injury, ctx.returnOf(id).text].filter(Boolean).join(' — ') || null,
       game: g ? { ...g, started, final, score: tg && tg.state !== 'pre' ? { us: tg.us, them: tg.them } : null, status: tg?.status || null, won: tg?.won ?? null, played: tg ? tg.played : null } : null,

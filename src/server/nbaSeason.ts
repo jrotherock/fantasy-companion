@@ -31,7 +31,7 @@ import { STATE_DIR } from './paths.js'
 import * as yahooApi from './yahooApi.js'
 import { parseStandings, parseTransactions } from './yahooParse.js'
 import type { Alert } from './alerts.js'
-import { handReturns, minuteWindows, setMinuteWindow, injuryNotesNow, liveDrafts, neverIds, onPreferencesChange, seasonLeagues, seasonPlayers, seasonKeep, seasonPunts, setSeasonKeep, setSeasonPunts } from './nbaDraft.js'
+import { handReturns, minuteWindows, setMinuteWindow, setReturn, injuryNotesNow, liveDrafts, neverIds, onPreferencesChange, seasonLeagues, seasonPlayers, seasonKeep, seasonPunts, setSeasonKeep, setSeasonPunts } from './nbaDraft.js'
 import { parseGameWeeks, parseLeagueRosters, parseNbaScoreboard, parsePlayers, parseRosterDay, parseSeasonSettings } from '../nba/yahooSeason.js'
 import { gameDay } from '../nba/sources.js'
 import { parseSleeperDayProjections, parseSleeperLogs, designation, type Designation, type GameLog } from '../nba/outlook.js'
@@ -714,6 +714,16 @@ export async function handleNbaSeason(parts: string[], req: any, res: any, json:
     const min = Number(b?.min), until = String(b?.until ?? '')
     if (!b?.playerId || (!clear && (!Number.isFinite(min) || min < 0 || min > 48 || !/^\d{4}-\d{2}-\d{2}$/.test(until)))) { json(res, 400, { error: 'playerId, min (0-48) and until (YYYY-MM-DD)' }); return true }
     if (!setMinuteWindow(String(b.playerId), clear ? null : { min, until })) { json(res, 400, { error: 'unknown player' }); return true }
+    views.clear()
+    json(res, 200, { ok: true })
+    return true
+  }
+  if (req.method === 'POST' && action === 'return') {
+    // When a player is expected back ({playerId, date}; date null goes back to CBS's), in every league.
+    const b = await body(req)
+    const date = b?.date == null || b.date === '' ? null : String(b.date)
+    if (!b?.playerId || (date && !/^\d{4}-\d{2}-\d{2}$/.test(date))) { json(res, 400, { error: 'playerId and date (YYYY-MM-DD or null)' }); return true }
+    if (!setReturn(String(b.playerId), date)) { json(res, 400, { error: 'unknown player' }); return true }
     views.clear()
     json(res, 200, { ok: true })
     return true
