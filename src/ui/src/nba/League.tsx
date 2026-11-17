@@ -20,7 +20,7 @@ import { LeagueSize } from './LeagueSize'
 
 const LABEL: Record<Cat, string> = { fg: 'FG%', ft: 'FT%', tpm: '3PM', pts: 'PTS', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO' }
 const pct = (x: number) => `${Math.round(x * 100)}%`
-const TABS = ['Today', 'Week', 'Adds', 'News', 'Season', 'Review'] as const
+const TABS = ['Today', 'Week', 'Adds', 'Ranks', 'News', 'Season', 'Review'] as const
 type Tab = typeof TABS[number]
 
 /**
@@ -75,6 +75,40 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 /** The league on screen and a way to read it again, for parts deep in it that change a setting (the status card). */
 const LeagueCtx = createContext<{ leagueId: string; refresh: () => void } | null>(null)
 
+// ── Ranks (src/nba/ranks.ts): per game, Basketball Monster's way, by window ──
+
+type PRanks = NonNullable<SeasonView['players'][string]['ranks']>
+type RankWin = keyof PRanks
+const WIN_LABEL: Record<RankWin, string> = { d7: '7 days', d30: '30 days', season: 'Season', ros: 'Rest of season' }
+const WIN_SHORT: Record<RankWin, string> = { d7: '7d', d30: '30d', season: 'Szn', ros: 'RoS' }
+const RanksCtx = createContext<{ players: SeasonView['players']; rostered: number; punted: boolean } | null>(null)
+/** Recent rank this many places from his rest-of-season rank shows as a trend. */
+const TREND = 30
+
+/** The rank shown: under my build where I punt. */
+const shown = (w: PRanks[RankWin], build: boolean) => (build ? w.build : w.rank)
+
+/**
+ * A player's rank beside his name: rest of season under my build, with ▲ or ▼ where his last 7 days say otherwise;
+ * a tap shows all four windows. Green inside the line a league this size rosters.
+ */
+function Rank({ id }: { id: string }) {
+  const c = useContext(RanksCtx)
+  const [open, setOpen] = useState(false)
+  const r = c?.players[id]?.ranks
+  if (!c || !r) return null
+  const ros = shown(r.ros, c.punted), d7 = shown(r.d7, c.punted)
+  const trend = ros != null && d7 != null ? (ros - d7 >= TREND ? 'up' : d7 - ros >= TREND ? 'down' : null) : null
+  const all = (Object.keys(WIN_SHORT) as RankWin[]).map((w) => `${WIN_SHORT[w]} ${shown(r[w], c.punted) != null ? `#${shown(r[w], c.punted)}` : '—'}`).join(' · ')
+  const title = `Rank${c.punted ? ' for your punt build' : ''}, per game: ${all}. The top ${c.rostered} are roster players in a league this size.`
+  return (
+    <button type="button" className={`nl-rank ${ros != null && ros <= c.rostered ? 'in' : 'out'}`} title={title} aria-label={title} onClick={(e) => { e.stopPropagation(); setOpen(!open) }}>
+      {ros != null ? `#${ros}` : '—'}{trend === 'up' ? ' ▲' : trend === 'down' ? ' ▼' : ''}
+      {open && <span className="nl-rank-all"> {all}</span>}
+    </button>
+  )
+}
+
 export function NbaLeague({ id, onBack }: { id: string; onBack: () => void }) {
   const { view, error, refresh } = useSeason(id)
   const [tab, setTab] = useState<Tab>(() => { try { return (sessionStorage.getItem(`nl-tab-${id}`) as Tab) || 'Today' } catch { return 'Today' } })
@@ -85,6 +119,7 @@ export function NbaLeague({ id, onBack }: { id: string; onBack: () => void }) {
   const rec = v.standing && v.standing.w != null ? `${v.standing.w}-${v.standing.l}${v.standing.t ? `-${v.standing.t}` : ''}${v.standing.rank ? ` · ${ordinal(v.standing.rank)}` : ''}` : null
   return (
     <LeagueCtx.Provider value={{ leagueId: v.league.id, refresh: () => refresh() }}>
+    <RanksCtx.Provider value={{ players: v.players, rostered: v.rankings?.rostered ?? 0, punted: (v.punts ?? []).length > 0 }}>
     <div className="nl">
       {crumb}
       <header className="ckhdr">
@@ -107,9 +142,11 @@ export function NbaLeague({ id, onBack }: { id: string; onBack: () => void }) {
           {tab === 'News' && <News v={v} />}
           {tab === 'Season' && <Season v={v} onChange={() => refresh()} />}
           {tab === 'Review' && <Review v={v} />}
+          {tab === 'Ranks' && <Ranks v={v} />}
         </>
       )}
     </div>
+    </RanksCtx.Provider>
     </LeagueCtx.Provider>
   )
 }
@@ -640,7 +677,7 @@ function RosterGroup({ title, rows, preseason, points, total }: { title: string;
               return (
                 <tr key={r.id} className={`nl-r-${st}${ACTIVE_SLOT(r.slot) ? '' : ' nl-r-bench'}`}>
                   <td className="l nl-slotc">{r.slot ?? '—'}</td>
-                  <td className="l nl-playerc"><span className="nl-slot-m">{r.slot ?? '—'}</span>{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span>{r.status !== 'healthy' && <> <InjuryTag r={r} /></>}</td>
+                  <td className="l nl-playerc"><span className="nl-slot-m">{r.slot ?? '—'}</span>{r.name} <span className="nl-dim nl-pos">{r.positions.join('/')}</span> <Rank id={r.id} />{r.status !== 'healthy' && <> <InjuryTag r={r} /></>}</td>
                   <td className="l nl-gamec">{r.game
                     ? <>{r.game.home ? 'v' : '@'} {r.game.vs} · <GameState r={r} /></>
                     : r.next ? <span className="nl-dim">{dateWord(r.next.date)} {r.next.home ? 'v' : '@'} {r.next.vs} · proj</span> : '—'}</td>
@@ -855,7 +892,7 @@ function WeekPlayers({ v, w, side, setSide, mode, setMode, dayPick, setDayPick, 
             {rows.map((p) => (
               <Fragment key={p.id}>
                 <tr className={m === 'sofar' && p.gs === 0 ? 'nl-r-benchonly' : p.gs < 0.5 && m !== 'sofar' ? 'nl-idle' : ''}>
-                  <td className="l">{p.name}</td>
+                  <td className="l">{p.name} <Rank id={p.id} /></td>
                   {m === 'sofar' ? <><td>{p.gp}</td><td>{p.gs}</td></> : <><td>{p.gs.toFixed(1)}</td><td>{p.mpg != null ? p.mpg.toFixed(0) : '—'}</td></>}
                   {fpw && <td style={real && p.proj && p.gs ? shade(fpHeat(fpOf(p.box, fpw), fpOf(p.proj, fpw))) : undefined}>{real && !p.gs ? '—' : <b>{real ? fpOf(p.box, fpw).toFixed(1) : fpOf(p.box, fpw).toFixed(0)}</b>}</td>}
                   {cols.map((c) => (
@@ -1006,6 +1043,7 @@ function Adds({ v, onChange }: { v: SeasonView; onChange: () => void }) {
       <PendingClaims v={v} />
       <WeekCard v={v} />
       <VerdictCard v={v} />
+      <Risers v={v} />
       <details className="nl-alloptions">
         <summary>All options <span className="nl-dim">· the week's plan, every move scored, how sure each is</span></summary>
       {v.addPlan && v.addPlan.steps.length > 0 && (
@@ -1271,11 +1309,11 @@ function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: 
     <div className={`nl-pick${over ? ' over' : ''}`}>
       <div className="nl-pickh">
         <span className={`nl-kind ${p.kind}`}>{p.kind}</span>
-        <b>Add {p.name}</b> <span className="nl-dim">{p.team} · {p.positions.join('/')}</span>
+        <b>Add {p.name}</b> <span className="nl-dim">{p.team} · {p.positions.join('/')}</span> <Rank id={p.add} />
         <span className={`nl-src ${p.waiver ? 'waiver' : 'free'}`} title={p.waiver ? 'On waivers: put in a claim; it clears after the waiver period' : 'A free agent: add him now'}>{p.waiver ? 'waivers · claim' : 'free agent · add now'}</span>
       </div>
       <div className="nl-pickd">
-        {p.dropName && <><b>Drop {p.dropName}</b> · </>}{p.why}
+        {p.dropName && <><b>Drop {p.dropName}</b>{p.drop && <> <Rank id={p.drop} /></>} · </>}{p.why}
       </div>
       <div className="nl-pickd nl-dim">
         {p.kind !== 'stream' && <SeasonGain p={p} />}
@@ -1581,6 +1619,100 @@ function Season({ v, onChange }: { v: SeasonView; onChange: () => void }) {
 
 
 // ── Review ──
+
+
+/**
+ * Free agents playing above their line: ranked like roster players over the last 7 or 30 days, and at least 30 places
+ * better than for the rest of the season. The moves above have already judged them on their line; this says who to watch.
+ */
+function Risers({ v }: { v: SeasonView }) {
+  const c = useContext(RanksCtx)
+  if (!v.risers?.length || !c) return null
+  return (
+    <Section title="Rising on the wire" hint="free agents ranked like roster players lately, and well above their rest-of-season rank: worth watching">
+      <ul className="nl-risers">
+        {v.risers.map((id) => {
+          const p = v.players[id], r = p?.ranks
+          if (!p || !r) return null
+          return (
+            <li key={id}><b>{p.name}</b> <span className="nl-dim">{p.team} · {p.positions.join('/')}</span> <Rank id={id} />
+              <span className="nl-dim"> — 7 days {shown(r.d7, c.punted) != null ? `#${shown(r.d7, c.punted)} (${r.d7.games} g)` : '—'}, 30 days {shown(r.d30, c.punted) != null ? `#${shown(r.d30, c.punted)}` : '—'}, rest of season #{shown(r.ros, c.punted) ?? '—'}</span></li>
+          )
+        })}
+      </ul>
+    </Section>
+  )
+}
+
+/**
+ * The league's rankings, per game, by window: who is best lately and for the rest of the season, who has each, and
+ * where the waiver line falls. Basketball Monster's way (Josh Lloyd's), not Yahoo's season totals.
+ */
+function Ranks({ v }: { v: SeasonView }) {
+  const cats = v.league.scoring === 'categories'
+  const punted = (v.punts ?? []).length > 0
+  const [win, setWin] = useState<RankWin>('ros')
+  const [who, setWho] = useState<'all' | 'free' | 'mine'>('all')
+  const [build, setBuild] = useState(punted)
+  const rk = v.rankings
+  if (!rk) return <div className="nl-none">No rankings yet.</div>
+  const of = (id: string, w: RankWin) => { const r = v.players[id]?.ranks; return r ? (build ? r[w].build : r[w].rank) : null }
+  const rows = rk.rows
+    .filter((r) => (who === 'all' ? true : who === 'free' ? !r.owner : r.mine))
+    .filter((r) => of(r.id, win) != null)
+    .sort((a, b) => of(a.id, win)! - of(b.id, win)!)
+    .slice(0, 200)
+  const line = rk.rostered
+  const cell = (id: string, w: RankWin) => {
+    const x = of(id, w), r = v.players[id]?.ranks?.[w]
+    if (x == null) return <span className="nl-dim">—</span>
+    return <span className={x <= line ? 'nl-rk-in' : 'nl-dim'} title={r && w !== 'ros' ? `${r.games} game${r.games === 1 ? '' : 's'}` : undefined}>{x}</span>
+  }
+  let crossed = false
+  return (
+    <>
+      <p className="nl-note">
+        Per game, the way Basketball Monster ranks{cats ? ': each category against the players a league this size rosters, FG% and FT% weighed by attempts, turnovers against' : ': fantasy points a game at this league’s scoring'}.
+        Yahoo ranks by season totals, so a player who missed games sinks there. The 7 and 30 days and the season are from games played (at least {2} in 7 days, 4 otherwise); the rest of the season is the app’s own line, the one every move is judged on.
+        The top {line} are roster players in a league this size.
+      </p>
+      <div className="ckseg" role="tablist" aria-label="Window">
+        {(Object.keys(WIN_LABEL) as RankWin[]).map((w) => <button key={w} role="tab" aria-selected={w === win} className={w === win ? 'on' : ''} onClick={() => setWin(w)}>{WIN_LABEL[w]}</button>)}
+      </div>
+      <div className="ckseg nl-rk-seg" role="tablist" aria-label="Players">
+        {([['all', 'Everyone'], ['free', 'Free agents'], ['mine', 'Mine']] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={k === who} className={k === who ? 'on' : ''} onClick={() => setWho(k)}>{l}</button>)}
+        {cats && punted && <button type="button" className={`nl-rk-build${build ? ' on' : ''}`} aria-pressed={build} onClick={() => setBuild(!build)} title="Rank with your punted categories left out, or on all nine">{build ? `Your build (no ${v.punts.map((c) => LABEL[c]).join(', ')})` : 'All 9 categories'}</button>}
+      </div>
+      <div className="nl-scroll">
+        <table className="nl-table nl-ranks">
+          <thead><tr>
+            <th className="l">#</th><th className="l">Player <span className="nl-dim">· who has him</span></th>
+            {(Object.keys(WIN_SHORT) as RankWin[]).map((w) => <th key={w} className={w === win ? 'nl-inplay' : ''}>{WIN_SHORT[w]}</th>)}
+          </tr></thead>
+          <tbody>
+            {!rows.length && <tr><td className="l nl-dim" colSpan={6}>Nobody here in this window.</td></tr>}
+            {rows.map((r) => {
+              const p = v.players[r.id]
+              const x = of(r.id, win)!
+              const divider = !crossed && x > line ? (crossed = true) : false
+              return (
+                <Fragment key={r.id}>
+                  {divider && <tr className="nl-rk-line"><td className="l" colSpan={6}>Waiver line: the top {line} are rostered in a league this size</td></tr>}
+                  <tr className={r.mine ? 'nl-rk-mine' : ''}>
+                    <td className="l"><b>{x}</b></td>
+                    <td className="l nl-rk-who">{p?.name ?? r.id} <span className="nl-dim">{p?.team} · {p?.positions.join('/')}</span>
+                      <div className="nl-rk-owner">{r.mine ? <b>You</b> : r.owner ?? <span className="nl-rk-fa">Free agent</span>}</div></td>
+                    {(Object.keys(WIN_SHORT) as RankWin[]).map((w) => <td key={w}>{cell(r.id, w)}</td>)}
+                  </tr>
+                </Fragment>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
 
 /**
  * The week looked back on, any time (2026-11-07: "save the odds so we can do an anytime analysis like we just did"):

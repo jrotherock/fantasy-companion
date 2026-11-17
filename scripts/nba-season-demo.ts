@@ -160,6 +160,13 @@ const snap = {
   fixtures: weeks.filter(([w]) => w < real.playoffWeeks[0]).map(([w, s, e]) => ({ week: w, start: s, end: e, pairs: pairs(w).map(([a, b]) => [String(a + 1), String(b + 1)]) })),
 }
 
+// LOGS=1: this season's real game logs from Sleeper's public stats, up to the day before, for the ranks' windows.
+if (process.env.LOGS) {
+  const { parseSleeperLogs } = await import('../src/nba/outlook.js')
+  const rows = []
+  for (const [w, s] of weeks) { if (s > today) break; rows.push(...parseSleeperLogs(await (await fetch(`https://api.sleeper.app/stats/nba/2026/${w}?season_type=regular`)).json())) }
+  ;(snap as any).sleeperLogs = rows.filter((l) => l.date < today)
+}
 const res = await fetch(`${base}/api/nba/season/${leagueId}/snapshot`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(snap) })
 const v = await res.json()
 console.log(res.status, v.error ?? `${v.phase}: week ${v.week?.week}, ${v.lineup?.moves.length} lineup moves, ${v.pickups?.length} pickups, ${v.news?.length} news, ${v.trades?.length} trades`)

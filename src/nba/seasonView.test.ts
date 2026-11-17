@@ -7,7 +7,7 @@ import type { Cat } from './value.js'
 import { buildSeasonView, claimsOf, DO, lineupWatchOf, LOOK, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonAlerts, seasonTile, verdictOf, type SeasonView } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
 import { claimsFailedOf, Context, rollWeek, yahooSeatsOf, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
-import { addDays, IL_WEEK_SLACK, PAIR_MARGIN, shortlistForWeek, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, SPECIALISTS, specialists, starLine, WEEK_SEASON_COST, WHATIFS, whatifFor, scoreWeek, type PairMove } from './adds.js'
+import { addDays, IL_WEEK_SLACK, RISE_GAP, PAIR_MARGIN, shortlistForWeek, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, SPECIALISTS, specialists, starLine, WEEK_SEASON_COST, WHATIFS, whatifFor, scoreWeek, type PairMove } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
 import { diffStatus } from './news.js'
@@ -1102,6 +1102,41 @@ test("a free agent is seated where Yahoo seats him, not where the player file do
   assert.deepEqual(asYahoo.players[asYahoo.pickups[0].add].positions, ['C'])
   const plan = (v: SeasonView) => JSON.stringify([v.pickups.map((p) => [p.add, p.drop, p.playDays]), v.weekPlan?.moves.map((m) => [m.add, m.drop, m.from])])
   assert.notEqual(plan(asYahoo), plan(asFile), 'where he can sit changes what he is worth')
+})
+
+test('ranks on the screen: every player named carries his four windows; the rankings list who has whom; a free agent playing above his line is a riser', () => {
+  const { league, snap, w: w0, ctx: c0 } = realLeague('2026-10-26-public', publicLeague, '2', 20, '2026-10-29')
+  const owned = new Set(snap.rosters.flatMap((r) => r.players.map((y) => c0.resolve(y))))
+  const line = league.teams * 13
+  // A free agent far down the line who has just had a big week in his usual minutes: three games, the last three days.
+  // (Given a jump in minutes, his own line catches up within three games, and he is no riser: he is on the list.)
+  const ros = c0.ranks()
+  const hot = w0.players.filter((p) => p.team && !owned.has(p.id) && (ros.get(p.id)?.ros.build ?? 0) > line * 1.4).sort((a, b) => ros.get(a.id)!.ros.build! - ros.get(b.id)!.ros.build!)[0]
+  const big = { ...emptyBox(), fgm: 8, fga: 15, ftm: 3, fta: 4, tpm: 2.5, pts: 21.5, reb: 7, ast: 4, stl: 1.5, blk: 1, to: 1.5 }
+  const regular = w0.players.filter((p) => p.projection && p.team && p.id !== hot.id).slice(0, 300)
+  const logs = [
+    // Everyone else's ordinary games, so the window has a pool to be measured against.
+    ...regular.flatMap((p) => ['2026-10-26', '2026-10-27', '2026-10-28'].map((date) => ({ id: p.id, date, team: p.team, min: p.projection!.perGame.min, box: { ...emptyBox(), fgm: (p.projection!.shooting.fga ?? 0) * (p.projection!.shooting.fgPct ?? 0), fga: p.projection!.shooting.fga ?? 0, ftm: (p.projection!.shooting.fta ?? 0) * (p.projection!.shooting.ftPct ?? 0), fta: p.projection!.shooting.fta ?? 0, tpm: p.projection!.perGame.tpm, pts: p.projection!.perGame.pts, reb: p.projection!.perGame.reb, ast: p.projection!.perGame.ast, stl: p.projection!.perGame.stl, blk: p.projection!.perGame.blk, to: p.projection!.perGame.to } }))),
+    ...['2026-10-26', '2026-10-27', '2026-10-28'].map((date) => ({ id: hot.id, date, team: hot.team, min: hot.projection!.perGame.min, box: big })),
+  ]
+  const v = buildSeasonView(league, snap, { ...w0, logs: logs as any })
+  assert.ok(v.risers.includes(hot.id), `${hot.name} played like a roster player and his line has him well below that`)
+  const hr = v.players[hot.id].ranks!
+  assert.ok(hr.d7.build! <= line && hr.ros.build! - hr.d7.build! >= RISE_GAP)
+  for (const id of v.risers) { const r = v.players[id].ranks!, best = Math.min(r.d7.build ?? 999, r.d30.build ?? 999); assert.ok(!owned.has(id) && best <= line && r.ros.build! - best >= RISE_GAP, id) }
+  assert.equal(v.rankings!.rostered, line)
+  // Every name on the screen has its ranks, mine and my opponent's included; the rankings say whose each one is.
+  const mine = snap.rosters.find((r) => r.team.id === '2')!.players.map((y) => c0.resolve(y)!).filter(Boolean)
+  for (const id of mine) assert.ok(v.players[id]?.ranks?.ros, id)
+  const opp = snap.rosters.find((r) => r.team.id === v.week!.opponent!.id)!.players.map((y) => c0.resolve(y)!).filter(Boolean)
+  const deep = [...mine, ...opp].filter((id) => !v.rankings!.rows.some((r) => r.id === id))
+  assert.ok(deep.length > 0, 'a rostered player outside the rankings')
+  for (const id of deep) assert.ok(v.players[id]?.ranks, `${id}: named for his roster, not the rankings`)
+  const row = v.rankings!.rows.find((r) => r.id === mine.find((id) => v.rankings!.rows.some((x) => x.id === id)))!
+  assert.ok(row.mine && row.owner)
+  assert.equal(v.rankings!.rows.find((r) => r.id === hot.id)!.owner, null)
+  // Nobody below the depth in every window is listed.
+  for (const r of v.rankings!.rows) assert.ok(Object.values(v.players[r.id].ranks!).some((x) => x.build != null && x.build <= Math.round(line * 1.5)))
 })
 
 /** Today's lineup with the best of mine who plays today benched for the weakest bench player who also plays. */

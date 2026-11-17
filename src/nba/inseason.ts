@@ -12,6 +12,7 @@ import type { NbaPlayer, Game, YahooWeek } from './types.js'
 import { easternDate, type InjuryNote } from './sources.js'
 import { NameIndex } from './join.js'
 import { CATS, categoryZ, type Cat } from './value.js'
+import { rankPlayers, type PlayerRanks } from './ranks.js'
 import { addBox, emptyBox, type Box, type NbaMatchup, type RosterDay, type SeasonSettings, type Side, type TeamMeta } from './yahooSeason.js'
 import { daysFrom, projectWeek, seat, startingSeats, type GameOutlook, type Man, type WeekOutlook } from './week.js'
 import { categoryWeek, pointsOf, pointsWeek, type PointsOdds, type SideOutlook, type WeekOdds, type Weights } from './matchup.js'
@@ -397,6 +398,15 @@ export class Context {
   man(id: string, eligible: string[] | null = null): Man {
     const p = this.byId.get(id)
     return { id, name: p?.name ?? id, positions: seatPositions(eligible ?? this.seatsOf(id)), team: p?.team ?? null }
+  }
+
+  private rankCache: Map<string, PlayerRanks> | null = null
+  /** Every player's rank in this league, last 7 and 30 days, season to date and rest of season (ranks.ts). */
+  ranks(): Map<string, PlayerRanks> {
+    this.rankCache ??= rankPlayers([...this.byId.values()], this.world.logs, this.world.today, {
+      scoring: this.league.scoring, teams: this.league.teams, roster: this.league.roster, points: this.league.points, punts: this.league.punts,
+    })
+    return this.rankCache
   }
 
   /** The seats Yahoo lets him fill: as Yahoo lists him now, else its preseason list, else the player file's. */

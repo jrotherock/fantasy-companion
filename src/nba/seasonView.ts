@@ -4,7 +4,8 @@
  * extras.ts; nothing here reads the network.
  */
 import type { Weights } from './matchup.js'
-import type { Cat } from './value.js'
+import { rosterSpots, type Cat } from './value.js'
+import type { PlayerRanks } from './ranks.js'
 import { startingSeats } from './week.js'
 import { startSit, type StartSit } from './startsit.js'
 import { buildWeek, checkLineup, claimsFailedNow, Context, rosterIds, moveEffects, weekValue, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
@@ -13,7 +14,18 @@ import { leagueNews, type NewsItem, type StatusEvent } from './news.js'
 import { allPlay, playoffPlan, power, tradeIdeas, type AllPlay, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
 import type { Alert } from '../server/alerts.js'
 
-export interface PlayerRef { name: string; team: string | null; positions: string[] }
+export interface PlayerRef {
+  name: string; team: string | null; positions: string[]
+  /** His rank in this league: last 7 and 30 days, season so far, rest of season, each overall and under my punts. */
+  ranks?: PlayerRanks
+}
+
+/** The league's rankings: the best by each window, mine and who has each. */
+export interface Rankings {
+  /** Players a league this size rosters: inside it is a roster player, outside the waiver line. */
+  rostered: number
+  rows: { id: string; owner: string | null; mine: boolean }[]
+}
 
 export interface SeasonView {
   league: { id: string; label: string; scoring: 'points' | 'categories'; teams: number; /** A points league's weights, for the fantasy points on its screens. */ points: Weights | null }
@@ -42,6 +54,10 @@ export interface SeasonView {
   trades: TradeIdea[]
   standing: { rank: number | null; w: number | null; l: number | null; t: number | null } | null
   players: Record<string, PlayerRef>
+  /** Every player worth a look by any window, ranked (ranks.ts). */
+  rankings: Rankings | null
+  /** Free agents ranked like roster players lately whose line has them below it (adds.ts risersOf), best first. */
+  risers: string[]
   /** Before week 1: the day the season starts. Streams and lineups have nothing to say until then. */
   startsOn: string | null
   /** The new week's first day while the screens have rolled into it ahead of the clock: Yahoo opens its adds at midnight. */
@@ -83,6 +99,24 @@ export function startSitView(league: SeasonLeague & { myTeamId?: string | null }
   return startSit(ctx, snap, me.id, date, aId, bId)
 }
 
+/** How many each window's list goes down: past the rostered line and a little further. */
+export const RANKINGS_DEPTH = 1.5
+
+/** The league's rankings: anyone inside the depth in any window, under my build, with who has him. */
+export function rankingsOf(ctx: Context, snap: Snapshot, myTeamId: string): Rankings {
+  const rostered = ctx.league.teams * rosterSpots(ctx.league.roster)
+  const depth = Math.round(rostered * RANKINGS_DEPTH)
+  const owner = new Map<string, { name: string; mine: boolean }>()
+  for (const r of snap.rosters) for (const y of r.players) { const id = ctx.resolve(y); if (id) owner.set(id, { name: r.team.name, mine: r.team.id === myTeamId }) }
+  const rows: Rankings['rows'] = []
+  for (const [id, x] of ctx.ranks()) {
+    if (!Object.values(x).some((w) => w.build != null && w.build <= depth)) continue
+    const o = owner.get(id)
+    rows.push({ id, owner: o?.name ?? null, mine: !!o?.mine })
+  }
+  return { rostered, rows }
+}
+
 export function myTeamOf(snap: Snapshot, configured?: string | null): { id: string; name: string } | null {
   const t = snap.rosters.find((r) => r.team.mine)?.team
     ?? snap.scoreboard.flatMap((m) => m.sides).find((s) => s.mine)
@@ -99,7 +133,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
     lineup: null, tomorrow: null, week: null, budget: null, pickups: [], keep: [], ilBack: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
-    standing: null, players: {}, startsOn: null, addsOpen: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null, lineupWatch: [], claims: [], pendingClaims: [], claimsFailed: [],
+    standing: null, players: {}, startsOn: null, addsOpen: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null, lineupWatch: [], claims: [], pendingClaims: [], claimsFailed: [], rankings: null, risers: [],
   }
   if (!drafted || !me) return base
 
@@ -132,7 +166,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   // spent, and a claimed player counts from the day he arrives.
   const pendingClaims = pendingOf(ctx, snap, me.id)
   const addsLeft = budget?.week ? Math.max(0, budget.week.max - budget.week.used - pendingClaims.length) : null
-  const { pickups: picks, pairs, ilBack, weekPlan, ilSwap } = pickupsAndPairs(ctx, withClaims(ctx, snap, me.id, pendingClaims), me.id, { punts, addsLeft, arrives: new Map(pendingClaims.map((c) => [c.add, c.from])) })
+  const { pickups: picks, pairs, ilBack, weekPlan, ilSwap, risers } = pickupsAndPairs(ctx, withClaims(ctx, snap, me.id, pendingClaims), me.id, { punts, addsLeft, arrives: new Map(pendingClaims.map((c) => [c.add, c.from])) })
   const news = leagueNews(ctx, snap, me.id, events, week?.opponent?.id ?? null).slice(0, 40)
   const st = snap.standings.find((s) => s.teamId === me.id || s.mine)
 
@@ -144,6 +178,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     standing: st ? { rank: st.rank, w: st.wins, l: st.losses, t: st.ties } : null,
     addPlan: addPlan(picks, budget, world.today, week?.end ?? null),
     verdict: null, weekPlan, ilSwap, weekVerdict: null,
+    rankings: rankingsOf(ctx, snap, me.id), risers,
     lineupWatch: lineupWatchOf(ctx, lineup, punts),
     claims: claimsOf(ctx, snap, me.id),
     pendingClaims,
@@ -173,9 +208,14 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   view.trades.forEach((t) => [...t.give, ...t.get].forEach((x) => ids.add(x.id)))
   view.playoffs?.mine.forEach((x) => ids.add(x.id))
   view.playoffs?.targets.forEach((x) => ids.add(x.id))
+  // My roster and my opponent's, IL included, and the rankings' players: each with his ranks.
+  for (const r of snap.rosters) if (r.team.id === me.id || r.team.id === week?.opponent?.id) for (const y of r.players) { const id = ctx.resolve(y); if (id) ids.add(id) }
+  // (Risers are inside the rostered line lately, so in the rankings.)
+  view.rankings?.rows.forEach((r) => ids.add(r.id))
+  const ranks = ctx.ranks()
   for (const id of ids) {
     const p = ctx.byId.get(id)
-    if (p) view.players[id] = { name: p.name, team: p.team, positions: ctx.seatsOf(id) }
+    if (p) view.players[id] = { name: p.name, team: p.team, positions: ctx.seatsOf(id), ranks: ranks.get(id) }
   }
   return view
 }

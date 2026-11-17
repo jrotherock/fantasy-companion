@@ -355,3 +355,19 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-backk { font-family: var(--mono); font-size: var(--t-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .nl-back input[type='date'] { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 3px; padding: 0.1rem 0.3rem; font: inherit; color-scheme: dark; }
 :root[data-theme='light'] .nl-back input[type='date'] { color-scheme: light; }
+
+/* Ranks: the chip beside a name, the rising list, the Ranks tab */
+.nl-rank { font-family: var(--mono); font-size: 10px; padding: 0 0.3rem; border-radius: 3px; border: 1px solid var(--line); background: none; color: var(--muted); cursor: pointer; line-height: 1.5; white-space: nowrap; }
+.nl-rank.in { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, var(--line)); }
+.nl-rank-all { color: var(--ink, inherit); white-space: normal; }
+.nl-risers { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.25rem; }
+.nl-rk-seg { margin-top: 0.4rem; flex-wrap: wrap; }
+.nl-rk-build { margin-left: auto; }
+.nl-rk-build.on { color: var(--green); }
+.nl-ranks td, .nl-ranks th { white-space: nowrap; }
+.nl-rk-in { color: var(--green); }
+.nl-rk-mine td { background: color-mix(in srgb, var(--green) 8%, transparent); }
+.nl-rk-fa { color: var(--muted); font-style: italic; }
+.nl-rk-line td { font-size: 11px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 0.3rem; }
+.nl-ranks td.nl-rk-who { white-space: normal; min-width: 9rem; }
+.nl-rk-owner { font-size: 11px; color: var(--muted); }

@@ -16,7 +16,7 @@
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek, type SideOutlook } from './matchup.js'
 import { rosterIds, sideOutlook, weekOf, type Context, type Snapshot, type Whatif } from './inseason.js'
-import { CATS, type Cat } from './value.js'
+import { CATS, rosterSpots, type Cat } from './value.js'
 import type { NbaPlayer } from './types.js'
 import { addBox, emptyBox, type Box } from './yahooSeason.js'
 import { designation, type Designation } from './outlook.js'
@@ -374,13 +374,34 @@ export const WEEK_SEASON_COST = 0.25
  */
 export const IL_WEEK_SLACK = 0.15
 
+/** How many risers join the candidates. */
+export const RISERS = 6
+/** Places better lately than for the rest of the season to count as rising. */
+export const RISE_GAP = 30
+
+/**
+ * Free agents ranked inside the rostered line (teams × roster spots) by the last 7 or 30 days under my build, and at
+ * least RISE_GAP places better than for the rest of the season: playing above his line. His line takes in his form (a jump in minutes moves
+ * it within three games), so the gap is mostly a hot run in his usual role; he is looked at and judged on his line.
+ * Best recent rank first.
+ */
+export function risersOf<P extends { id: string }>(ctx: Context, pool: P[]): P[] {
+  const line = ctx.league.teams * rosterSpots(ctx.league.roster)
+  const rk = ctx.ranks()
+  const hot = (id: string) => { const r = rk.get(id); return r ? Math.min(r.d7.build ?? Infinity, r.d30.build ?? Infinity) : Infinity }
+  return pool
+    .filter((p) => hot(p.id) <= line && (rk.get(p.id)?.ros.build ?? Infinity) - hot(p.id) >= RISE_GAP)
+    .sort((a, b) => hot(a.id) - hot(b.id))
+    .slice(0, RISERS)
+}
+
 /** A pair is shown when its second move adds at least this much to the best single move. */
 export const PAIR_MARGIN = UPGRADE_WINS
 
-export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, opts: { punts?: Cat[]; limit?: number; addsLeft?: number | null; arrives?: Map<string, string | null> } = {}): { pickups: Pickup[]; pairs: PairMove[]; ilBack: IlReturn[]; weekPlan: WeekPlan | null; ilSwap: IlSwap | null } {
+export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, opts: { punts?: Cat[]; limit?: number; addsLeft?: number | null; arrives?: Map<string, string | null> } = {}): { pickups: Pickup[]; pairs: PairMove[]; ilBack: IlReturn[]; weekPlan: WeekPlan | null; ilSwap: IlSwap | null; risers: string[] } {
   const { today } = ctx.world
   const mine = snap.rosters.find((r) => r.team.id === myTeamId)
-  if (!mine) return { pickups: [], pairs: [], ilBack: [], weekPlan: null, ilSwap: null }
+  if (!mine) return { pickups: [], pairs: [], ilBack: [], weekPlan: null, ilSwap: null, risers: [] }
   const rostered = new Set<string>()
   for (const r of snap.rosters) for (const y of r.players) { const id = ctx.resolve(y); if (id) rostered.add(id) }
   const waivers = new Set(snap.waivers)
@@ -571,7 +592,10 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
   const inPool = new Map(pool.map((p) => [p.id, p]))
   const forWeek = shortlistForWeek(pool.map((p) => p.id), worth, openOn.size ? openGames : weekGames, floor, WEEK_POOL)
     .map((id) => inPool.get(id)!)
-  const cands = [...new Map([...forSeason, ...forWeek].map((p) => [p.id, p])).values()]
+  // Playing like a roster player lately, while his line still has him below the waiver line: looked at, and judged on
+  // his line like any other (2026-11-16: ranks by 7 and 30 days, "leverage them in our decision logic").
+  const risers = risersOf(ctx, pool)
+  const cands = [...new Map([...forSeason, ...forWeek, ...risers].map((p) => [p.id, p])).values()]
   // For this week's plan, also the best in each race still in play, whatever they are worth overall: a specialist can
   // decide a close category (2026-10-25: Kris Dunn's five steals on Sunday would have won Hoops' steals; on overall
   // value he was nowhere near the list).
@@ -754,7 +778,7 @@ export function pickupsAndPairs(ctx: Context, snap: Snapshot, myTeamId: string, 
     pr.confidence = check(pr.moves.flatMap((m) => [m.add, m.drop]), myIds, after, 'season')
   }
   const weekPlan = bestWeek(opts.addsLeft ?? null)
-  return { pickups: shown, pairs: top, ilBack, weekPlan, ilSwap }
+  return { pickups: shown, pairs: top, ilBack, weekPlan, ilSwap, risers: risers.map((p) => p.id) }
 
   /**
    * The adds that give this week its best chance by the last game, whatever they do to the season (shown beside it):

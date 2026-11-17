@@ -168,9 +168,10 @@ let schedule: Game[] | null = null
 let opponentPrior: Allowed | null | undefined
 let noise: World['noise'] | null = null
 
-/** Yahoo's positions for each player, from every league's rosters and its lists of available players. */
+/** Yahoo's positions for each player, from my real leagues' rosters and Yahoo's lists of available players. */
 const yahooSeats = (players: NbaPlayer[]) =>
-  yahooSeatsOf(players, leagues().flatMap((l) => { const s = snapOf(l.id); return [...s.rosters.flatMap((r) => r.players), ...(s.available ?? [])] }))
+  // A -test league's rosters are made up from the player file, so say nothing about Yahoo's positions.
+  yahooSeatsOf(players, leagues().filter((l) => !isTest(l.id)).flatMap((l) => { const s = snapOf(l.id); return [...s.rosters.flatMap((r) => r.players), ...(s.available ?? [])] }))
 
 function world(leagueId: string): World {
   opponentPrior ??= existsSync(`${DATA}/opponent-2025.json`) ? JSON.parse(readFileSync(`${DATA}/opponent-2025.json`, 'utf8')) as Allowed : null
