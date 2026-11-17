@@ -371,3 +371,6 @@ button.nl-chip { cursor: pointer; color: var(--ink); font: inherit; font-size: v
 .nl-rk-line td { font-size: 11px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 0.3rem; }
 .nl-ranks td.nl-rk-who { white-space: normal; min-width: 9rem; }
 .nl-rk-owner { font-size: 11px; color: var(--muted); }
+.nl-mkt { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.03em; padding: 0 0.3rem; border-radius: 3px; border: 1px solid var(--line); white-space: nowrap; margin-right: 0.3rem; }
+.nl-mkt.sell { color: var(--amber, #d9a400); border-color: color-mix(in srgb, var(--amber, #d9a400) 50%, var(--line)); }
+.nl-mkt.buy { color: var(--green); border-color: color-mix(in srgb, var(--green) 50%, var(--line)); }

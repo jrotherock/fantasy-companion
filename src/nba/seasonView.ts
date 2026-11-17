@@ -11,13 +11,15 @@ import { startSit, type StartSit } from './startsit.js'
 import { buildWeek, checkLineup, claimsFailedNow, Context, rosterIds, moveEffects, weekValue, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
 import { addDays, addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type IlReturn, type IlSwap, type PairMove, type Pickup, type WeekPlan } from './adds.js'
 import { leagueNews, type NewsItem, type StatusEvent } from './news.js'
-import { allPlay, playoffPlan, power, tradeIdeas, type AllPlay, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
+import { allPlay, marketFlags, playoffPlan, power, tradeIdeas, type AllPlay, type Market, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
 import type { Alert } from '../server/alerts.js'
 
 export interface PlayerRef {
   name: string; team: string | null; positions: string[]
   /** His rank in this league: last 7 and 30 days, season so far, rest of season, each overall and under my punts. */
   ranks?: PlayerRanks
+  /** The league rates him differently from what he is worth to me: sell high (mine) or buy low (someone else's). */
+  market?: Market
 }
 
 /** The league's rankings: the best by each window, mine and who has each. */
@@ -56,6 +58,8 @@ export interface SeasonView {
   players: Record<string, PlayerRef>
   /** Every player worth a look by any window, ranked (ranks.ts). */
   rankings: Rankings | null
+  /** Mine to sell high and others' to buy low, biggest gap first (extras.ts marketFlags). */
+  market: { sell: Market[]; buy: Market[] }
   /** Free agents ranked like roster players lately whose line has them below it (adds.ts risersOf), best first. */
   risers: string[]
   /** Before week 1: the day the season starts. Streams and lineups have nothing to say until then. */
@@ -99,6 +103,9 @@ export function startSitView(league: SeasonLeague & { myTeamId?: string | null }
   return startSit(ctx, snap, me.id, date, aId, bId)
 }
 
+/** Buy-low targets listed. */
+export const MARKET_SHOWN = 12
+
 /** How many each window's list goes down: past the rostered line and a little further. */
 export const RANKINGS_DEPTH = 1.5
 
@@ -133,7 +140,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
     lineup: null, tomorrow: null, week: null, budget: null, pickups: [], keep: [], ilBack: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
-    standing: null, players: {}, startsOn: null, addsOpen: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null, lineupWatch: [], claims: [], pendingClaims: [], claimsFailed: [], rankings: null, risers: [],
+    standing: null, players: {}, startsOn: null, addsOpen: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null, lineupWatch: [], claims: [], pendingClaims: [], claimsFailed: [], rankings: null, risers: [], market: { sell: [], buy: [] },
   }
   if (!drafted || !me) return base
 
@@ -170,6 +177,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   const news = leagueNews(ctx, snap, me.id, events, week?.opponent?.id ?? null).slice(0, 40)
   const st = snap.standings.find((s) => s.teamId === me.id || s.mine)
 
+  const market = marketFlags(ctx, snap, me.id)
   const view: SeasonView = {
     ...base, lineup, tomorrow, week, budget, pickups: picks, keep: league.keep ?? [], ilBack, pairs, news, punts, power: pw,
     allPlay: allPlay(snap.past, me.id, league.scoring),
@@ -179,6 +187,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     addPlan: addPlan(picks, budget, world.today, week?.end ?? null),
     verdict: null, weekPlan, ilSwap, weekVerdict: null,
     rankings: rankingsOf(ctx, snap, me.id), risers,
+    market: { sell: [...market.values()].filter((m) => m.kind === 'sell'), buy: [...market.values()].filter((m) => m.kind === 'buy').slice(0, MARKET_SHOWN) },
     lineupWatch: lineupWatchOf(ctx, lineup, punts),
     claims: claimsOf(ctx, snap, me.id),
     pendingClaims,
@@ -212,10 +221,11 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   for (const r of snap.rosters) if (r.team.id === me.id || r.team.id === week?.opponent?.id) for (const y of r.players) { const id = ctx.resolve(y); if (id) ids.add(id) }
   // (Risers are inside the rostered line lately, so in the rankings.)
   view.rankings?.rows.forEach((r) => ids.add(r.id))
+  view.market.buy.forEach((m) => ids.add(m.id))
   const ranks = ctx.ranks()
   for (const id of ids) {
     const p = ctx.byId.get(id)
-    if (p) view.players[id] = { name: p.name, team: p.team, positions: ctx.seatsOf(id), ranks: ranks.get(id) }
+    if (p) view.players[id] = { name: p.name, team: p.team, positions: ctx.seatsOf(id), ranks: ranks.get(id), market: market.get(id) }
   }
   return view
 }

@@ -81,7 +81,7 @@ type PRanks = NonNullable<SeasonView['players'][string]['ranks']>
 type RankWin = keyof PRanks
 const WIN_LABEL: Record<RankWin, string> = { d7: '7 days', d30: '30 days', season: 'Season', ros: 'Rest of season' }
 const WIN_SHORT: Record<RankWin, string> = { d7: '7d', d30: '30d', season: 'Szn', ros: 'RoS' }
-const RanksCtx = createContext<{ players: SeasonView['players']; rostered: number; punted: boolean } | null>(null)
+const RanksCtx = createContext<{ players: SeasonView['players']; rostered: number; punted: boolean; points: boolean } | null>(null)
 /** Recent rank this many places from his rest-of-season rank shows as a trend. */
 const TREND = 30
 
@@ -92,6 +92,21 @@ const shown = (w: PRanks[RankWin], build: boolean) => (build ? w.build : w.rank)
  * A player's rank beside his name: rest of season under my build, with ▲ or ▼ where his last 7 days say otherwise;
  * a tap shows all four windows. Green inside the line a league this size rosters.
  */
+type MarketF = NonNullable<SeasonView['players'][string]['market']>
+const WHY_WORDS: Record<MarketF['why'], string> = { form: 'his recent games', punt: 'your punts', both: 'his recent games and your punts' }
+/** In words: how the league sees him, what he is worth to you, and why. */
+const marketWords = (m: MarketF, punted: boolean, points: boolean) =>
+  `The league sees him at #${m.seen} (last 30 days, ${points ? 'fantasy points a game' : 'all categories'}); he is worth #${m.worth} to you${punted ? ' for your build' : ''} the rest of the way. The gap is ${WHY_WORDS[m.why]}: ${m.kind === 'sell' ? 'sell while he looks good' : 'buy while he looks cheap'}.`
+
+/** SELL or BUY beside a name, when the league rates him differently from what he is worth to me. */
+function MarketTag({ id }: { id: string }) {
+  const c = useContext(RanksCtx)
+  const m = c?.players[id]?.market
+  if (!c || !m) return null
+  const t = marketWords(m, c.punted, c.points)
+  return <span className={`nl-mkt ${m.kind}`} title={t} aria-label={t}>{m.kind === 'sell' ? 'SELL HIGH' : 'BUY LOW'}</span>
+}
+
 function Rank({ id }: { id: string }) {
   const c = useContext(RanksCtx)
   const [open, setOpen] = useState(false)
@@ -101,12 +116,13 @@ function Rank({ id }: { id: string }) {
   const trend = ros != null && d7 != null ? (ros - d7 >= TREND ? 'up' : d7 - ros >= TREND ? 'down' : null) : null
   const all = (Object.keys(WIN_SHORT) as RankWin[]).map((w) => `${WIN_SHORT[w]} ${shown(r[w], c.punted) != null ? `#${shown(r[w], c.punted)}` : '—'}`).join(' · ')
   const title = `Rank${c.punted ? ' for your punt build' : ''}, per game: ${all}. The top ${c.rostered} are roster players in a league this size.`
-  return (
+  return (<>
     <button type="button" className={`nl-rank ${ros != null && ros <= c.rostered ? 'in' : 'out'}`} title={title} aria-label={title} onClick={(e) => { e.stopPropagation(); setOpen(!open) }}>
       {ros != null ? `#${ros}` : '—'}{trend === 'up' ? ' ▲' : trend === 'down' ? ' ▼' : ''}
       {open && <span className="nl-rank-all"> {all}</span>}
     </button>
-  )
+    {c.players[id]?.market && <> <MarketTag id={id} /></>}
+  </>)
 }
 
 export function NbaLeague({ id, onBack }: { id: string; onBack: () => void }) {
@@ -119,7 +135,7 @@ export function NbaLeague({ id, onBack }: { id: string; onBack: () => void }) {
   const rec = v.standing && v.standing.w != null ? `${v.standing.w}-${v.standing.l}${v.standing.t ? `-${v.standing.t}` : ''}${v.standing.rank ? ` · ${ordinal(v.standing.rank)}` : ''}` : null
   return (
     <LeagueCtx.Provider value={{ leagueId: v.league.id, refresh: () => refresh() }}>
-    <RanksCtx.Provider value={{ players: v.players, rostered: v.rankings?.rostered ?? 0, punted: (v.punts ?? []).length > 0 }}>
+    <RanksCtx.Provider value={{ players: v.players, rostered: v.rankings?.rostered ?? 0, punted: (v.punts ?? []).length > 0, points: v.league.scoring === 'points' }}>
     <div className="nl">
       {crumb}
       <header className="ckhdr">
@@ -1338,6 +1354,7 @@ function PickupRow({ p, cats, over }: { p: SeasonView['pickups'][number]; cats: 
           <span className="nl-dim"> {p.playDays.filter((d) => d.open).length} of {p.playDays.length} games into empty spots</span>
         </div>
       )}
+      {p.drop && <DropSellHigh id={p.drop} />}
       {p.steps && <div className="nl-steps">{p.steps}</div>}
       {p.alternatives.length > 0 && (
         <div className="nl-pickd nl-dim">Or drop: {p.alternatives.map((a, i) => <span key={a.drop}>{i ? ' · ' : ''}{a.dropName} <span title="this week's win chance after the move, and matchups won over the season">(week <span className={effect(a.winAfter - p.winBefore, 0.01)}>{pct(a.winAfter)}</span>, season {a.seasonWins != null ? <span className={effect(a.seasonWins, 0.03)}>{wins(a.seasonWins)}</span> : `+${Math.round(a.seasonGain)}`})</span></span>)}</div>
@@ -1598,15 +1615,17 @@ function Season({ v, onChange }: { v: SeasonView; onChange: () => void }) {
         )}
       </Section>
 
-      <Section title="Trade ideas" hint="good for you, not bad for them">
+      <Section title="Trade ideas" hint="good for you, and no loss for them — or a loss that looks fair to them on recent games">
         {!v.trades.length && <div className="nl-none">{po?.daysToDeadline != null && po.daysToDeadline < 0 ? 'The trade deadline has passed.' : 'Nothing that helps you without hurting them.'}</div>}
         {v.trades.map((t, i) => (
           <div key={i} className="nl-trade">
             <div><span className="nl-dim">{t.teamName} ({t.manager}):</span> give <b>{t.give.map((g) => g.name).join(' + ')}</b>, get <b>{t.get.map((g) => g.name).join(' + ')}</b></div>
-            <div className="nl-dim">{t.why}</div>
+            <div className="nl-dim">{t.why}{t.looks === 'fair' ? ' · looks fair to them on recent ranks' : ''}</div>
+            {t.angles.length > 0 && <div className="nl-pickd">{t.angles.map((a) => <span key={a.id} className={`nl-mkt ${a.kind}`} title={`League #${a.seen}, worth #${a.worth} to you`}>{a.kind === 'sell' ? `sells ${a.name} high` : `buys ${a.name} low`} (#{a.seen} → #{a.worth})</span>)}</div>}
           </div>
         ))}
       </Section>
+      <MarketList v={v} />
 
       {exp && exp.length > 0 && (
         <Section title="In both leagues" hint="one injury, two lineups">
@@ -1620,6 +1639,33 @@ function Season({ v, onChange }: { v: SeasonView; onChange: () => void }) {
 
 // ── Review ──
 
+
+/** A drop the league rates highly: trade him first. */
+function DropSellHigh({ id }: { id: string }) {
+  const c = useContext(RanksCtx)
+  const m = c?.players[id]?.market
+  if (!c || m?.kind !== 'sell') return null
+  return <div className="nl-pickd nl-amber">The league rates {c.players[id].name} #{m.seen} lately: try trading him before you drop him.</div>
+}
+
+/**
+ * Sell high and buy low: my players the league rates above what they are worth to me, and others' it rates below.
+ * Trade ideas above already lean on these; this is the list to shop with.
+ */
+function MarketList({ v }: { v: SeasonView }) {
+  const c = useContext(RanksCtx)
+  if (!c || (!v.market.sell.length && !v.market.buy.length)) return null
+  const row = (m: SeasonView['market']['sell'][number]) => (
+    <li key={m.id}><b>{v.players[m.id]?.name ?? m.id}</b> <span className="nl-dim">{v.players[m.id]?.team}{m.kind === 'buy' ? ` · ${m.teamName}` : ''}</span>
+      <span className="nl-dim"> — league #{m.seen}, worth #{m.worth} to you · {WHY_WORDS[m.why]}</span></li>
+  )
+  return (
+    <Section title="Sell high · Buy low" hint={c.points ? "the league rates these by recent games; you rank them by the rest of the season" : "the league rates these by recent games on every category; you rank them by the rest of the season for your build"}>
+      {v.market.sell.length > 0 && <><div className="nl-subh">Sell high <span className="nl-dim">· yours, rated above what they are worth to you</span></div><ul className="nl-risers">{v.market.sell.map(row)}</ul></>}
+      {v.market.buy.length > 0 && <><div className="nl-subh">Buy low <span className="nl-dim">· theirs, worth more to you than the league thinks</span></div><ul className="nl-risers">{v.market.buy.map(row)}</ul></>}
+    </Section>
+  )
+}
 
 /**
  * Free agents playing above their line: ranked like roster players over the last 7 or 30 days, and at least 30 places
@@ -1700,7 +1746,7 @@ function Ranks({ v }: { v: SeasonView }) {
                   {divider && <tr className="nl-rk-line"><td className="l" colSpan={6}>Waiver line: the top {line} are rostered in a league this size</td></tr>}
                   <tr className={r.mine ? 'nl-rk-mine' : ''}>
                     <td className="l"><b>{x}</b></td>
-                    <td className="l nl-rk-who">{p?.name ?? r.id} <span className="nl-dim">{p?.team} · {p?.positions.join('/')}</span>
+                    <td className="l nl-rk-who">{p?.name ?? r.id} <span className="nl-dim">{p?.team} · {p?.positions.join('/')}</span> <MarketTag id={r.id} />
                       <div className="nl-rk-owner">{r.mine ? <b>You</b> : r.owner ?? <span className="nl-rk-fa">Free agent</span>}</div></td>
                     {(Object.keys(WIN_SHORT) as RankWin[]).map((w) => <td key={w}>{cell(r.id, w)}</td>)}
                   </tr>

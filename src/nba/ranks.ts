@@ -117,3 +117,38 @@ export function rankPlayers(players: NbaPlayer[], logs: GameLog[], today: string
   }
   return out
 }
+
+// ── What others think a player is worth, against what he is worth to me ──
+
+/** Places between how others rate a player and what he is worth to me, to call it a chance to sell high or buy low. */
+export const MARKET_GAP = 30
+
+export interface MarketFlag {
+  kind: 'sell' | 'buy'
+  /** How the league sees him: his last 30 days on all nine (or points), else his season. */
+  seen: number
+  /** What he is worth to me: rest of season under my build. */
+  worth: number
+  /** Why they differ: his recent play against his line ('form'), my punts ('punt'), or both. */
+  why: 'form' | 'punt' | 'both'
+}
+
+/**
+ * Sell high: mine, rated by the league (recent games, every category) at least MARKET_GAP places better than he is
+ * worth to me for the rest of the season, and rated like a roster player. Buy low: someone else's, worth that much
+ * more to me than the league's view of him, and worth a roster spot to me. Managers trade on recent box scores and
+ * on all nine categories, not on my line or my punts (2026-11-16).
+ */
+export function marketFlag(r: PlayerRanks, mine: boolean, line: number): MarketFlag | null {
+  const seen = r.d30.rank ?? r.season.rank
+  const worth = r.ros.build
+  const nine = r.ros.rank
+  if (seen == null || worth == null || nine == null) return null
+  const gap = worth - seen
+  // The gap in two parts: the league's recent view against my line on all nine, and my punts against all nine.
+  const form = nine - seen, punt = worth - nine
+  const why = (f: number, p: number): MarketFlag['why'] => (f >= MARKET_GAP / 2 && p >= MARKET_GAP / 2 ? 'both' : p > f ? 'punt' : 'form')
+  if (mine && gap >= MARKET_GAP && seen <= line) return { kind: 'sell', seen, worth, why: why(form, punt) }
+  if (!mine && -gap >= MARKET_GAP && worth <= line) return { kind: 'buy', seen, worth, why: why(-form, -punt) }
+  return null
+}

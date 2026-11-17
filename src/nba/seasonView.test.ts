@@ -11,7 +11,8 @@ import { addDays, IL_WEEK_SLACK, RISE_GAP, PAIR_MARGIN, shortlistForWeek, STREAM
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
 import { diffStatus } from './news.js'
-import { allPlay } from './extras.js'
+import { MARKET_GAP } from './ranks.js'
+import { allPlay, FAIR_PLACES, FAIR_RATIO, looksTo, wouldTake } from './extras.js'
 
 const players: NbaPlayer[] = JSON.parse(readFileSync('data/nba/players.json', 'utf8')).players
 const schedule: Game[] = JSON.parse(readFileSync('data/nba/schedule.json', 'utf8')).games
@@ -1137,6 +1138,47 @@ test('ranks on the screen: every player named carries his four windows; the rank
   assert.equal(v.rankings!.rows.find((r) => r.id === hot.id)!.owner, null)
   // Nobody below the depth in every window is listed.
   for (const r of v.rankings!.rows) assert.ok(Object.values(v.players[r.id].ranks!).some((x) => x.build != null && x.build <= Math.round(line * 1.5)))
+})
+
+test("sell high, buy low: the league's view against my worth, on the screen and in trade ideas they would take", () => {
+  const { league, snap, w: w0, ctx: c0 } = realLeague('2026-10-26-public', publicLeague, '2', 20, '2026-11-20')
+  const mineIds = snap.rosters.find((r) => r.team.id === '2')!.players.filter((y) => y.slot !== 'IL').map((y) => c0.resolve(y)!).filter(Boolean)
+  const ros0 = c0.ranks()
+  // My most ordinary player has had a month like a star, in his usual minutes: the league rates him far above his line.
+  const hot = [...mineIds].sort((a, b) => ros0.get(b)!.ros.build! - ros0.get(a)!.ros.build!)[0]
+  // And another team's best has had a month well below his line: the league rates him below his worth to me.
+  const theirIds = snap.rosters.find((r) => r.team.id === '5')!.players.filter((y) => y.slot !== 'IL').map((y) => c0.resolve(y)!).filter(Boolean)
+  const cold = [...theirIds].sort((a, b) => ros0.get(a)!.ros.build! - ros0.get(b)!.ros.build!)[0]
+  const line = (p: NbaPlayer, k = 1) => { const g = p.projection!.perGame, sh = p.projection!.shooting; return { ...emptyBox(), fgm: (sh.fga ?? 0) * (sh.fgPct ?? 0) * k, fga: (sh.fga ?? 0) * k, ftm: (sh.fta ?? 0) * (sh.ftPct ?? 0) * k, fta: (sh.fta ?? 0) * k, tpm: g.tpm * k, pts: g.pts * k, reb: g.reb * k, ast: g.ast * k, stl: g.stl * k, blk: g.blk * k, to: g.to } }
+  const dates = Array.from({ length: 12 }, (_, i) => addDays('2026-10-25', i * 2))
+  const logs = w0.players.filter((p) => p.projection && p.team && p.projection.perGame.min > 10).flatMap((p) => dates.map((date) => ({ id: p.id, date, team: p.team, min: p.projection!.perGame.min, box: line(p, p.id === hot ? 1.9 : p.id === cold ? 0.55 : 1) })))
+  const v = buildSeasonView(league, snap, { ...w0, logs: logs as any })
+  const m = v.market.sell.find((x) => x.id === hot)
+  assert.ok(m, 'mine, rated far above his worth: sell high')
+  assert.ok(m!.worth - m!.seen >= MARKET_GAP && m!.why === 'form')
+  assert.equal(v.players[hot].market?.kind, 'sell')
+  for (const x of v.market.sell) assert.equal(x.teamId, '2')
+  for (const x of v.market.buy) assert.notEqual(x.teamId, '2')
+  assert.ok(v.market.buy.some((x) => x.id === cold && x.teamId === '5'), 'theirs, rated below his worth to me: buy low')
+  // How each trade looks to them: the best they get against the best they give, on the league's view.
+  const seenOf = (id: string) => { const r = v.players[id].ranks!; return r.d30.rank ?? r.season.rank ?? r.ros.rank ?? 999 }
+  for (const t of v.trades) assert.equal(t.looks, Math.min(...t.give.map((g) => seenOf(g.id))) <= Math.min(...t.get.map((g) => seenOf(g.id))) * FAIR_RATIO + FAIR_PLACES ? 'fair' : 'short', t.why)
+  // Trade ideas sell him: one they lose on my numbers is offered only when it looks fair to them and plays an angle.
+  const sells = v.trades.filter((t) => t.angles.some((a) => a.id === hot && a.kind === 'sell'))
+  assert.ok(sells.length > 0, 'a trade sells him high')
+  assert.ok(v.trades.some((t) => t.them < -0.04 && t.looks === 'fair' && t.angles.length), 'one they would take on recent ranks, though my numbers say it costs them')
+  for (const t of v.trades) if (t.them < -0.04) assert.ok(t.looks === 'fair' && t.angles.length > 0, t.why)
+  // They take what is no loss to them by my numbers; a loss only when it looks fair to them and plays an angle.
+  assert.ok(wouldTake(-0.01, 0.08, 'short', 0))
+  assert.ok(!wouldTake(-0.2, 0.08, 'short', 1), 'looks short to them')
+  assert.ok(!wouldTake(-0.2, 0.08, 'fair', 0), 'no angle: just a bad trade for them')
+  assert.ok(wouldTake(-0.2, 0.08, 'fair', 1))
+  // I give the first list (they get it), they give the second: a little worse in what they get still looks fair.
+  assert.equal(looksTo([3], [1]), 'fair')
+  assert.equal(looksTo([10], [1]), 'short', 'a hot #10 is no #1')
+  assert.equal(looksTo([26], [20]), 'fair')
+  assert.equal(looksTo([27], [20]), 'short', 'they give the clearly better player')
+  assert.equal(looksTo([90, 26], [20]), 'fair', 'two for one: the best they get counts')
 })
 
 /** Today's lineup with the best of mine who plays today benched for the weakest bench player who also plays. */

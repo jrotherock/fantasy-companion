@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MIN_GAMES, rankPlayers } from './ranks.js'
+import { MARKET_GAP, marketFlag, MIN_GAMES, rankPlayers, type PlayerRanks } from './ranks.js'
 import { emptyBox } from './yahooSeason.js'
 import type { NbaPlayer } from './types.js'
 import type { GameLog } from './outlook.js'
@@ -57,4 +57,30 @@ test('ranks: shooting is weighed by attempts, a punt makes its own order, a poin
   // x and y tie on points and assists; z: 14 + 13.5 = 27.5 beats 23.
   assert.equal(pts.get('z')!.ros.rank, 1)
   assert.equal(pts.get('z')!.ros.build, 1, 'no punts in points')
+})
+
+const pr = (d30: number | null, season: number | null, ros: number, build = ros): PlayerRanks => ({
+  d7: { rank: null, build: null, games: 0 }, d30: { rank: d30, build: null, games: 5 }, season: { rank: season, build: null, games: 5 }, ros: { rank: ros, build, games: 0 },
+})
+
+test('sell high: mine, rated by the league well above his worth to me and like a roster player; buy low: theirs, the other way', () => {
+  const line = 130
+  // A hot month on a modest line: sell.
+  assert.deepEqual(marketFlag(pr(40, 60, 40 + MARKET_GAP), true, line), { kind: 'sell', seen: 40, worth: 70, why: 'form' })
+  assert.equal(marketFlag(pr(40, 60, 40 + MARKET_GAP - 1), true, line), null, 'not by enough')
+  assert.equal(marketFlag(pr(140, 160, 200), true, line), null, 'the league would not want him either')
+  // The same player on another roster is no buy; nor is mine a buy.
+  assert.equal(marketFlag(pr(40, 60, 70), false, line), null)
+  // A slumping star elsewhere: buy. Mine slumping: nothing to do.
+  assert.deepEqual(marketFlag(pr(90, 80, 20), false, line), { kind: 'buy', seen: 90, worth: 20, why: 'form' })
+  assert.equal(marketFlag(pr(90, 80, 20), true, line), null)
+  assert.equal(marketFlag(pr(200, 200, 140), false, line), null, 'not worth a roster spot to me')
+  // No month yet: the season is what the league sees; nothing at all, no flag.
+  assert.equal(marketFlag(pr(null, 40, 80), true, line)!.seen, 40)
+  assert.equal(marketFlag(pr(null, null, 80), true, line), null)
+  // My punts: an assists guard others rate #30 on all nine and on form, worth #75 to my punt-assists build.
+  assert.equal(marketFlag(pr(30, 30, 32, 75), true, line)!.why, 'punt')
+  assert.equal(marketFlag(pr(30, 30, 50, 90), true, line)!.why, 'both')
+  // A big with no assists, #95 to the league, #60 to me: a buy for my build.
+  assert.equal(marketFlag(pr(95, 95, 92, 60), false, line)!.why, 'punt')
 })

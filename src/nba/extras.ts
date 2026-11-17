@@ -9,7 +9,8 @@
  */
 import type { NbaMatchup } from './yahooSeason.js'
 import { catsOf } from './yahooSeason.js'
-import { CATS, type Cat } from './value.js'
+import { CATS, rosterSpots, type Cat } from './value.js'
+import { marketFlag, type MarketFlag } from './ranks.js'
 import { startingSeats } from './week.js'
 import { catsVsLeague, pointsVsLeague, typicalWeek, type Member } from './strength.js'
 import { member, rosterIds, teamWeeks, type Context, type Snapshot } from './inseason.js'
@@ -169,6 +170,26 @@ export function playoffPlan(ctx: Context, snap: Snapshot, myTeamId: string): Pla
 
 // ── Trades ─────────────────────────────────────────────────────────────────
 
+export type Market = MarketFlag & { id: string; teamId: string; teamName: string }
+
+/**
+ * Every rostered player the league rates differently from what he is worth to me (ranks.ts marketFlag): mine to sell
+ * high, others' to buy low. Biggest gap first.
+ */
+export function marketFlags(ctx: Context, snap: Snapshot, myTeamId: string): Map<string, Market> {
+  const line = ctx.league.teams * rosterSpots(ctx.league.roster)
+  const ranks = ctx.ranks()
+  const out: Market[] = []
+  for (const r of snap.rosters) for (const y of r.players) {
+    const id = ctx.resolve(y)
+    const rk = id ? ranks.get(id) : null
+    if (!id || !rk || ctx.world.never.has(id)) continue
+    const f = marketFlag(rk, r.team.id === myTeamId, line)
+    if (f) out.push({ ...f, id, teamId: r.team.id, teamName: r.team.name })
+  }
+  return new Map(out.sort((a, b) => Math.abs(b.worth - b.seen) - Math.abs(a.worth - a.seen)).map((m) => [m.id, m]))
+}
+
 export interface TradeIdea {
   teamId: string
   teamName: string
@@ -179,7 +200,27 @@ export interface TradeIdea {
   me: number
   them: number
   why: string
+  /** The players in it the league rates differently from what they are worth to me: mine sold high, theirs bought low. */
+  angles: { id: string; name: string; kind: 'sell' | 'buy'; seen: number; worth: number }[]
+  /** How it looks to them on the league's view (recent ranks): the best they get against the best they give. */
+  looks: 'fair' | 'short'
 }
+
+/**
+ * How a trade may look to the other side and still be fair to them: the best player they get may rank this much
+ * below the best they give, in proportion, plus a couple of places (#1 for #3, #20 for #26, #57 for #70). A flat
+ * allowance let a hot #10 pass for the league's #1.
+ */
+export const FAIR_RATIO = 1.2, FAIR_PLACES = 2
+
+/** How a trade looks to the other side on the league's view: the best they get against the best they give, ranks. */
+export const looksTo = (giveSeen: number[], getSeen: number[]): 'fair' | 'short' => (Math.min(...giveSeen) <= Math.min(...getSeen) * FAIR_RATIO + FAIR_PLACES ? 'fair' : 'short')
+
+/**
+ * Whether the other side would take a trade: no clear loss by my numbers, or a loss there that looks fair to them on
+ * recent ranks and sells high or buys low (they trade on recent games and all nine, not my line or my punts).
+ */
+export const wouldTake = (them: number, bar: number, looks: 'fair' | 'short', angles: number) => them > -bar / 2 || (looks === 'fair' && angles > 0)
 
 /**
  * Trades that help me and do not hurt them much: every one-for-one, and two of
@@ -215,6 +256,10 @@ export function tradeIdeas(ctx: Context, snap: Snapshot, myTeamId: string, limit
 
   const ideas: TradeIdea[] = []
   const name = (id: string) => ctx.byId.get(id)?.name ?? id
+  // The league's view of each player (recent ranks, every category), for how a trade looks to the other side.
+  const market = marketFlags(ctx, snap, myTeamId)
+  const ranks = ctx.ranks()
+  const seen = (id: string) => { const r = ranks.get(id); return r?.d30.rank ?? r?.season.rank ?? r?.ros.rank ?? 999 }
   for (const [teamId, them] of tw) {
     if (teamId === myTeamId) continue
     const baseThem = scoreOf(teamId, none)
@@ -234,8 +279,15 @@ export function tradeIdeas(ctx: Context, snap: Snapshot, myTeamId: string, limit
       const me = scoreOf(myTeamId, swap) - baseMe
       const th = scoreOf(teamId, swap) - baseThem
       const bar = cats ? 0.08 : 0.01
-      if (me > bar && th > -bar / 2) {
+      // On the league's view, the best player they get against the best they give, a little slack either way.
+      const looks = looksTo(give.map((m) => seen(m.id)), get.map((m) => seen(m.id)))
+      const angles = [...give.filter((m) => market.get(m.id)?.kind === 'sell'), ...get.filter((m) => market.get(m.id)?.kind === 'buy')]
+        .map((m) => { const f = market.get(m.id)!; return { id: m.id, name: name(m.id), kind: f.kind, seen: f.seen, worth: f.worth } })
+      // A trade that is a loss for them by my numbers is still one they may take when it looks fair to them and sells
+      // high or buys low: they trade on recent games and all nine categories, not on my line or my punts.
+      if (me > bar && wouldTake(th, bar, looks, angles.length)) {
         ideas.push({
+          angles, looks,
           teamId, teamName: team.name, manager: team.manager,
           give: give.map((m) => ({ id: m.id, name: name(m.id) })), get: get.map((m) => ({ id: m.id, name: name(m.id) })),
           me, them: th,
@@ -251,9 +303,11 @@ export function tradeIdeas(ctx: Context, snap: Snapshot, myTeamId: string, limit
     const theirBest = [...theirs].sort((a, b) => b.worth - a.worth).slice(0, 5)
     for (let i = 0; i < myDepth.length; i++) for (let j = i + 1; j < myDepth.length; j++) for (const r of theirBest) tryTrade([myDepth[i], myDepth[j]], [r])
   }
-  // One idea per player received, the best for me among those they would not mind.
+  // One idea per player received, the best for me among those they would not mind; one that looks fair to them and
+  // plays a sell-high or buy-low counts as if it cost them nothing.
   const best = new Map<string, TradeIdea>()
-  for (const t of ideas.sort((a, b) => b.me + Math.min(0, b.them) - (a.me + Math.min(0, a.them)))) {
+  const key = (t: TradeIdea) => t.me + (t.looks === 'fair' && t.angles.length ? 0 : Math.min(0, t.them))
+  for (const t of ideas.sort((a, b) => key(b) - key(a))) {
     const key = t.get.map((g) => g.id).join('+')
     if (!best.has(key)) best.set(key, t)
   }
