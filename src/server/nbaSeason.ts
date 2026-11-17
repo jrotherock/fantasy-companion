@@ -39,7 +39,7 @@ import { diffStatus, type StatusEvent } from '../nba/news.js'
 import { buildSeasonView, startSitView, losesStart, pickupAlerts, seasonAlerts, seasonTile, type SeasonTile, type SeasonView } from '../nba/seasonView.js'
 import { parseEspnScoreboard, type LiveGame } from '../nba/scores.js'
 import type { Allowed } from '../nba/opponent.js'
-import { claimsFailedNow, claimsFailedOf, rollWeek, weekOf, type Fixture, type SeasonLeague, type Snapshot, type WeekDays, type World } from '../nba/inseason.js'
+import { claimsFailedNow, claimsFailedOf, rollWeek, weekOf, yahooSeatsOf, type Fixture, type SeasonLeague, type Snapshot, type WeekDays, type World } from '../nba/inseason.js'
 import { daysFrom } from '../nba/week.js'
 import { addDays } from '../nba/adds.js'
 import type { Box } from '../nba/yahooSeason.js'
@@ -90,6 +90,8 @@ const isTest = (id: string) => id.endsWith('-test')
 interface Stored extends Snapshot {
   /** When each part was last read, and the last error. */
   parts: Record<string, { at: number; error?: string | null; tried?: number }>
+  /** Yahoo's available players by its season rank, with the positions Yahoo seats them at: where a free agent can start. */
+  available?: { yahooId: string; name: string; team: string | null; eligible: string[] }[]
 }
 
 const emptySnap = (): Stored => ({
@@ -166,6 +168,10 @@ let schedule: Game[] | null = null
 let opponentPrior: Allowed | null | undefined
 let noise: World['noise'] | null = null
 
+/** Yahoo's positions for each player, from every league's rosters and its lists of available players. */
+const yahooSeats = (players: NbaPlayer[]) =>
+  yahooSeatsOf(players, leagues().flatMap((l) => { const s = snapOf(l.id); return [...s.rosters.flatMap((r) => r.players), ...(s.available ?? [])] }))
+
 function world(leagueId: string): World {
   opponentPrior ??= existsSync(`${DATA}/opponent-2025.json`) ? JSON.parse(readFileSync(`${DATA}/opponent-2025.json`, 'utf8')) as Allowed : null
   schedule ??= JSON.parse(readFileSync(`${DATA}/schedule.json`, 'utf8')).games as Game[]
@@ -179,6 +185,7 @@ function world(leagueId: string): World {
   })
   const now = clock()
   return {
+    seats: yahooSeats(players),
     players,
     logs: Object.values(sleeper.logs).flatMap((x) => x.rows),
     dayProj: new Map(Object.values(sleeper.proj).flatMap((x) => x.rows)),
@@ -247,7 +254,7 @@ function gamesOn(now = clock()): boolean {
   return now >= Math.min(...tips) - HOUR && now <= Math.max(...tips) + 3 * HOUR
 }
 
-type Part = 'settings' | 'weeks' | 'rosters' | 'today' | 'tomorrow' | 'scoreboard' | 'standings' | 'waivers' | 'transactions' | 'pending' | 'past' | 'fixtures' | 'weekDays'
+type Part = 'settings' | 'weeks' | 'rosters' | 'today' | 'tomorrow' | 'scoreboard' | 'standings' | 'waivers' | 'transactions' | 'pending' | 'past' | 'fixtures' | 'weekDays' | 'available'
 
 function every(part: Part, drafted: boolean, live: boolean): number {
   if (!drafted) return part === 'rosters' || part === 'settings' || part === 'weeks' ? 6 * HOUR : Infinity
@@ -257,6 +264,7 @@ function every(part: Part, drafted: boolean, live: boolean): number {
     case 'today': case 'scoreboard': return live ? 10 * MIN : HOUR
     case 'standings': return 3 * HOUR
     case 'waivers': return 2 * HOUR
+    case 'available': return 12 * HOUR
     case 'transactions': return HOUR
     case 'pending': return live ? 15 * MIN : 30 * MIN
     case 'past': return 12 * HOUR
@@ -326,6 +334,16 @@ async function readLeague(l: SeasonLeague & { myTeamId: string | null }, force =
       })
       await run('standings', async () => { s.standings = parseStandings(leagueBody(await yahooApi.call(`league/${key}/standings`, { by: 'nba-season' }))) })
       await run('waivers', async () => { s.waivers = parsePlayers(await yahooApi.call(`league/${key}/players;status=W;count=25`, { by: 'nba-season' })).map((p) => p.yahooId) })
+      // The top hundred available, twice a day: the positions Yahoo seats each at (four calls).
+      await run('available', async () => {
+        const got: NonNullable<Stored['available']> = []
+        for (let start = 0; start < 100; start += 25) {
+          const ps = parsePlayers(await yahooApi.call(`league/${key}/players;status=A;sort=AR;start=${start};count=25`, { by: 'nba-season' }))
+          got.push(...ps.map((p) => ({ yahooId: p.yahooId, name: p.name, team: p.team, eligible: p.eligible })))
+          if (ps.length < 25) break
+        }
+        s.available = got
+      })
       await run('transactions', async () => { s.transactions = parseTransactions(leagueBody(await yahooApi.call(`league/${key}/transactions;types=add,drop,trade;count=25`, { by: 'nba-season' }))) })
       // My pending waiver claims (Yahoo shows a team's own), planned as if they clear (2026-10-27: "why can't the app
       // read and understand claims I've put in?"). One gone: cleared if the player came to me, else it failed.

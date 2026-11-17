@@ -175,7 +175,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   view.playoffs?.targets.forEach((x) => ids.add(x.id))
   for (const id of ids) {
     const p = ctx.byId.get(id)
-    if (p) view.players[id] = { name: p.name, team: p.team, positions: p.positions }
+    if (p) view.players[id] = { name: p.name, team: p.team, positions: ctx.seatsOf(id) }
   }
   return view
 }
@@ -235,7 +235,7 @@ export function withClaims(ctx: Context, snap: Snapshot, me: string, claims: Sea
       const adds = claims.map((c) => {
         const y = t.find((x) => x.key === c.id)!.players.find((p) => p.kind === 'add')!.player
         const p = ctx.byId.get(c.add)
-        return { ...y, slot: 'BN', eligible: y.eligible?.length ? y.eligible : [...(p?.positions ?? []), 'Util'] }
+        return { ...y, slot: 'BN', eligible: y.eligible?.length ? y.eligible : [...(p ? ctx.seatsOf(p.id) : []), 'Util'] }
       })
       return { ...r, players: [...kept, ...adds] }
     }),

@@ -90,6 +90,12 @@ export interface World {
   noise: Noise
   /** Never-list ids: never offered as a pickup or a trade target. */
   never: Set<string>
+  /**
+   * Yahoo's positions for each player, by player id, as Yahoo lists them now (any roster in my leagues, or its list of
+   * available players). A free agent is seated by these, not by the player file's (Sleeper's), which can give a seat
+   * Yahoo does not (2026-11-16: Cam Spencer PG/SF/SG in the file, PG/SG on Yahoo; Public's Adds had him starting at F).
+   */
+  seats?: Map<string, string[]>
   /** Today's games as they stand (score, period, clock), where read. */
   scores?: LiveGame[]
   now: number
@@ -114,6 +120,23 @@ export function seatPositions(eligible: string[]): string[] {
     if (e === 'F') { out.add('SF'); out.add('PF') }
   }
   return [...out]
+}
+
+/**
+ * Yahoo's positions for each player id, from what Yahoo listed (rosters, available players): Yahoo's positions are the
+ * same in every league, and a later listing of a player replaces an earlier one.
+ */
+export function yahooSeatsOf(players: NbaPlayer[], listed: { yahooId: string; name: string; team: string | null; eligible: string[] }[]): Map<string, string[]> {
+  const byYahoo = new Map(players.filter((p) => p.yahoo?.yahooId).map((p) => [p.yahoo!.yahooId, p.id]))
+  const index = new NameIndex(players.map((p) => ({ id: p.id, name: p.name, team: p.team })))
+  const out = new Map<string, string[]>()
+  for (const y of listed) {
+    const seats = seatPositions(y.eligible ?? [])
+    if (!seats.length) continue
+    const id = byYahoo.get(y.yahooId) ?? index.resolve(y.name, teamCode(y.team))
+    if (id) out.set(id, seats)
+  }
+  return out
 }
 
 const RESERVE = new Set(['BN', 'IL', 'IL+', 'IR', 'NA'])
@@ -373,7 +396,15 @@ export class Context {
 
   man(id: string, eligible: string[] | null = null): Man {
     const p = this.byId.get(id)
-    return { id, name: p?.name ?? id, positions: seatPositions(eligible ?? p?.positions ?? []), team: p?.team ?? null }
+    return { id, name: p?.name ?? id, positions: seatPositions(eligible ?? this.seatsOf(id)), team: p?.team ?? null }
+  }
+
+  /** The seats Yahoo lets him fill: as Yahoo lists him now, else its preseason list, else the player file's. */
+  seatsOf(id: string): string[] {
+    const live = this.world.seats?.get(id)
+    if (live?.length) return live
+    const p = this.byId.get(id)
+    return p?.yahoo?.positions?.length ? p.yahoo.positions : p?.positions ?? []
   }
 }
 

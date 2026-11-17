@@ -6,7 +6,7 @@ import type { NbaPlayer, Game, YahooWeek } from './types.js'
 import type { Cat } from './value.js'
 import { buildSeasonView, claimsOf, DO, lineupWatchOf, LOOK, NOTIFY_PAIR_WINS, NOTIFY_WINS, pickupAlerts, seasonAlerts, seasonTile, verdictOf, type SeasonView } from './seasonView.js'
 import { emptyBox, type NbaMatchup, type RosterDay, type TeamMeta } from './yahooSeason.js'
-import { claimsFailedOf, Context, rollWeek, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
+import { claimsFailedOf, Context, rollWeek, yahooSeatsOf, rosterIds, sideOutlook, soFarOf, type Fixture, type SeasonLeague, type Snapshot, type Whatif, type World } from './inseason.js'
 import { addDays, IL_WEEK_SLACK, PAIR_MARGIN, shortlistForWeek, STREAM_KEEP_MIN, STREAM_SEASON_COST, UPGRADE_WINS, SPECIALISTS, specialists, starLine, WEEK_SEASON_COST, WHATIFS, whatifFor, scoreWeek, type PairMove } from './adds.js'
 import { daysFrom, startingSeats } from './week.js'
 import { categoryWeek, pointsWeek } from './matchup.js'
@@ -1069,6 +1069,39 @@ test("same-day adds: a free agent playing later today counts today; without them
   const days = (v: SeasonView) => [...v.pickups.flatMap((p) => p.playDays.map((d) => d.date)), ...(v.weekPlan?.moves ?? []).map((m) => m.from)]
   assert.ok(days(same).includes('2026-10-22'), 'an add plays tonight')
   assert.ok(!days(next).includes('2026-10-22'), 'without same-day adds, nothing before tomorrow')
+})
+
+test("a free agent is seated where Yahoo seats him, not where the player file does (Public, 2026-11-16: Cam Spencer offered at F)", () => {
+  // Yahoo's list wins over the file: by Yahoo id, else by name and team; G and F stand for both their seats.
+  const spencer = players.find((p) => p.name === 'Cam Spencer')!
+  const flagg = players.find((p) => p.name === 'Cooper Flagg')!
+  const noId = players.find((p) => !p.yahoo && p.team && p.positions.length)!
+  const seats = yahooSeatsOf(players, [
+    { yahooId: spencer.yahoo!.yahooId, name: 'Someone Else', team: 'MEM', eligible: ['PG', 'SG', 'G', 'Util'] },
+    { yahooId: 'nobody', name: noId.name, team: noId.team, eligible: ['F', 'Util'] },
+    { yahooId: flagg.yahoo!.yahooId, name: flagg.name, team: flagg.team, eligible: ['Util'] },
+  ])
+  assert.deepEqual(seats.get(spencer.id), ['PG', 'SG'])
+  assert.deepEqual(seats.get(noId.id), ['SF', 'PF'])
+  assert.ok(!seats.has(flagg.id), 'Util alone says nothing')
+  const ctx = new Context(publicLeague, { ...world('2026-11-16'), seats })
+  assert.deepEqual(ctx.seatsOf(spencer.id), ['PG', 'SG'])
+  // Not listed now: Yahoo's preseason list, then the file's.
+  assert.deepEqual(ctx.seatsOf(flagg.id), flagg.yahoo!.positions)
+  const bare = players.find((p) => !p.yahoo && p.positions.length && p.id !== noId.id)!
+  assert.deepEqual(ctx.seatsOf(bare.id), bare.positions)
+
+  // Adds seat every free agent by Yahoo's list: listed as centres only, every pickup is offered as one, and the plan moves.
+  const { league, snap, w } = realLeague('2026-10-19-public', publicLeague, '2', 20, '2026-10-22')
+  const asFile = buildSeasonView(league, snap, w)
+  // Rostered players are seated by their roster rows, so listing everyone touches only the free agents.
+  const centres = new Map(w.players.map((p) => [p.id, ['C']]))
+  const asYahoo = buildSeasonView(league, snap, { ...w, seats: centres })
+  assert.ok(asYahoo.pickups.length > 0)
+  for (const p of asYahoo.pickups) assert.deepEqual(p.positions, ['C'], p.name)
+  assert.deepEqual(asYahoo.players[asYahoo.pickups[0].add].positions, ['C'])
+  const plan = (v: SeasonView) => JSON.stringify([v.pickups.map((p) => [p.add, p.drop, p.playDays]), v.weekPlan?.moves.map((m) => [m.add, m.drop, m.from])])
+  assert.notEqual(plan(asYahoo), plan(asFile), 'where he can sit changes what he is worth')
 })
 
 /** Today's lineup with the best of mine who plays today benched for the weakest bench player who also plays. */
