@@ -89,8 +89,9 @@ const TREND = 30
 const shown = (w: PRanks[RankWin], build: boolean) => (build ? w.build : w.rank)
 
 /**
- * A player's rank beside his name: rest of season under my build, with ▲ or ▼ where his last 7 days say otherwise;
- * a tap shows all four windows. Green inside the line a league this size rosters.
+ * A player's rank beside his name, rest of season: on all nine and for my build where I punt ("#58 · you #30"), with
+ * ▲ or ▼ where his last 7 days say otherwise for me; a tap shows all four windows. Green inside the line a league this
+ * size rosters, for my build.
  */
 type MarketF = NonNullable<SeasonView['players'][string]['market']>
 const WHY_WORDS: Record<MarketF['why'], string> = { form: 'his recent games', punt: 'your punts', both: 'his recent games and your punts' }
@@ -114,11 +115,15 @@ function Rank({ id }: { id: string }) {
   if (!c || !r) return null
   const ros = shown(r.ros, c.punted), d7 = shown(r.d7, c.punted)
   const trend = ros != null && d7 != null ? (ros - d7 >= TREND ? 'up' : d7 - ros >= TREND ? 'down' : null) : null
-  const all = (Object.keys(WIN_SHORT) as RankWin[]).map((w) => `${WIN_SHORT[w]} ${shown(r[w], c.punted) != null ? `#${shown(r[w], c.punted)}` : '—'}`).join(' · ')
-  const title = `Rank${c.punted ? ' for your punt build' : ''}, per game: ${all}. The top ${c.rostered} are roster players in a league this size.`
+  const nine = r.ros.rank
+  const windows = (build: boolean) => (Object.keys(WIN_SHORT) as RankWin[]).map((w) => `${WIN_SHORT[w]} ${shown(r[w], build) != null ? `#${shown(r[w], build)}` : '—'}`).join(' · ')
+  const all = c.punted ? `All 9: ${windows(false)}. Your build: ${windows(true)}` : windows(false)
+  const title = `Rank per game, rest of season${c.punted ? ' on all 9 categories, then for your punt build' : ''}. ${all}. The top ${c.rostered} are roster players in a league this size.`
+  // With a punt, both: all nine first, then mine (2026-11-16: Thybulle's #30 read as his overall rank; it was mine).
+  const label = ros == null ? '—' : c.punted && nine != null && nine !== ros ? `#${nine} · you #${ros}` : `#${ros}`
   return (<>
     <button type="button" className={`nl-rank ${ros != null && ros <= c.rostered ? 'in' : 'out'}`} title={title} aria-label={title} onClick={(e) => { e.stopPropagation(); setOpen(!open) }}>
-      {ros != null ? `#${ros}` : '—'}{trend === 'up' ? ' ▲' : trend === 'down' ? ' ▼' : ''}
+      {label}{trend === 'up' ? ' ▲' : trend === 'down' ? ' ▼' : ''}
       {open && <span className="nl-rank-all"> {all}</span>}
     </button>
     {c.players[id]?.market && <> <MarketTag id={id} /></>}
