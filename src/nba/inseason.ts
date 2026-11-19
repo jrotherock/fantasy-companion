@@ -781,6 +781,20 @@ export function rollWeek(snap: Snapshot, world: World): { snap: Snapshot; world:
     return !!g.tip && world.now >= Date.parse(g.tip) + 3 * 3_600_000
   }
   if (!games.every(over)) return null
+  return rollAfter(snap, world, end)
+}
+
+/**
+ * Next matchup week as it will stand on its first day, whatever today is: its pairing, no adds used, my roster as it
+ * is. For planning that week's adds ahead (2026-11-19: Public at 4 of 4 adds by Thursday, "how can I still get
+ * recommendations for the week if I can't execute on them?").
+ */
+export function nextWeekOf(snap: Snapshot, world: World): { snap: Snapshot; world: World } | null {
+  const end = snap.scoreboard[0]?.end ?? weekOf(snap.weeks, world.today)?.[2]
+  return end ? rollAfter(snap, world, end) : null
+}
+
+function rollAfter(snap: Snapshot, world: World, end: string): { snap: Snapshot; world: World } | null {
   const dayAfter = new Date(Date.parse(`${end}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
   const next = snap.weeks.find(([, s]) => s === dayAfter)
   const fx = next && snap.fixtures?.find((f) => f.week === next[0])

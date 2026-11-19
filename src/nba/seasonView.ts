@@ -8,7 +8,7 @@ import { rosterSpots, type Cat } from './value.js'
 import type { PlayerRanks } from './ranks.js'
 import { startingSeats } from './week.js'
 import { startSit, type StartSit } from './startsit.js'
-import { buildWeek, checkLineup, claimsFailedNow, Context, rosterIds, moveEffects, weekValue, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
+import { buildWeek, checkLineup, claimsFailedNow, Context, nextWeekOf, rosterIds, moveEffects, weekValue, type LineupCheck, type SeasonLeague, type Snapshot, type WeekView, type World } from './inseason.js'
 import { addDays, addPlan, budgetOf, categoryPlan, pickupsAndPairs, type AddPlan, type Budget, type CategoryPlan, type IlReturn, type IlSwap, type PairMove, type Pickup, type WeekPlan } from './adds.js'
 import { leagueNews, type NewsItem, type StatusEvent } from './news.js'
 import { allPlay, marketFlags, playoffPlan, power, tradeIdeas, type AllPlay, type Market, type PlayoffPlan, type PowerRow, type TradeIdea } from './extras.js'
@@ -21,6 +21,19 @@ export interface PlayerRef {
   /** The league rates him differently from what he is worth to me: sell high (mine) or buy low (someone else's). */
   market?: Market
 }
+
+export interface NextWeek {
+  week: number
+  start: string
+  end: string
+  opponent: string | null
+  /** Its best adds by its chance of winning, from its first day (adds.ts weekPlan), and the best for the season. */
+  plan: WeekPlan | null
+  pickups: Pickup[]
+}
+
+/** This week's adds used up: a weekly limit reached (pending claims count, as Yahoo counts them). */
+export const addsGone = (v: Pick<SeasonView, 'budget'>) => !!v.budget?.week && v.budget.week.used >= v.budget.week.max
 
 /** The league's rankings: the best by each window, mine and who has each. */
 export interface Rankings {
@@ -58,6 +71,11 @@ export interface SeasonView {
   players: Record<string, PlayerRef>
   /** Every player worth a look by any window, ranked (ranks.ts). */
   rankings: Rankings | null
+  /**
+   * This week's adds all used: the week ahead's best adds, planned from its first day against its opponent, to make
+   * when the adds reset (2026-11-19: Public at 4 of 4 by Thursday).
+   */
+  nextWeek: NextWeek | null
   /** Mine to sell high and others' to buy low, biggest gap first (extras.ts marketFlags). */
   market: { sell: Market[]; buy: Market[] }
   /** Free agents ranked like roster players lately whose line has them below it (adds.ts risersOf), best first. */
@@ -103,6 +121,20 @@ export function startSitView(league: SeasonLeague & { myTeamId?: string | null }
   return startSit(ctx, snap, me.id, date, aId, bId)
 }
 
+/** The week ahead's adds, planned from its first day with its adds all free; null where its pairing is not known. */
+export function nextWeekPlan(league: SeasonLeague, snap: Snapshot, world: World, myTeamId: string, punts: Cat[], adds: number): NextWeek | null {
+  const r = nextWeekOf(snap, world)
+  if (!r) return null
+  const ctx = new Context(league, r.world, new Map())
+  const { pickups, weekPlan } = pickupsAndPairs(ctx, r.snap, myTeamId, { punts, addsLeft: adds })
+  const m = r.snap.scoreboard.find((x) => x.sides.some((sd) => sd.id === myTeamId))
+  return {
+    week: m?.week ?? 0, start: r.world.today, end: m?.end ?? r.world.today,
+    opponent: m?.sides.find((sd) => sd.id !== myTeamId)?.name ?? null,
+    plan: weekPlan, pickups: pickups.filter((p) => p.kind !== 'stream').slice(0, 3),
+  }
+}
+
 /** Buy-low targets listed. */
 export const MARKET_SHOWN = 12
 
@@ -140,7 +172,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     league: { id: league.id, label: league.label, scoring: league.scoring, teams: league.teams, points: league.scoring === 'points' ? league.points ?? null : null },
     at: snap.at, today: world.today, phase: drafted ? 'season' : 'before-draft', myTeam: me,
     lineup: null, tomorrow: null, week: null, budget: null, pickups: [], keep: [], ilBack: [], pairs: [], news: [], punts: [], power: [], allPlay: null, playoffs: null, trades: [],
-    standing: null, players: {}, startsOn: null, addsOpen: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null, lineupWatch: [], claims: [], pendingClaims: [], claimsFailed: [], rankings: null, risers: [], market: { sell: [], buy: [] },
+    standing: null, players: {}, startsOn: null, addsOpen: null, addPlan: null, catPlan: null, verdict: null, weekPlan: null, ilSwap: null, weekVerdict: null, lineupWatch: [], claims: [], pendingClaims: [], claimsFailed: [], rankings: null, risers: [], market: { sell: [], buy: [] }, nextWeek: null,
   }
   if (!drafted || !me) return base
 
@@ -187,6 +219,7 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
     addPlan: addPlan(picks, budget, world.today, week?.end ?? null),
     verdict: null, weekPlan, ilSwap, weekVerdict: null,
     rankings: rankingsOf(ctx, snap, me.id), risers,
+    nextWeek: addsLeft === 0 && budget?.week ? nextWeekPlan(league, snap, world, me.id, punts, budget.week.max) : null,
     market: { sell: [...market.values()].filter((m) => m.kind === 'sell'), buy: [...market.values()].filter((m) => m.kind === 'buy').slice(0, MARKET_SHOWN) },
     lineupWatch: lineupWatchOf(ctx, lineup, punts),
     claims: claimsOf(ctx, snap, me.id),
@@ -222,6 +255,8 @@ export function buildSeasonView(league: SeasonLeague & { myTeamId?: string | nul
   // (Risers are inside the rostered line lately, so in the rankings.)
   view.rankings?.rows.forEach((r) => ids.add(r.id))
   view.market.buy.forEach((m) => ids.add(m.id))
+  view.nextWeek?.plan?.moves.forEach((m) => { ids.add(m.add); if (m.drop) ids.add(m.drop) })
+  view.nextWeek?.pickups.forEach((p) => { ids.add(p.add); if (p.drop) ids.add(p.drop) })
   const ranks = ctx.ranks()
   for (const id of ids) {
     const p = ctx.byId.get(id)
@@ -375,7 +410,8 @@ const pctOf = (x: number) => `${Math.round(x * 100)}%`
  */
 export function pickupAlerts(v: SeasonView, link: string): Alert[] {
   const out: Alert[] = []
-  if (v.phase !== 'season') return out
+  // No adds left this week: nothing to act on until they reset (the Adds screen plans that week).
+  if (v.phase !== 'season' || addsGone(v)) return out
   const name = (id: string | null) => (id ? v.players[id]?.name ?? id : '')
   const L = v.league
   // Only a move that holds up in most what-ifs is worth interrupting for.
@@ -477,6 +513,13 @@ export function weekVerdictOf(v: SeasonView): WeekVerdict | null {
   if (v.phase !== 'season' || !p) return null
   const w = p.winBefore
   const chance: WeekVerdict['chance'] = w < 0.15 ? 'long shot' : w < 0.35 ? 'uphill' : w <= 0.65 ? 'in play' : w < 0.9 ? 'ahead' : 'nearly won'
+  if (addsGone(v)) {
+    const reset = v.week ? dayLong(addDays(v.week.end, 1)) : 'next week'
+    return {
+      level: 'none', chance, winBefore: p.winBefore, winAfter: p.winBefore, moves: [], activations: [], season: null, races: [], aligned: false,
+      headline: `No adds left this week (${v.budget!.week!.used} of ${v.budget!.week!.max}): they reset ${reset}`,
+    }
+  }
   const gain = p.winAfter - p.winBefore
   const level: WeekVerdict['level'] = !p.moves.length ? 'none' : gain >= WEEK_DO ? 'do' : gain >= WEEK_LOOK ? 'look' : 'none'
   const seasonAdds = new Set((v.verdict?.level === 'none' ? [] : v.verdict?.moves ?? []).map((m) => m.add))
@@ -501,7 +544,10 @@ export function verdictOf(v: SeasonView): Verdict | null {
   const up = (step ? ups.find((p) => p.name === step.add && p.dropName === step.drop) : null) ?? ups[0] ?? null
   // The plan's value for the move: on the Monday, the season gain less this week's loss.
   const upValue = up ? (step && step.add === up.name ? step.season ?? up.seasonWins ?? 0 : up.seasonWins ?? 0) : 0
-  const upWhen = up ? (step && step.add === up.name ? step.when : up.waiver ? 'claim now' : 'now') : null
+  // Out of adds this week: a move waits for the reset (and nothing streams: the budget leaves none to stream).
+  const gone = addsGone(v)
+  const reset = gone && v.week ? addDays(v.week.end, 1) : null
+  const upWhen = up ? (reset ? `${dayLong(reset)}, when your adds reset` : step && step.add === up.name ? step.when : up.waiver ? 'claim now' : 'now') : null
   const pair = v.pairs[0] ?? null
   const win = v.week?.odds?.win ?? v.week?.points?.win ?? null
   const inPlay = win != null && win > 0.3 && win < 0.7
@@ -538,11 +584,11 @@ export function verdictOf(v: SeasonView): Verdict | null {
   // A pair first when it is worth a good deal more than the best single move and holds up. Like a single move in the
   // week's plan, one that costs this week waits for the Monday after it, worth that loss more.
   const pairCost = pair ? Math.max(0, pair.winBefore - pair.winAfter) : 0
-  const monday = v.week && pairCost > 0.03 ? addDays(v.week.end, 1) : null
+  const monday = v.week && (pairCost > 0.03 || gone) ? addDays(v.week.end, 1) : null
   const pairValue = pair ? pair.seasonWins + (monday ? pairCost : 0) : 0
   if (pair && pairValue >= DO.pair && pairValue >= upValue + DO.season && holds(pair.confidence) >= DO.holds) {
     return {
-      level: 'do', kind: 'pair', when: monday ? `${new Date(`${monday}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}, after this week` : 'now',
+      level: 'do', kind: 'pair', when: monday ? `${dayLong(monday)}, ${gone ? 'when your adds reset' : 'after this week'}` : 'now',
       season: pairValue, week: monday ? null : { before: pair.winBefore, after: pair.winAfter }, confidence: pair.confidence,
       headline: pair.moves.map((m, i) => `${i ? 'add' : 'Add'} ${m.name} for ${m.dropName}`).join(' and '),
       moves: pair.moves.map((m) => ({ add: m.add, name: m.name, drop: m.drop, dropName: m.dropName, waiver: m.waiver })),
@@ -550,7 +596,7 @@ export function verdictOf(v: SeasonView): Verdict | null {
     }
   }
   const season = (level: Verdict['level']): Verdict => ({
-    level, kind: 'season', when: upWhen, season: upValue, week: upWhen && /after this week/.test(upWhen) ? null : { before: up!.winBefore, after: up!.winAfter }, confidence: up!.confidence,
+    level, kind: 'season', when: upWhen, season: upValue, week: upWhen && (/after this week/.test(upWhen) || reset) ? null : { before: up!.winBefore, after: up!.winAfter }, confidence: up!.confidence,
     headline: up!.drop ? `Add ${up!.name}, drop ${up!.dropName}` : `Add ${up!.name} into your open spot`, moves: [one(up!)], reasons: reasonsOf(up!),
   })
   const stream = (level: Verdict['level']): Verdict => ({
@@ -583,6 +629,9 @@ export function planWithPair(plan: AddPlan, v: Verdict, pair: PairMove): AddPlan
   })
   return { ...plan, steps: [...steps, ...rest] }
 }
+
+/** "Mon, Nov 23". */
+const dayLong = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
 
 /** A tip time as the user reads it: Pacific, named. */
 const tipWord = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' }) + ' PT' : 'later')

@@ -1181,6 +1181,40 @@ test("sell high, buy low: the league's view against my worth, on the screen and 
   assert.equal(looksTo([90, 26], [20]), 'fair', 'two for one: the best they get counts')
 })
 
+test("out of adds: the week says so, the season's move waits for the reset, nothing alerts, and next week's adds are planned (Public, 2026-11-19)", () => {
+  const today = '2026-11-19'
+  const { snap: s0 } = snapshotFor(hoops, today)
+  const snap = { ...s0, fixtures: fixturesFor(hoops) }
+  const used = (n: number) => ({ ...snap, rosters: snap.rosters.map((r) => (r.team.id === hoops.myTeamId ? { ...r, team: { ...r.team, addsThisWeek: n } } : r)) })
+  const open = buildSeasonView(hoops, used(2), world(today))
+  const v = buildSeasonView(hoops, used(hoops.adds.perWeek!), world(today))
+  assert.deepEqual(v.budget!.week, { used: 10, max: 10 })
+  // This week: nothing to add, and why.
+  assert.equal(v.weekVerdict!.level, 'none')
+  assert.deepEqual(v.weekVerdict!.moves, [])
+  assert.match(v.weekVerdict!.headline, /^No adds left this week \(10 of 10\): they reset Mon, Nov 23$/)
+  assert.ok(open.weekVerdict!.moves.length > 0, 'with adds left, the same week has moves')
+  // The season's move, if any, is for Monday, and is no stream.
+  assert.equal(open.verdict!.when, 'now', 'with adds left it is now')
+  assert.notEqual(v.verdict!.level, 'none')
+  assert.equal(v.verdict!.when, 'Mon, Nov 23, when your adds reset')
+  assert.equal(v.verdict!.week, null)
+  assert.notEqual(v.verdict!.kind, 'stream')
+  // No notification to make an add that cannot be made.
+  assert.ok(pickupAlerts(open, '').length > 0)
+  assert.deepEqual(pickupAlerts(v, ''), [])
+  // Next week: its first day, its opponent, adds free again, every move from then.
+  assert.equal(open.nextWeek, null)
+  const n = v.nextWeek!
+  assert.equal(n.start, '2026-11-23')
+  assert.equal(n.week, 6)
+  const opp = fixturesFor(hoops).find((f) => f.week === 6)!.pairs.find((pr) => pr.includes(hoops.myTeamId))!.find((id) => id !== hoops.myTeamId)
+  assert.equal(n.opponent, `Team ${opp}`)
+  assert.ok(n.plan && n.plan.moves.length > 0)
+  for (const m of n.plan!.moves) { assert.ok(m.from >= '2026-11-23', m.name); assert.ok(v.players[m.add]?.name) }
+  assert.ok(n.pickups.every((p) => p.kind !== 'stream'))
+})
+
 /** Today's lineup with the best of mine who plays today benched for the weakest bench player who also plays. */
 function benchTheBest(league: SeasonLeague & { myTeamId: string }, today: string) {
   const { snap } = snapshotFor(league, today)

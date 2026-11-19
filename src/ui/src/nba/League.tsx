@@ -1063,6 +1063,7 @@ function Adds({ v, onChange }: { v: SeasonView; onChange: () => void }) {
       <IlBack v={v} />
       <PendingClaims v={v} />
       <WeekCard v={v} />
+      <NextWeekCard v={v} />
       <VerdictCard v={v} />
       <Risers v={v} />
       <details className="nl-alloptions">
@@ -1262,7 +1263,8 @@ const CHANCE_WORD: Record<NonNullable<SeasonView['weekVerdict']>['chance'], stri
 function WeekCard({ v }: { v: SeasonView }) {
   const d = v.weekVerdict
   if (!d) return null
-  const word = d.level === 'do' ? 'Do this' : d.level === 'look' ? 'Worth a look' : 'Nothing worth an add'
+  const gone = !!v.budget?.week && v.budget.week.used >= v.budget.week.max
+  const word = gone ? 'Out of adds' : d.level === 'do' ? 'Do this' : d.level === 'look' ? 'Worth a look' : 'Nothing worth an add'
   const cats = v.league.scoring === 'categories'
   return (
     <div className={`nl-verdictcard nl-weekcard ${d.level}`}>
@@ -1293,7 +1295,43 @@ function WeekCard({ v }: { v: SeasonView }) {
           )}
         </>
       ) : (
-        <div className="nl-dim">{d.headline}: no pickup within your adds, open spots and the players you could spare raises this week's chance by a point.</div>
+        gone
+          ? <div className="nl-dim">{d.headline}. What still moves this week: your lineup each night (Today), and IL moves, which use no add. Next week's adds are planned below.</div>
+          : <div className="nl-dim">{d.headline}: no pickup within your adds, open spots and the players you could spare raises this week's chance by a point.</div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Out of adds this week: next week's best adds, planned from its first day against its opponent with every add free,
+ * to make when they reset (2026-11-19: Public at 4 of 4 by Thursday).
+ */
+function NextWeekCard({ v }: { v: SeasonView }) {
+  const n = v.nextWeek
+  if (!n) return null
+  const p = n.plan
+  const gain = p ? p.winAfter - p.winBefore : 0
+  const name = (id: string | null) => (id ? v.players[id]?.name ?? id : '')
+  return (
+    <div className={`nl-verdictcard nl-weekcard ${p && p.moves.length && gain >= 0.03 ? 'do' : 'look'}`}>
+      <div className="nl-vk">Next week · {dateWord(n.start)}{n.opponent ? ` vs ${n.opponent}` : ''}<span className="nl-dim"> · make these when your adds reset</span></div>
+      {p && p.moves.length > 0 ? (
+        <>
+          <ol className="nl-weeksteps">
+            {p.moves.map((m) => (
+              <li key={m.add}>
+                {m.toIl ? <><b>Move {m.dropName} to IL</b>, <b>add {m.name}</b></> : <><b>Add {m.name}</b>{m.drop ? <>, drop {m.dropName}</> : ' into your open spot'}</>} <Rank id={m.add} />
+                <span className="nl-dim"> · from {dateWord(m.from)}{m.waiver ? ' (waivers: claim so it clears by then)' : ''}</span>
+                {m.seasonWins != null && <span className="nl-dim"> · season <span className={effect(m.seasonWins, 0.03)}>{wins(m.seasonWins)}</span></span>}
+              </li>
+            ))}
+          </ol>
+          <div className="nl-vr"><WeekWin before={p.winBefore} after={p.winAfter} prefix="Next week " /></div>
+        </>
+      ) : <div className="nl-dim">No add raises next week's chance by a point{p ? ` (it starts at ${pct(p.winBefore)})` : ''}.</div>}
+      {n.pickups.length > 0 && (
+        <div className="nl-pickd nl-dim">Best for the season: {n.pickups.map((x, i) => <span key={x.add}>{i ? ' · ' : ''}{x.name}{x.drop ? ` for ${name(x.drop)}` : ' into your open spot'} ({x.seasonWins != null ? wins(x.seasonWins) : '—'})</span>)}</div>
       )}
     </div>
   )

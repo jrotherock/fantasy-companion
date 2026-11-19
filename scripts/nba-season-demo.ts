@@ -9,7 +9,7 @@
  * starters are given designations so the news and lineup screens have
  * something to say. The server only takes this for leagues ending in -test.
  * Run it with NBA_NOW set on the server to the same day (see .claude/launch.json).
- * IL_BACK=1 puts my questionable player on IL, coming back. A fourth argument, an ISO instant, gives my players whose games tipped by then
+ * IL_BACK=1 puts my questionable player on IL, coming back. ADDS_USED=n sets my adds used this week (default 3). A fourth argument, an ISO instant, gives my players whose games tipped by then
  * a box line, as Yahoo's would read mid-game (the nba-test-live server).
  */
 import { readFileSync } from 'node:fs'
@@ -47,7 +47,7 @@ for (let r = 0; r < rounds; r++) for (const t of r % 2 ? [...rosters.keys()].rev
 const names = ['Huff Huff Pass', 'Beats by Dray', 'Wemby Wonderland', 'Slim Reaper Kats', 'Tatum Tots', 'Brunson Burners', 'Kawhi Not', 'Jokic Joke', 'Dame Time', 'Bam Squad', 'Shai Me Up Domo Down', 'Luka Warm', 'Zion Lion', 'Giannis Gang', 'Mobley Dick', 'Haliburton Ernie']
 const meta = (i: number): TeamMeta => {
   const id = String(i + 1), mine = id === myId
-  return { key: `${real.leagueKey}.t.${id}`, id, name: mine ? real.myTeamName : names[i % names.length] === real.myTeamName ? `Team ${id}` : names[i % names.length], manager: mine ? 'Justin' : `Manager ${id}`, mine, addsThisWeek: mine ? 3 : Math.floor(rand() * 5), moves: mine ? 31 : Math.floor(20 + rand() * 30), waiverPriority: i + 1, faab: null }
+  return { key: `${real.leagueKey}.t.${id}`, id, name: mine ? real.myTeamName : names[i % names.length] === real.myTeamName ? `Team ${id}` : names[i % names.length], manager: mine ? 'Justin' : `Manager ${id}`, mine, addsThisWeek: mine ? Number(process.env.ADDS_USED ?? 3) : Math.floor(rand() * 5), moves: mine ? 31 : Math.floor(20 + rand() * 30), waiverPriority: i + 1, faab: null }
 }
 
 const seats = ['PG', 'SG', 'SF', 'PF', 'C', ...Array(real.roster.Util).fill('Util')]
